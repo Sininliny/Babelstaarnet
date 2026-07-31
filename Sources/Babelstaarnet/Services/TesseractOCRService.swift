@@ -86,7 +86,8 @@ struct TesseractOCRService {
                 displayID: capture.displayID
             )
 
-            guard let invertedPNG = Self.invertedHighContrastPNG(
+            let invertedRegions: [TextRegion]
+            if let invertedPNG = Self.invertedHighContrastPNG(
                 from: capture.image
             ), let invertedTSV = try? Self.runTesseract(
                 executableURL: executableURL,
@@ -95,19 +96,20 @@ struct TesseractOCRService {
                 pageSegmentationMode: capture.frame == capture.screenFrame
                     ? 3
                     : 6
-            ) else {
-                return normalRegions
+            ) {
+                invertedRegions = Self.parse(
+                    tsv: invertedTSV,
+                    imageSize: CGSize(
+                        width: capture.image.width,
+                        height: capture.image.height
+                    ),
+                    captureFrame: capture.frame,
+                    screenFrame: capture.screenFrame,
+                    displayID: capture.displayID
+                )
+            } else {
+                invertedRegions = []
             }
-            let invertedRegions = Self.parse(
-                tsv: invertedTSV,
-                imageSize: CGSize(
-                    width: capture.image.width,
-                    height: capture.image.height
-                ),
-                captureFrame: capture.frame,
-                screenFrame: capture.screenFrame,
-                displayID: capture.displayID
-            )
 
             let contrastRegions: [TextRegion]
             if let chromaPNG = Self.lightTextOnColorPNG(from: capture.image),
@@ -131,10 +133,33 @@ struct TesseractOCRService {
                 contrastRegions = []
             }
 
-            return Self.merge(
+            let mergedRegions = Self.merge(
                 Self.merge(normalRegions, with: invertedRegions),
                 with: contrastRegions
             )
+            guard Self.needsSmallTextPass(mergedRegions),
+                  let smallImage = Self.smallTextPNG(
+                      from: capture.image,
+                      regions: mergedRegions
+                  ),
+                  let smallTSV = try? Self.runTesseract(
+                      executableURL: executableURL,
+                      png: smallImage.png,
+                      automaticInversion: false,
+                      pageSegmentationMode: 11,
+                      dpi: 288
+                  ) else {
+                return mergedRegions
+            }
+            let smallRegions = Self.parse(
+                tsv: smallTSV,
+                imageSize: smallImage.size,
+                captureFrame: capture.frame,
+                screenFrame: capture.screenFrame,
+                displayID: capture.displayID,
+                minimumConfidence: 22
+            )
+            return Self.merge(mergedRegions, with: smallRegions)
         }.value
     }
 
@@ -142,7 +167,8 @@ struct TesseractOCRService {
         executableURL: URL,
         png: Data,
         automaticInversion: Bool,
-        pageSegmentationMode: Int
+        pageSegmentationMode: Int,
+        dpi: Int = 144
     ) throws -> String {
         let process = Process()
         process.executableURL = executableURL
@@ -152,8 +178,9 @@ struct TesseractOCRService {
             "-l", "dan",
             "--oem", "1",
             "--psm", "\(pageSegmentationMode)",
-            "--dpi", "144",
+            "--dpi", "\(dpi)",
             "-c", "tessedit_do_invert=\(automaticInversion ? 1 : 0)",
+            "-c", "preserve_interword_spaces=1",
             "tsv"
         ]
 
@@ -232,32 +259,7 @@ struct TesseractOCRService {
             return nil
         }
 
-        var rgba = [UInt8](
-            repeating: 0,
-            count: width * height * 4
-        )
-        let rendered = rgba.withUnsafeMutableBytes { bytes in
-            guard let address = bytes.baseAddress,
-                  let context = CGContext(
-                      data: address,
-                      width: width,
-                      height: height,
-                      bitsPerComponent: 8,
-                      bytesPerRow: width * 4,
-                      space: CGColorSpaceCreateDeviceRGB(),
-                      bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
-                          | CGImageAlphaInfo.premultipliedLast.rawValue
-                  ) else {
-                return false
-            }
-            context.interpolationQuality = .none
-            context.draw(
-                image,
-                in: CGRect(x: 0, y: 0, width: width, height: height)
-            )
-            return true
-        }
-        guard rendered else {
+        guard let rgba = rgbaPixels(from: image) else {
             return nil
         }
 
@@ -309,6 +311,284 @@ struct TesseractOCRService {
                       bitmapInfo: CGImageAlphaInfo.none.rawValue
                   ),
                   let output = context.makeImage() else {
+                return nil
+            }
+            return NSBitmapImageRep(cgImage: output)
+                .representation(using: .png, properties: [:])
+        }
+    }
+
+    private struct PreparedOCRImage {
+        let png: Data
+        let size: CGSize
+    }
+
+    private static func needsSmallTextPass(
+        _ regions: [TextRegion]
+    ) -> Bool {
+        let heights = regions
+            .flatMap(\.words)
+            .map(\.frame.height)
+            .filter { $0 > 0 }
+            .sorted()
+        guard !heights.isEmpty else {
+            return true
+        }
+        let lowerQuartile = heights[
+            min(heights.count - 1, heights.count / 4)
+        ]
+        return lowerQuartile <= 13
+    }
+
+    /// Dense PDFs need a different treatment from ordinary screen text:
+    /// long table rules are removed, the remaining dark glyphs are enlarged,
+    /// and sparse-text segmentation reads each cell independently.
+    private static func smallTextPNG(
+        from image: CGImage,
+        regions: [TextRegion]
+    ) -> PreparedOCRImage? {
+        let width = image.width
+        let height = image.height
+        guard width > 0,
+              height > 0,
+              width * height <= 2_000_000,
+              let rgba = rgbaPixels(from: image) else {
+            return nil
+        }
+
+        var grayscale = [UInt8](
+            repeating: 255,
+            count: width * height
+        )
+        for pixelIndex in 0..<(width * height) {
+            let rgbaIndex = pixelIndex * 4
+            let alpha = Int(rgba[rgbaIndex + 3])
+            let red = compositeOnWhite(
+                Int(rgba[rgbaIndex]),
+                alpha: alpha
+            )
+            let green = compositeOnWhite(
+                Int(rgba[rgbaIndex + 1]),
+                alpha: alpha
+            )
+            let blue = compositeOnWhite(
+                Int(rgba[rgbaIndex + 2]),
+                alpha: alpha
+            )
+            let luminance = (77 * red + 150 * green + 29 * blue) >> 8
+            let enhanced = Int(
+                (Double(luminance - 128) * 1.35 + 128)
+                    .rounded()
+            )
+            grayscale[pixelIndex] = UInt8(
+                min(max(enhanced, 0), 255)
+            )
+        }
+
+        removeLongHorizontalLines(
+            from: &grayscale,
+            width: width,
+            height: height
+        )
+        removeLongVerticalLines(
+            from: &grayscale,
+            width: width,
+            height: height
+        )
+
+        let recognizedHeights = regions
+            .flatMap(\.words)
+            .map(\.frame.height)
+            .filter { $0 > 0 }
+            .sorted()
+        let lowerHeight = recognizedHeights.isEmpty
+            ? 8
+            : recognizedHeights[
+                min(
+                    recognizedHeights.count - 1,
+                    recognizedHeights.count / 4
+                )
+            ]
+        let requestedScale: CGFloat
+        if lowerHeight < 7 {
+            requestedScale = 2.35
+        } else if lowerHeight < 10 {
+            requestedScale = 2
+        } else {
+            requestedScale = 1.7
+        }
+        let dimensionLimit = 3_200 / CGFloat(max(width, height))
+        let scale = max(1, min(requestedScale, dimensionLimit))
+        let targetWidth = Int(
+            (CGFloat(width) * scale).rounded()
+        )
+        let targetHeight = Int(
+            (CGFloat(height) * scale).rounded()
+        )
+        guard let png = grayscalePNG(
+            grayscale,
+            width: width,
+            height: height,
+            targetWidth: targetWidth,
+            targetHeight: targetHeight
+        ) else {
+            return nil
+        }
+        return PreparedOCRImage(
+            png: png,
+            size: CGSize(width: targetWidth, height: targetHeight)
+        )
+    }
+
+    private static func rgbaPixels(
+        from image: CGImage
+    ) -> [UInt8]? {
+        let width = image.width
+        let height = image.height
+        var rgba = [UInt8](
+            repeating: 0,
+            count: width * height * 4
+        )
+        let rendered = rgba.withUnsafeMutableBytes { bytes in
+            guard let address = bytes.baseAddress,
+                  let context = CGContext(
+                      data: address,
+                      width: width,
+                      height: height,
+                      bitsPerComponent: 8,
+                      bytesPerRow: width * 4,
+                      space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
+                          | CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else {
+                return false
+            }
+            context.interpolationQuality = .none
+            context.draw(
+                image,
+                in: CGRect(x: 0, y: 0, width: width, height: height)
+            )
+            return true
+        }
+        return rendered ? rgba : nil
+    }
+
+    private static func removeLongHorizontalLines(
+        from pixels: inout [UInt8],
+        width: Int,
+        height: Int
+    ) {
+        let minimumLength = max(48, width / 14)
+        for row in 0..<height {
+            let rowStart = row * width
+            var runStart: Int?
+            for column in 0...width {
+                let isDark = column < width
+                    && pixels[rowStart + column] < 92
+                if isDark {
+                    runStart = runStart ?? column
+                } else if let start = runStart {
+                    if column - start >= minimumLength {
+                        for index in start..<column {
+                            pixels[rowStart + index] = 255
+                        }
+                    }
+                    runStart = nil
+                }
+            }
+        }
+    }
+
+    private static func removeLongVerticalLines(
+        from pixels: inout [UInt8],
+        width: Int,
+        height: Int
+    ) {
+        let minimumLength = max(24, height / 14)
+        for column in 0..<width {
+            var runStart: Int?
+            for row in 0...height {
+                let isDark = row < height
+                    && pixels[row * width + column] < 92
+                if isDark {
+                    runStart = runStart ?? row
+                } else if let start = runStart {
+                    if row - start >= minimumLength {
+                        for index in start..<row {
+                            pixels[index * width + column] = 255
+                        }
+                    }
+                    runStart = nil
+                }
+            }
+        }
+    }
+
+    private static func grayscalePNG(
+        _ pixels: [UInt8],
+        width: Int,
+        height: Int,
+        targetWidth: Int,
+        targetHeight: Int
+    ) -> Data? {
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        guard let provider = CGDataProvider(
+            data: Data(pixels) as CFData
+        ), let source = CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 8,
+            bytesPerRow: width,
+            space: colorSpace,
+            bitmapInfo: CGBitmapInfo(
+                rawValue: CGImageAlphaInfo.none.rawValue
+            ),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: true,
+            intent: .defaultIntent
+        ) else {
+            return nil
+        }
+
+        var scaled = [UInt8](
+            repeating: 255,
+            count: targetWidth * targetHeight
+        )
+        return scaled.withUnsafeMutableBytes { bytes in
+            guard let address = bytes.baseAddress,
+                  let context = CGContext(
+                      data: address,
+                      width: targetWidth,
+                      height: targetHeight,
+                      bitsPerComponent: 8,
+                      bytesPerRow: targetWidth,
+                      space: colorSpace,
+                      bitmapInfo: CGImageAlphaInfo.none.rawValue
+                  ) else {
+                return nil
+            }
+            context.interpolationQuality = .high
+            context.setFillColor(gray: 1, alpha: 1)
+            context.fill(
+                CGRect(
+                    x: 0,
+                    y: 0,
+                    width: targetWidth,
+                    height: targetHeight
+                )
+            )
+            context.draw(
+                source,
+                in: CGRect(
+                    x: 0,
+                    y: 0,
+                    width: targetWidth,
+                    height: targetHeight
+                )
+            )
+            guard let output = context.makeImage() else {
                 return nil
             }
             return NSBitmapImageRep(cgImage: output)
@@ -390,7 +670,8 @@ struct TesseractOCRService {
         imageSize: CGSize,
         captureFrame: CGRect,
         screenFrame: CGRect,
-        displayID: CGDirectDisplayID
+        displayID: CGDirectDisplayID,
+        minimumConfidence: Double = 35
     ) -> [TextRegion] {
         struct LineKey: Hashable {
             let page: Int
@@ -424,7 +705,7 @@ struct TesseractOCRService {
                   let width = Double(columns[8]),
                   let height = Double(columns[9]),
                   let confidence = Double(columns[10]),
-                  confidence >= 35 else {
+                  confidence >= minimumConfidence else {
                 continue
             }
 

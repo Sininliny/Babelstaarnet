@@ -16,6 +16,9 @@ This repository currently contains the first working MVP for Danish → English.
 - Danish OCR with [Tesseract](https://github.com/tesseract-ocr/tesseract)
   and the open `dan` model
 - Contrast-adaptive OCR passes for dark, light, and colored text
+- Adaptive small-text OCR for dense PDFs and forms: table rules are removed,
+  tiny glyphs are enlarged within a bounded pixel budget, and cell text is
+  recognized with sparse layout analysis
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
 - A Kindle Word Wise-style choice between an English meaning and a concise

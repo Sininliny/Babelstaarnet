@@ -62,6 +62,10 @@ struct FixtureGenerator {
                 alpha: 1
             )
         ]
+        let tinyTextAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14, weight: .regular),
+            .foregroundColor: NSColor.black
+        ]
 
         NSColor(
             calibratedRed: 0.80,
@@ -86,6 +90,48 @@ struct FixtureGenerator {
         "Farvet dansk tekst".draw(
             at: NSPoint(x: 64, y: 426),
             withAttributes: coloredTextAttributes
+        )
+
+        let table = NSRect(x: 40, y: 350, width: 1_280, height: 62)
+        NSColor.black.setStroke()
+        let tableOutline = NSBezierPath(rect: table)
+        tableOutline.lineWidth = 2
+        tableOutline.stroke()
+        for x in [460.0, 900.0] {
+            let divider = NSBezierPath()
+            divider.move(to: NSPoint(x: x, y: table.minY))
+            divider.line(to: NSPoint(x: x, y: table.maxY))
+            divider.lineWidth = 2
+            divider.stroke()
+        }
+        let rowDivider = NSBezierPath()
+        rowDivider.move(to: NSPoint(x: table.minX, y: 381))
+        rowDivider.line(to: NSPoint(x: table.maxX, y: 381))
+        rowDivider.lineWidth = 2
+        rowDivider.stroke()
+        "Månedlig leje inkl. evt. møblering".draw(
+            at: NSPoint(x: 50, y: 389),
+            withAttributes: tinyTextAttributes
+        )
+        "betaling for varme og varmt vand".draw(
+            at: NSPoint(x: 470, y: 389),
+            withAttributes: tinyTextAttributes
+        )
+        "bidrag til driftsudgifter".draw(
+            at: NSPoint(x: 910, y: 389),
+            withAttributes: tinyTextAttributes
+        )
+        "Beboerindskud".draw(
+            at: NSPoint(x: 50, y: 357),
+            withAttributes: tinyTextAttributes
+        )
+        "Ydelse for indflytningsmåned".draw(
+            at: NSPoint(x: 470, y: 357),
+            withAttributes: tinyTextAttributes
+        )
+        "betaling for elektricitet".draw(
+            at: NSPoint(x: 910, y: 357),
+            withAttributes: tinyTextAttributes
         )
 
         "Godmorgen, hvordan har du det?".draw(
