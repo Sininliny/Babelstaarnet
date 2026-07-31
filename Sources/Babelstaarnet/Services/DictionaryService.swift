@@ -3,6 +3,26 @@ import Foundation
 
 struct DictionaryService {
     func definition(for translatedWord: String, sourceWord: String) -> String {
+        fullDefinition(
+            for: translatedWord,
+            sourceWord: sourceWord
+        ).truncatedDefinition()
+    }
+
+    func beginnerExplanation(
+        for translatedWord: String,
+        sourceWord: String
+    ) -> String {
+        fullDefinition(
+            for: translatedWord,
+            sourceWord: sourceWord
+        ).beginnerGloss()
+    }
+
+    private func fullDefinition(
+        for translatedWord: String,
+        sourceWord: String
+    ) -> String {
         let cleaned = translatedWord
             .components(separatedBy: .whitespacesAndNewlines)
             .first?
@@ -18,8 +38,7 @@ struct DictionaryService {
             cleaned as CFString,
             CFRange(location: 0, length: length)
         ) {
-            let fullDefinition = unmanaged.takeRetainedValue() as String
-            return fullDefinition.truncatedDefinition()
+            return unmanaged.takeRetainedValue() as String
         }
 
         return "“\(translatedWord)” is the English meaning of “\(sourceWord)”."
@@ -27,17 +46,40 @@ struct DictionaryService {
 }
 
 private extension String {
-    func truncatedDefinition(limit: Int = 320) -> String {
-        let compact = replacingOccurrences(
+    var compacted: String {
+        replacingOccurrences(
             of: "\\s+",
             with: " ",
             options: .regularExpression
         ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-        guard compact.count > limit else {
-            return compact
+    func truncatedDefinition(limit: Int = 320) -> String {
+        compacted.truncated(to: limit)
+    }
+
+    func beginnerGloss(limit: Int = 150) -> String {
+        let compact = compacted
+        let firstSentence = compact.firstSentence ?? compact
+        return firstSentence.truncated(to: limit)
+    }
+
+    var firstSentence: String? {
+        let boundaries = CharacterSet(charactersIn: ".!?")
+        guard let boundary = rangeOfCharacter(from: boundaries) else {
+            return isEmpty ? nil : self
         }
-        let end = compact.index(compact.startIndex, offsetBy: limit)
-        return String(compact[..<end]).trimmingCharacters(in: .whitespaces) + "…"
+        return String(self[...boundary.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            + String(self[boundary.lowerBound])
+    }
+
+    func truncated(to limit: Int) -> String {
+        guard count > limit else {
+            return self
+        }
+        let end = index(startIndex, offsetBy: limit)
+        return String(self[..<end])
+            .trimmingCharacters(in: .whitespaces) + "…"
     }
 }

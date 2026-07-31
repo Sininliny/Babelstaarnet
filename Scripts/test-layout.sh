@@ -38,6 +38,15 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/LearningModeChecks.swift" \
+    -o "$output_dir/LearningModeChecks"
+
+"$output_dir/LearningModeChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Services/BeginnerDanishService.swift" \
     "$project_dir/Tests/BabelstaarnetTests/BeginnerDanishServiceChecks.swift" \
     -o "$output_dir/BeginnerDanishServiceChecks"

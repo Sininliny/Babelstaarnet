@@ -14,8 +14,11 @@ struct MenuBarContentView: View {
             if model.screenPermissionGranted {
                 learningControl
 
-                HStack {
-                    Text(model.explanationMode.menuTitle)
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Translate · \(model.translationMode.shortTitle)")
+                        Text("Explain · \(model.explanationMode.title)")
+                    }
                     Spacer()
                     Text("fn  Z")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))

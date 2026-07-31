@@ -1,27 +1,57 @@
 import CoreGraphics
 import Foundation
 
-enum ExplanationMode: String, CaseIterable, Identifiable, Sendable {
+enum TranslationMode: String, CaseIterable, Identifiable, Sendable {
     case english
-    case easyDanish
+    case none
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .english:
-            return "English meaning"
-        case .easyDanish:
-            return "Easy Danish"
+            return "Danish → English"
+        case .none:
+            return "None"
         }
     }
 
-    var menuTitle: String {
+    var shortTitle: String {
+        self == .english ? "English" : "No translation"
+    }
+}
+
+enum ExplanationMode: String, CaseIterable, Identifiable, Sendable {
+    case beginner
+    case easyDanish
+    case english
+    case none
+
+    var id: String { rawValue }
+
+    var title: String {
         switch self {
-        case .english:
-            return "Danish → English"
+        case .beginner:
+            return "Beginner"
         case .easyDanish:
-            return "Danish · easy explanation"
+            return "Easy Danish"
+        case .english:
+            return "English"
+        case .none:
+            return "None"
+        }
+    }
+
+    var badgeTitle: String? {
+        switch self {
+        case .beginner:
+            return "BEGINNER"
+        case .easyDanish:
+            return "LET DANSK"
+        case .english:
+            return "ENGLISH"
+        case .none:
+            return nil
         }
     }
 }
@@ -104,6 +134,7 @@ struct TextRegion: Identifiable, Hashable, Sendable {
 struct HoverCard: Equatable, Sendable {
     let word: WordRegion
     let definition: String
+    let translationMode: TranslationMode
     let explanationMode: ExplanationMode
 }
 

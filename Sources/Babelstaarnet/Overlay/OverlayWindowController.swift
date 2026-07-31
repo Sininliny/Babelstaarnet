@@ -23,6 +23,7 @@ final class OverlayWindowController {
     private var currentWord: WordRegion?
     private var autoSpeak = true
     private var hoverDelay = 0.7
+    private var translationMode: TranslationMode = .english
     private var explanationMode: ExplanationMode = .english
     private let onSpeakDanish: (String) -> Void
 
@@ -34,10 +35,12 @@ final class OverlayWindowController {
         regions: [TextRegion],
         autoSpeak: Bool,
         hoverDelay: Double,
+        translationMode: TranslationMode,
         explanationMode: ExplanationMode
     ) {
         self.autoSpeak = autoSpeak
         self.hoverDelay = hoverDelay
+        self.translationMode = translationMode
         self.explanationMode = explanationMode
 
         let grouped = Dictionary(grouping: regions, by: \.displayID)
@@ -160,6 +163,11 @@ final class OverlayWindowController {
 
         let definition: String
         switch explanationMode {
+        case .beginner:
+            definition = dictionary.beginnerExplanation(
+                for: match.word.translatedText,
+                sourceWord: match.word.sourceText
+            )
         case .english:
             definition = dictionary.definition(
                 for: match.word.translatedText,
@@ -169,10 +177,13 @@ final class OverlayWindowController {
             definition = match.word.beginnerExplanation.isEmpty
                 ? "Ingen kort dansk forklaring fundet."
                 : match.word.beginnerExplanation
+        case .none:
+            definition = ""
         }
         let card = HoverCard(
             word: match.word,
             definition: definition,
+            translationMode: translationMode,
             explanationMode: explanationMode
         )
         for overlay in overlays.values

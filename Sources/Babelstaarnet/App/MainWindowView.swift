@@ -101,17 +101,11 @@ struct MainWindowView: View {
 
     private var languageRow: some View {
         HStack(spacing: 10) {
-            Text("Danish")
-                .fontWeight(.medium)
-            Image(systemName: "arrow.right")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.tertiary)
-            Text(
-                model.explanationMode == .english
-                    ? "English"
-                    : "Easy Danish"
-            )
-                .fontWeight(.medium)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Translate · \(model.translationMode.title)")
+                Text("Explain · \(model.explanationMode.title)")
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
             Text("Local")
                 .foregroundStyle(.tertiary)

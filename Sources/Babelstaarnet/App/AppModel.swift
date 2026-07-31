@@ -50,6 +50,15 @@ final class AppModel: ObservableObject {
             refreshOverlayPreferences()
         }
     }
+    @Published var translationMode: TranslationMode = .english {
+        didSet {
+            UserDefaults.standard.set(
+                translationMode.rawValue,
+                forKey: Keys.translationMode
+            )
+            refreshOverlayPreferences()
+        }
+    }
     @Published var explanationMode: ExplanationMode = .english {
         didSet {
             UserDefaults.standard.set(
@@ -105,6 +114,8 @@ final class AppModel: ObservableObject {
         powerSavingEnabled = defaults.object(
             forKey: Keys.powerSavingEnabled
         ) as? Bool ?? true
+        translationMode = defaults.string(forKey: Keys.translationMode)
+            .flatMap(TranslationMode.init(rawValue:)) ?? .english
         explanationMode = defaults.string(forKey: Keys.explanationMode)
             .flatMap(ExplanationMode.init(rawValue:)) ?? .english
 
@@ -395,6 +406,7 @@ final class AppModel: ObservableObject {
                     regions: [],
                     autoSpeak: autoSpeak,
                     hoverDelay: hoverDelay,
+                    translationMode: translationMode,
                     explanationMode: explanationMode
                 )
                 phase = .showing(regionCount: 0)
@@ -579,6 +591,7 @@ final class AppModel: ObservableObject {
             regions: translatedRegions,
             autoSpeak: autoSpeak,
             hoverDelay: hoverDelay,
+            translationMode: translationMode,
             explanationMode: explanationMode
         )
     }
@@ -597,7 +610,7 @@ final class AppModel: ObservableObject {
             return
         }
 
-        if explanationMode == .english {
+        if explanationMode != .easyDanish {
             showOverlay()
             return
         }
@@ -797,6 +810,7 @@ final class AppModel: ObservableObject {
         static let powerSavingEnabled = "powerSavingEnabled"
         static let autoSpeak = "autoSpeak"
         static let hoverDelay = "hoverDelay"
+        static let translationMode = "translationMode"
         static let explanationMode = "explanationMode"
         static let screenPermissionWasRequested = "screenPermissionWasRequested"
     }

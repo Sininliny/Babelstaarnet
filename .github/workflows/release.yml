@@ -9,7 +9,7 @@ on:
       tag:
         description: "Release tag"
         required: true
-        default: "v0.1.2"
+        default: "v0.1.3"
 
 permissions:
   contents: write
@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Import Developer ID certificate
         if: ${{ env.HAS_SIGNING_CREDENTIALS == 'true' }}

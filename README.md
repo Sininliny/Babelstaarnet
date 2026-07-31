@@ -21,8 +21,9 @@ This repository currently contains the first working MVP for Danish → English.
   recognized with sparse layout analysis
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
-- A Kindle Word Wise-style choice between an English meaning and a concise
-  Easy Danish explanation
+- Independent learning layers: show or hide Danish → English translation, then
+  freely combine it with a Beginner gloss, Easy Danish explanation, full
+  English definition, or no explanation
 - Easy Danish hints from a local learner lexicon plus
   [Princeton WordNet](https://wordnet.princeton.edu/) definitions translated
   through the local English → Danish Argos model
@@ -132,7 +133,8 @@ On first use:
    Recording**.
 3. Relaunch the app if macOS requests it.
 4. Choose **Activate hover learning** or press `Fn+Z`.
-5. Choose **English meaning** or **Easy Danish** in Settings.
+5. In Settings, independently choose **Translate: Danish → English / None** and
+   **Explain: Beginner / Easy Danish / English / None**.
 6. Hover a Danish word to hear it and see the selected explanation.
 7. Press `Fn+Z` again to deactivate.
 

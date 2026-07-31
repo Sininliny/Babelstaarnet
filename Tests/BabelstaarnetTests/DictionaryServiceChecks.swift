@@ -13,6 +13,14 @@ enum DictionaryServiceChecks {
         precondition(!result.isEmpty)
         precondition(result.contains(target))
         precondition(result.contains(source))
-        print("Dictionary fallback checks passed")
+
+        let beginner = DictionaryService().beginnerExplanation(
+            for: target,
+            sourceWord: source
+        )
+        precondition(!beginner.isEmpty)
+        precondition(beginner.count <= 151)
+        precondition(beginner.contains(target))
+        print("Dictionary and beginner gloss checks passed")
     }
 }

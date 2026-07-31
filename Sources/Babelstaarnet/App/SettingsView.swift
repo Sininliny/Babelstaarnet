@@ -6,25 +6,27 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Learning") {
-                LabeledContent("Translation", value: "Danish → English")
+                Picker(
+                    "Translate",
+                    selection: $model.translationMode
+                ) {
+                    ForEach(TranslationMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
 
                 Picker(
-                    "Explanation",
+                    "Explain",
                     selection: $model.explanationMode
                 ) {
                     ForEach(ExplanationMode.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }
                 }
-                .pickerStyle(.segmented)
 
-                Text(
-                    model.explanationMode == .english
-                        ? "Show the English meaning and definition."
-                        : "Show a short explanation written in simple Danish."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text(configurationHelp)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Toggle("Speak Danish on hover", isOn: $model.autoSpeak)
 
@@ -111,5 +113,23 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 555)
+    }
+
+    private var configurationHelp: String {
+        let translation = model.translationMode == .english
+            ? "Show the English translation."
+            : "Hide the translation."
+        let explanation: String
+        switch model.explanationMode {
+        case .beginner:
+            explanation = "Use a short beginner-friendly English gloss."
+        case .easyDanish:
+            explanation = "Explain the word in simple Danish."
+        case .english:
+            explanation = "Show the fuller English dictionary definition."
+        case .none:
+            explanation = "Hide the explanation."
+        }
+        return "\(translation) \(explanation)"
     }
 }
