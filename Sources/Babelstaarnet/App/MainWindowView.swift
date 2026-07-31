@@ -16,10 +16,6 @@ struct MainWindowView: View {
 
                 if model.screenPermissionGranted {
                     learningControl
-
-                    if !model.openSourceEnginesReady {
-                        engineNotice
-                    }
                 } else {
                     permissionNotice
                 }
@@ -98,9 +94,9 @@ struct MainWindowView: View {
 
     private var windowHeight: CGFloat {
         if !model.screenPermissionGranted {
-            return 320
+            return 355
         }
-        return model.openSourceEnginesReady ? 285 : 340
+        return 285
     }
 
     private var languageRow: some View {
@@ -195,54 +191,49 @@ struct MainWindowView: View {
     private var permissionNotice: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(
-                "Allow Screen Recording to read words under the pointer.",
-                systemImage: "rectangle.on.rectangle.slash"
+                "One-time setup",
+                systemImage: "checkmark.shield"
             )
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 13, weight: .semibold))
+
+            Text(
+                "Babelstårnet needs permission to read visible words. Click below, then enable Babelstårnet in System Settings."
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
 
             HStack {
                 Button(
                     model.screenPermissionWasRequested
-                        ? "Quit & Relaunch"
-                        : "Allow access"
+                        ? "Open System Settings"
+                        : "Set up Babelstårnet"
                 ) {
                     if model.screenPermissionWasRequested {
-                        model.relaunch()
+                        model.openScreenRecordingSettings()
                     } else {
-                        model.requestScreenPermission()
+                        model.beginGuidedSetup()
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
 
-                Button("System Settings") {
-                    model.openScreenRecordingSettings()
+                if model.screenPermissionWasRequested {
+                    Button("Enabled it? Relaunch") {
+                        model.relaunch()
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
             }
+
+            Label(
+                "No account required. Built-in on-device engines work immediately.",
+                systemImage: "lock"
+            )
+            .font(.system(size: 10))
+            .foregroundStyle(.tertiary)
         }
         .padding(15)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var engineNotice: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "shippingbox")
-                .foregroundStyle(.secondary)
-            Text(model.engineSetupMessage)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button(model.isInstallingEngines ? "Installing…" : "Install") {
-                Task {
-                    await model.installOpenSourceEngines()
-                }
-            }
-            .disabled(model.isInstallingEngines)
-        }
-        .padding(12)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var footer: some View {

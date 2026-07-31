@@ -1,0 +1,16 @@
+BABELSTÅRNET — START HERE
+
+1. Drag Babelstaarnet.app onto the Applications folder in this window.
+2. Open Babelstaarnet from Applications.
+3. Click “Set up Babelstårnet”.
+4. In System Settings, enable Babelstårnet under Screen Recording.
+5. Return to Babelstårnet. If asked, click “Enabled it? Relaunch”.
+6. Click “Start hover learning”, or press fn + Z.
+7. Move the pointer over a Danish word.
+
+Everything runs on this Mac. No account is required.
+
+If macOS says it cannot verify this preview build:
+Control-click Babelstaarnet.app, choose Open, then choose Open once more.
+
+A normally signed and notarized release opens with a regular double-click.

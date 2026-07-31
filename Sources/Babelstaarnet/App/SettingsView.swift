@@ -63,6 +63,12 @@ struct SettingsView: View {
             }
 
             Section("Local engines") {
+                Text(
+                    "Optional: Babelstårnet can use Apple's built-in on-device engines without installing anything."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
                 LabeledContent("OCR", value: model.ocrEngineName)
                 LabeledContent("Translation", value: model.translationEngineName)
                 LabeledContent(

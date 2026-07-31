@@ -204,6 +204,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func beginGuidedSetup() {
+        requestScreenPermission()
+        if !screenPermissionGranted {
+            openScreenRecordingSettings()
+        }
+    }
+
     func refreshScreenPermission() {
         screenPermissionGranted = captureService.hasPermission
         if screenPermissionGranted {

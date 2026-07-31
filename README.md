@@ -50,7 +50,27 @@ This repository currently contains the first working MVP for Danish → English.
 No screenshot, recognized text, definition, or audio is sent to a remote
 service.
 
-## Requirements
+## Install the app
+
+Download the latest DMG from
+[GitHub Releases](https://github.com/Sininliny/Babelstaarnet/releases), open it,
+and drag **Babelstaarnet.app** to **Applications**. On first launch:
+
+1. Click **Set up Babelstårnet**.
+2. Enable Babelstårnet in the System Settings page that opens.
+3. Return to the app and relaunch if macOS requests it.
+4. Click **Start hover learning**, or press `Fn+Z`.
+
+No account, terminal, or engine installation is required. Apple Vision and
+Translation provide an entirely on-device zero-setup path. The open-source
+Tesseract and Argos engines remain available as an optional installation under
+Settings.
+
+Releases built without an Apple Developer ID are preview builds. macOS may
+require Control-clicking the app and choosing **Open** once. Signed and
+notarized releases open normally.
+
+## Development requirements
 
 - macOS 15 or newer
 - Swift 6.2 toolchain
@@ -71,9 +91,9 @@ requirement, remove or toggle that old Babelstårnet entry once, launch the
 current bundle, enable Babelstårnet again, and relaunch. Later local rebuilds
 retain the designated requirement.
 
-## Install the open-source local engines
+## Optional open-source local engines
 
-On first launch, use **Install engines** in the dashboard or Settings. The
+Use **Install engines** in Settings if you prefer the open-source pipeline. The
 packaged installer installs Tesseract with Danish language data through
 Homebrew, creates a private Python 3.12 environment under Application Support,
 and downloads the Danish ↔ English Argos models plus local WordNet data.
@@ -84,9 +104,9 @@ The same setup can be run from the repository:
 make install-engines
 ```
 
-This is a one-time setup. After the packages are installed, both engines work
-without network access. If you skip this step, Babelstårnet remains functional
-with Apple's on-device Vision and Translation frameworks.
+This is a one-time optional setup. After the packages are installed, both
+engines work without network access. If you skip it, Babelstårnet remains
+functional with Apple's on-device Vision and Translation frameworks.
 
 Argos state is kept under:
 
@@ -100,9 +120,11 @@ Argos state is kept under:
 make test
 make test-runtime
 make run
+make release
 ```
 
 `make run` builds and ad-hoc signs `dist/Babelstaarnet.app`, then launches it.
+`make release` produces a drag-to-Applications DMG and checksum under `dist/`.
 On first use:
 
 1. Choose **Allow access** in the menu-bar popover.

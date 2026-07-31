@@ -26,14 +26,6 @@ struct MenuBarContentView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
 
-                if !model.openSourceEnginesReady {
-                    Button("Install local engines") {
-                        Task {
-                            await model.installOpenSourceEngines()
-                        }
-                    }
-                    .disabled(model.isInstallingEngines)
-                }
             } else {
                 permissionControl
             }
@@ -149,20 +141,28 @@ struct MenuBarContentView: View {
 
     private var permissionControl: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Screen Recording access is required.")
+            Text("Complete the one-time screen access setup.")
                 .font(.system(size: 11, weight: .medium))
             Button(
                 model.screenPermissionWasRequested
-                    ? "Quit & Relaunch"
-                    : "Allow access"
+                    ? "Open System Settings"
+                    : "Set up Babelstårnet"
             ) {
                 if model.screenPermissionWasRequested {
-                    model.relaunch()
+                    model.openScreenRecordingSettings()
                 } else {
-                    model.requestScreenPermission()
+                    model.beginGuidedSetup()
                 }
             }
             .buttonStyle(.bordered)
+
+            if model.screenPermissionWasRequested {
+                Button("Enabled it? Relaunch") {
+                    model.relaunch()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
         }
     }
 }

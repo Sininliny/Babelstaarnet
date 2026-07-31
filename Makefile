@@ -1,4 +1,4 @@
-.PHONY: build test test-runtime app run install-engines clean
+.PHONY: build test test-runtime app release run install-engines clean
 
 build:
 	swift build
@@ -11,6 +11,9 @@ test-runtime:
 
 app:
 	./Scripts/build-app.sh
+
+release:
+	./Scripts/package-release.sh
 
 run: app
 	open ./dist/Babelstaarnet.app
