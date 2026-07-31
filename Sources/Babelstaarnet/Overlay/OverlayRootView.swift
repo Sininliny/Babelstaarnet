@@ -100,6 +100,7 @@ private extension View {
         tint: Color,
         cornerRadius: CGFloat
     ) -> some View {
+#if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             glassEffect(
                 .regular.tint(tint),
@@ -109,20 +110,27 @@ private extension View {
                 )
             )
         } else {
-            background(
-                .ultraThinMaterial,
-                in: RoundedRectangle(
-                    cornerRadius: cornerRadius,
-                    style: .continuous
-                )
+            materialBubble(cornerRadius: cornerRadius)
+        }
+#else
+        materialBubble(cornerRadius: cornerRadius)
+#endif
+    }
+
+    private func materialBubble(cornerRadius: CGFloat) -> some View {
+        background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(
+                cornerRadius: cornerRadius,
+                style: .continuous
             )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: cornerRadius,
-                    style: .continuous
-                )
-                .stroke(.white.opacity(0.28), lineWidth: 0.7)
-            }
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: cornerRadius,
+                style: .continuous
+            )
+            .stroke(.white.opacity(0.28), lineWidth: 0.7)
         }
     }
 }
