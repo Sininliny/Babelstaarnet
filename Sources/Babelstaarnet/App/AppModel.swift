@@ -675,7 +675,7 @@ final class AppModel: ObservableObject {
     private func apply(
         translations: [String: String],
         explanations: [String: String] = [:],
-        adaptiveExplanations: [String: String] = [:],
+        adaptiveExplanations: [String: MixedLanguageExplanation] = [:],
         to regions: [TextRegion],
         generation: UUID
     ) {
@@ -695,9 +695,11 @@ final class AppModel: ObservableObject {
                 ] ?? beginnerDanishService.localExplanation(
                     for: word.sourceText
                 ) ?? ""
-                translatedWord.adaptiveExplanation = adaptiveExplanations[
+                let mixed = adaptiveExplanations[
                     word.sourceText.lowercased()
-                ] ?? ""
+                ]
+                translatedWord.adaptiveExplanation = mixed?.text ?? ""
+                translatedWord.adaptiveEnglishTerms = mixed?.englishTerms ?? []
                 return translatedWord
             }
             return translatedRegion
@@ -770,9 +772,11 @@ final class AppModel: ObservableObject {
                 ] ?? beginnerDanishService.localExplanation(
                     for: word.sourceText
                 ) ?? ""
-                updatedWord.adaptiveExplanation = adaptiveExplanations[
+                let mixed = adaptiveExplanations[
                     word.sourceText.lowercased()
-                ] ?? ""
+                ]
+                updatedWord.adaptiveExplanation = mixed?.text ?? ""
+                updatedWord.adaptiveEnglishTerms = mixed?.englishTerms ?? []
                 return updatedWord
             }
             return updatedRegion
@@ -831,7 +835,7 @@ final class AppModel: ObservableObject {
 
     private func mixedExplanations(
         from danishExplanations: [String: String]
-    ) async -> [String: String] {
+    ) async -> [String: MixedLanguageExplanation] {
         guard explanationMode == .adaptive,
               !danishExplanations.isEmpty else {
             return [:]
@@ -876,7 +880,7 @@ final class AppModel: ObservableObject {
         }
 
         return danishExplanations.mapValues { explanation in
-            mixedExplanationService.mix(
+            mixedExplanationService.mixResult(
                 danishExplanation: explanation,
                 englishByDanishWord: mixedWordTranslationCache,
                 isFamiliar: { learnerProfileStore.isFamiliar($0) }

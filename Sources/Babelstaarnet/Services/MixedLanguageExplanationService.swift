@@ -1,5 +1,10 @@
 import Foundation
 
+struct MixedLanguageExplanation: Equatable, Sendable {
+    let text: String
+    let englishTerms: [String]
+}
+
 struct MixedLanguageExplanationService {
     private static let wordExpression = try! NSRegularExpression(
         pattern: #"[\p{L}]+(?:['’-][\p{L}]+)*"#
@@ -42,6 +47,22 @@ struct MixedLanguageExplanationService {
         wordLimit: Int = 20,
         replacementLimit: Int = 6
     ) -> String {
+        mixResult(
+            danishExplanation: danishExplanation,
+            englishByDanishWord: englishByDanishWord,
+            isFamiliar: isFamiliar,
+            wordLimit: wordLimit,
+            replacementLimit: replacementLimit
+        ).text
+    }
+
+    func mixResult(
+        danishExplanation: String,
+        englishByDanishWord: [String: String],
+        isFamiliar: (String) -> Bool,
+        wordLimit: Int = 20,
+        replacementLimit: Int = 6
+    ) -> MixedLanguageExplanation {
         let compact = danishExplanation
             .replacingOccurrences(
                 of: #"\s+"#,
@@ -50,7 +71,7 @@ struct MixedLanguageExplanationService {
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !compact.isEmpty else {
-            return ""
+            return MixedLanguageExplanation(text: "", englishTerms: [])
         }
 
         let limited = completeWords(in: compact, limit: wordLimit)
@@ -62,6 +83,7 @@ struct MixedLanguageExplanationService {
             )
         )
         let mutable = NSMutableString(string: limited)
+        var englishTerms: [String] = []
         for match in wordMatches(in: limited).reversed() {
             let key = normalized(match.word)
             guard replaceable.contains(key),
@@ -72,8 +94,12 @@ struct MixedLanguageExplanationService {
                 continue
             }
             mutable.replaceCharacters(in: match.range, with: english)
+            englishTerms.append(english)
         }
-        return mutable as String
+        return MixedLanguageExplanation(
+            text: mutable as String,
+            englishTerms: Array(Set(englishTerms)).sorted()
+        )
     }
 
     private func wordMatches(

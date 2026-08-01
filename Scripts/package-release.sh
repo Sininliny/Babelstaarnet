@@ -13,6 +13,8 @@ version="$(
 app_path="$project_dir/dist/Babelstaarnet.app"
 dmg_name="Babelstaarnet-${version}-macOS.dmg"
 dmg_path="$project_dir/dist/$dmg_name"
+app_zip_name="Babelstaarnet-${version}-macOS.app.zip"
+app_zip_path="$project_dir/dist/$app_zip_name"
 staging_root="$(mktemp -d "${TMPDIR:-/tmp}/babelstaarnet-release.XXXXXX")"
 payload_dir="$staging_root/Babelstårnet"
 
@@ -23,6 +25,15 @@ trap cleanup EXIT
 
 "$script_dir/build-app.sh"
 codesign --verify --deep --strict "$app_path"
+
+rm -f "$app_zip_path"
+/usr/bin/ditto \
+    -c \
+    -k \
+    --sequesterRsrc \
+    --keepParent \
+    "$app_path" \
+    "$app_zip_path"
 
 mkdir -p "$payload_dir"
 /usr/bin/ditto "$app_path" "$payload_dir/Babelstaarnet.app"
@@ -40,7 +51,10 @@ hdiutil verify "$dmg_path"
 (
     cd "$project_dir/dist"
     /usr/bin/shasum -a 256 "$dmg_name" > "$dmg_name.sha256"
+    /usr/bin/shasum -a 256 "$app_zip_name" > "$app_zip_name.sha256"
 )
 
 echo "Packaged $dmg_path"
 echo "Checksum $dmg_path.sha256"
+echo "Packaged $app_zip_path"
+echo "Checksum $app_zip_path.sha256"

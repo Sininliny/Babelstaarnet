@@ -28,6 +28,7 @@ enum HoverHitTesting {
                     translatedText: word.translatedText,
                     beginnerExplanation: word.beginnerExplanation,
                     adaptiveExplanation: word.adaptiveExplanation,
+                    adaptiveEnglishTerms: word.adaptiveEnglishTerms,
                     frame: word.frame,
                     screenFrame: word.screenFrame,
                     displayID: word.displayID

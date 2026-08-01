@@ -46,7 +46,7 @@ if [[ -n "$signing_identity" ]]; then
         --force \
         --deep \
         --options runtime \
-        --timestamp=none \
+        --timestamp \
         --sign "$signing_identity" \
         "$app_dir"
     echo "Signed with $signing_identity"

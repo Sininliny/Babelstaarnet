@@ -52,10 +52,10 @@ struct OverlayRootView: View {
                 Divider().opacity(0.65)
 
                 if card.explanationMode == .adaptive {
-                    Text(card.definition)
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    MixedExplanationText(
+                        text: card.definition,
+                        englishTerms: adaptiveEnglishTerms(for: card)
+                    )
                 } else {
                     Text(card.definition)
                         .font(.system(size: 12, design: .rounded))
@@ -136,6 +136,139 @@ struct OverlayRootView: View {
         .fixedSize(horizontal: false, vertical: true)
         .liquidGlassBubble(tint: .primary.opacity(0.04), cornerRadius: 14)
         .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
+    }
+
+    private func adaptiveEnglishTerms(for card: HoverCard) -> [String] {
+        if !card.word.adaptiveEnglishTerms.isEmpty {
+            return card.word.adaptiveEnglishTerms
+        }
+        guard card.word.adaptiveExplanation.isEmpty,
+              !card.word.translatedText.isEmpty else {
+            return []
+        }
+        return [card.word.translatedText]
+    }
+}
+
+private struct MixedExplanationText: View {
+    let text: String
+    let englishTerms: [String]
+
+    private var englishTokens: Set<String> {
+        Set(
+            englishTerms
+                .flatMap { $0.split(whereSeparator: \Character.isWhitespace) }
+                .map { normalized(String($0)) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    var body: some View {
+        InlineTokenLayout(spacing: 3, lineSpacing: 3) {
+            ForEach(Array(tokens.enumerated()), id: \.offset) { _, token in
+                if englishTokens.contains(normalized(token)) {
+                    Text(token)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(
+                                    .secondary.opacity(0.45),
+                                    lineWidth: 0.6
+                                )
+                        }
+                } else {
+                    Text(token)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .padding(.vertical, 1)
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var tokens: [String] {
+        text.split(whereSeparator: \Character.isWhitespace).map(String.init)
+    }
+
+    private func normalized(_ token: String) -> String {
+        token.lowercased().trimmingCharacters(
+            in: .whitespacesAndNewlines.union(.punctuationCharacters)
+        )
+    }
+}
+
+private struct InlineTokenLayout: Layout {
+    let spacing: CGFloat
+    let lineSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        measure(proposal: proposal, subviews: subviews).size
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        let measurement = measure(
+            proposal: ProposedViewSize(
+                width: bounds.width,
+                height: proposal.height
+            ),
+            subviews: subviews
+        )
+        for (index, origin) in measurement.origins.enumerated() {
+            subviews[index].place(
+                at: CGPoint(
+                    x: bounds.minX + origin.x,
+                    y: bounds.minY + origin.y
+                ),
+                anchor: .topLeading,
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func measure(
+        proposal: ProposedViewSize,
+        subviews: Subviews
+    ) -> (size: CGSize, origins: [CGPoint]) {
+        let availableWidth = proposal.width ?? .greatestFiniteMagnitude
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var usedWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > availableWidth {
+                x = 0
+                y += rowHeight + lineSpacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            usedWidth = max(usedWidth, x - spacing)
+        }
+
+        return (
+            CGSize(
+                width: proposal.width ?? usedWidth,
+                height: subviews.isEmpty ? 0 : y + rowHeight
+            ),
+            origins
+        )
     }
 }
 

@@ -75,6 +75,7 @@ struct WordRegion: Identifiable, Hashable, Sendable {
     var translatedText: String
     var beginnerExplanation: String
     var adaptiveExplanation: String
+    var adaptiveEnglishTerms: [String]
     let frame: CGRect
     let screenFrame: CGRect
     let displayID: CGDirectDisplayID
@@ -85,6 +86,7 @@ struct WordRegion: Identifiable, Hashable, Sendable {
         translatedText: String = "",
         beginnerExplanation: String = "",
         adaptiveExplanation: String = "",
+        adaptiveEnglishTerms: [String] = [],
         frame: CGRect,
         screenFrame: CGRect,
         displayID: CGDirectDisplayID
@@ -94,6 +96,7 @@ struct WordRegion: Identifiable, Hashable, Sendable {
         self.translatedText = translatedText
         self.beginnerExplanation = beginnerExplanation
         self.adaptiveExplanation = adaptiveExplanation
+        self.adaptiveEnglishTerms = adaptiveEnglishTerms
         self.frame = frame
         self.screenFrame = screenFrame
         self.displayID = displayID

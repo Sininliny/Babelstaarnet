@@ -32,6 +32,22 @@ enum MixedLanguageExplanationChecks {
         )
         precondition(!mixed.contains("…"))
 
+        let result = service.mixResult(
+            danishExplanation: danish,
+            englishByDanishWord: [
+                "første": "first",
+                "del": "part",
+                "solopgang": "sunrise",
+                "klokken": "the clock"
+            ],
+            isFamiliar: { familiar.contains($0) }
+        )
+        precondition(result.text == mixed)
+        precondition(
+            Set(result.englishTerms)
+                == Set(["first", "part", "sunrise", "the clock"])
+        )
+
         let learned = service.mix(
             danishExplanation: danish,
             englishByDanishWord: ["første": "first"],

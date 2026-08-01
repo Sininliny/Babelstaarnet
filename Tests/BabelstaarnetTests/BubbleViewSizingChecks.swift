@@ -9,6 +9,8 @@ enum BubbleViewSizingChecks {
             sourceText: "Jordens",
             translatedText: "Earth's",
             beginnerExplanation: "Noget som hører til jorden.",
+            adaptiveExplanation: "Noget som hører til Earth.",
+            adaptiveEnglishTerms: ["Earth"],
             frame: CGRect(x: 100, y: 100, width: 70, height: 24),
             screenFrame: CGRect(x: 0, y: 0, width: 1_440, height: 900),
             displayID: 1
@@ -20,7 +22,7 @@ enum BubbleViewSizingChecks {
 
         let compact = HoverCard(
             word: word,
-            definition: "Noget som hører til jorden.",
+            definition: "Noget som hører til Earth.",
             familiarityLabel: "Well established",
             translationMode: .english,
             explanationMode: .adaptive
@@ -33,7 +35,7 @@ enum BubbleViewSizingChecks {
 
         let supported = HoverCard(
             word: word,
-            definition: "Noget som hører til jorden.",
+            definition: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
             familiarityLabel: "New word",
             translationMode: .english,
