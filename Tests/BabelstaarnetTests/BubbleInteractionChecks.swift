@@ -16,6 +16,27 @@ enum BubbleInteractionChecks {
             )
         )
         precondition(
+            BubbleInteractionPolicy.shouldKeepLearningSnapshot(
+                pointer: CGPoint(x: 102, y: 101),
+                anchor: CGPoint(x: 100, y: 100),
+                interactionIsHeld: false
+            )
+        )
+        precondition(
+            !BubbleInteractionPolicy.shouldKeepLearningSnapshot(
+                pointer: CGPoint(x: 112, y: 100),
+                anchor: CGPoint(x: 100, y: 100),
+                interactionIsHeld: false
+            )
+        )
+        precondition(
+            BubbleInteractionPolicy.shouldKeepLearningSnapshot(
+                pointer: CGPoint(x: 400, y: 400),
+                anchor: CGPoint(x: 100, y: 100),
+                interactionIsHeld: true
+            )
+        )
+        precondition(
             BubbleInteractionPolicy.shouldPinAfterStationaryHover(
                 point: CGPoint(x: 110, y: 110),
                 anchor: CGPoint(x: 111, y: 109),

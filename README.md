@@ -3,7 +3,8 @@
 Babelstårnet is a private, local-first macOS learning overlay. It reads Danish
 text visible across your displays and turns each Danish OCR word into a
 hoverable learning target. Hovering speaks the original Danish word and shows
-its English meaning and definition beside—not over—the source.
+the surrounding Danish sentence with only the English support the learner
+currently needs, beside—not over—the source.
 
 This repository currently contains the first working MVP for Danish → English.
 
@@ -21,35 +22,41 @@ This repository currently contains the first working MVP for Danish → English.
   recognized with sparse layout analysis
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
-- Independent learning layers: show or hide Danish → English translation, then
-  freely combine it with an Adaptive explanation, Beginner gloss, Easy Danish
-  explanation, full English definition, or no explanation
+- One Danish-first learning translator with no mode selection: familiar words
+  stay Danish while English appears only where it is needed for understanding
 - A private adaptive learning profile that treats hovering as exposure only,
   learns from explicit **Knew** and **Don’t know** feedback, gradually
   reduces English support, and can be reset from Settings
-- Learner-first mixed explanations keep Danish word order and grammar words,
-  while locally replacing unfamiliar content words with English. Familiar words
-  gradually remain in Danish; extra English appears only after **Don’t know**.
-- Stable, content-sized adaptive cards: `1` marks a word known, `2` marks it
-  unknown and shows extra English, and `3` pins or unpins the card. Holding
-  Option keeps it open while the pointer moves to its controls. After 0.75
-  seconds without input, the bubble is held temporarily; any pointer or keyboard
-  input releases that temporary hold. These keys exist only while an
-  adaptive card is visible.
+- The adaptive sentence bridge preserves Danish word order and grammar across
+  the visible source line. Established words remain Danish, learning words
+  receive a brief outlined English bridge, and new meaning-bearing words use
+  concise English support.
+- Two coordinated learning bubbles: a compact adaptive word explanation stays
+  above the hovered word while a wider sentence bridge stays below it. The word
+  bridge preserves a concise Danish explanation and replaces only concepts the
+  learner does not yet know with outlined English. Each bridge can be enabled
+  independently in the menu-bar popover or Settings, and all content wraps
+  instead of being shortened. Both use one frozen
+  OCR snapshot, so background rescans cannot change them while the pointer is
+  still. `1` marks a word known, `2` marks it unknown and shows extra English,
+  and `3` pins or unpins the visible bubbles. Holding
+  Option keeps them open while the pointer moves to the controls. After 0.75
+  seconds without input, they are held temporarily; any pointer or keyboard
+  input releases that temporary hold. Every shortcut and the hold modifier can
+  be changed in Settings; bubble shortcuts exist only while a learning bubble
+  is visible.
 - Versioned local JSON export/import for backing up or moving the adaptive
   learning profile without exporting screenshots or source sentences; imports
   merge idempotently with existing progress
-- Easy Danish hints from a local learner lexicon plus
-  [Princeton WordNet](https://wordnet.princeton.edu/) definitions translated
-  through the local English → Danish Argos model
 - Cursor-only learning bubble; no screen full of translated captions
 - Per-word OCR bounds and pointer tracking for selectable text and text in images
-- English definitions from the local macOS Dictionary
+- Optional extra English help from the local macOS Dictionary after **Don’t
+  know** feedback
 - Danish pronunciation through the local AVSpeechSynthesizer voice
 - Guaranteed meaning placement on dense pages; speech never runs without a
   visible learning result
 - Native Liquid Glass on macOS 26+, with a material-glass fallback on macOS 15
-- Global Fn+Z activation/deactivation
+- Customizable global activation/deactivation shortcut (`Fn+Z` by default)
 - Distinct active and inactive menu-bar icons
 - Movement-driven refresh with a low-frequency stationary fallback for scrolling
   and screen changes
@@ -75,7 +82,7 @@ and drag **Babelstaarnet.app** to **Applications**. On first launch:
 1. Click **Set up Babelstårnet**.
 2. Enable Babelstårnet in the System Settings page that opens.
 3. Return to the app and relaunch if macOS requests it.
-4. Click **Start hover learning**, or press `Fn+Z`.
+4. Click **Start hover learning**, or press `Fn+Z` (the default shortcut).
 
 No account, terminal, or engine installation is required. Apple Vision and
 Translation provide an entirely on-device zero-setup path. The open-source
@@ -112,7 +119,8 @@ retain the designated requirement.
 Use **Install engines** in Settings if you prefer the open-source pipeline. The
 packaged installer installs Tesseract with Danish language data through
 Homebrew, creates a private Python 3.12 environment under Application Support,
-and downloads the Danish ↔ English Argos models plus local WordNet data.
+and downloads Danish → English and English → Danish Argos models plus local
+WordNet data for adaptive word explanations.
 
 The same setup can be run from the repository:
 
@@ -147,14 +155,13 @@ On first use:
 2. Enable Babelstårnet under **System Settings → Privacy & Security → Screen
    Recording**.
 3. Relaunch the app if macOS requests it.
-4. Choose **Activate hover learning** or press `Fn+Z`.
-5. In Settings, independently choose **Translate: Danish → English / None** and
-  **Explain: Adaptive / Beginner / Easy Danish / English / None**.
-6. Hover a Danish word to hear it and see the selected explanation.
-7. With an Adaptive card visible, use `1` for **Knew**, `2` for **Don’t know**,
+4. Choose **Activate hover learning** or press `Fn+Z` by default.
+5. Hover a Danish word to hear it and see the adaptive sentence bridge.
+6. With a learning card visible, use `1` for **Knew**, `2` for **Don’t know**,
    or `3` to pin it. Hold Option while moving to its controls. Leaving the
-   pointer still temporarily holds the bubble until the next input.
-8. Press `Fn+Z` again to deactivate.
+   pointer still temporarily holds the bubble until the next input. These
+   shortcuts and the hold modifier are editable under **Settings → Shortcuts**.
+7. Press the activation shortcut again to deactivate.
 
 Power saving is enabled by default. It can be disabled under **Settings →
 Learning → Pause screen reading when idle**. While suspended, detection remains
@@ -163,9 +170,9 @@ or OCR request is made.
 
 `make test-runtime` renders a Retina-scale cursor crop containing dark, light,
 and colored Danish text, reads it with the installed Tesseract engine, and
-checks repeated translations through the persistent Argos worker. The runtime
-checks enforce a sub-two-second OCR budget and a sub-one-second warmed
-translation budget.
+checks repeated translations through the persistent Argos worker and verifies
+the adaptive word-explanation resources. The runtime checks enforce a
+sub-two-second OCR budget and a sub-one-second warmed translation budget.
 
 When the Apple translation fallback is used, the first translation may prompt
 macOS to download its Danish → English language pack. It then works offline.
@@ -179,7 +186,7 @@ cursor movement → adaptive local crop → contrast-adaptive Tesseract
                                              │
                          cached persistent Argos translation
                                              │
-                    English meaning / adaptive Danish + English hint
+                         adaptive Danish + English sentence bridge
                                              │
                               nonactivating hover bubble
                                              │

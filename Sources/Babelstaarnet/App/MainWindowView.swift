@@ -73,7 +73,6 @@ struct MainWindowView: View {
             }
 
             Text(statusText)
-                .lineLimit(1)
         }
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(.secondary)
@@ -81,7 +80,7 @@ struct MainWindowView: View {
 
     private var statusText: String {
         if model.phase.isWorking {
-            return "Reading…"
+            return "Reading"
         }
         if case .failed = model.phase {
             return "Needs attention"
@@ -102,8 +101,8 @@ struct MainWindowView: View {
     private var languageRow: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Translate · \(model.translationMode.title)")
-                Text("Explain · \(model.explanationMode.title)")
+                Text("Learning translator")
+                Text("Danish first · English when needed")
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -170,7 +169,7 @@ struct MainWindowView: View {
     }
 
     private var shortcutKey: some View {
-        Text("fn  Z")
+        Text(model.toggleLearningShortcutLabel)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)

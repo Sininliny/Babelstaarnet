@@ -90,13 +90,10 @@ enum AdaptiveLearningChecks {
 
         let service = AdaptiveExplanationService()
         let danishOnly = service.explanation(
-            easyDanish: "Hun er ikke sikker endnu.",
+            bridgeText: "Hun er ikke sikker endnu.",
             englishMeaning: "hesitates",
-            shortEnglish: "Hesitates.",
-            fullEnglish: "To pause before doing something because you are unsure.",
-            progress: familiar,
-            expandEnglish: false,
-            at: now
+            expandedEnglish: "To pause before doing something because you are unsure.",
+            expandEnglish: false
         )
         precondition(danishOnly.englishSupport == nil)
         precondition(danishOnly.primaryText.hasPrefix("Hun"))
@@ -105,13 +102,10 @@ enum AdaptiveLearningChecks {
         let needsHelp = store.progress(for: "tøver", at: now)
         precondition(needsHelp.level(at: now) == .learning)
         let expanded = service.explanation(
-            easyDanish: "Hun er ikke sikker endnu.",
+            bridgeText: "Hun er ikke sikker endnu.",
             englishMeaning: "hesitates",
-            shortEnglish: "Hesitates.",
-            fullEnglish: "To pause before doing something because you are unsure.",
-            progress: needsHelp,
-            expandEnglish: true,
-            at: now
+            expandedEnglish: "To pause before doing something because you are unsure.",
+            expandEnglish: true
         )
         precondition(
             expanded.englishSupport
@@ -119,22 +113,11 @@ enum AdaptiveLearningChecks {
         )
         precondition(expanded.englishIsExpanded)
 
-        let newWord = LearnerWordProgress(
-            word: "naturressourcer",
-            familiarity: 0.12,
-            encounterCount: 1,
-            moreEnglishCount: 0,
-            knownConfirmationCount: 0,
-            lastSeen: now
-        )
         let bilingual = service.explanation(
-            easyDanish: "Useful materialer fra nature, som mennesker kan use.",
+            bridgeText: "Useful materialer fra nature, som mennesker kan use.",
             englishMeaning: "natural resources",
-            shortEnglish: "“natural resources” — useful materials or supplies that come from nature.",
-            fullEnglish: "“natural resources” — useful materials or supplies that come from nature, such as water, land, forests, minerals, and energy.",
-            progress: newWord,
-            expandEnglish: false,
-            at: now
+            expandedEnglish: "“natural resources” — useful materials or supplies that come from nature, such as water, land, forests, minerals, and energy.",
+            expandEnglish: false
         )
         precondition(bilingual.primaryText.split(separator: " ").count <= 20)
         precondition(bilingual.primaryText.hasSuffix("."))

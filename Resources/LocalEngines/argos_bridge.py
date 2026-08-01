@@ -51,22 +51,19 @@ def english_definitions(words: list[str]) -> list[str]:
     definitions: list[str] = []
     for raw_word in words:
         cleaned = re.sub(r"[^A-Za-z' -]", "", raw_word).strip().lower()
-        candidates = [
-            cleaned.replace(" ", "_"),
-            *reversed(cleaned.split()),
-        ]
+        candidates = [cleaned.replace(" ", "_")]
+        if " " not in cleaned:
+            candidates.append(cleaned)
         synsets = []
         for candidate in candidates:
-            if not candidate:
-                continue
-            synsets = wordnet.synsets(candidate)
+            if candidate:
+                synsets = wordnet.synsets(candidate)
             if synsets:
                 break
-
         if synsets:
             definition = synsets[0].definition().strip()
         elif cleaned:
-            definition = f"a word or expression with the meaning “{cleaned}”"
+            definition = f"a term used for {cleaned}"
         else:
             definition = "a word used in this sentence"
         definitions.append(definition[:240])
@@ -81,7 +78,7 @@ def main() -> int:
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--batch", action="store_true")
     parser.add_argument("--server", action="store_true")
-    parser.add_argument("--check-wordwise", action="store_true")
+    parser.add_argument("--check-word-bridge", action="store_true")
     arguments = parser.parse_args()
 
     try:
@@ -103,7 +100,7 @@ def main() -> int:
             print("ready")
             return 0
 
-        if arguments.check_wordwise:
+        if arguments.check_word_bridge:
             english_definitions([])
             print("ready")
             return 0

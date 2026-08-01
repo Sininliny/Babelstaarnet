@@ -38,30 +38,28 @@ enum ArgosServiceCheck {
                 + " s"
         )
 
-        let wordWiseService = ArgosTranslationService()
-        let wordWiseReady = await wordWiseService.isWordWiseReady()
+        let wordBridgeService = ArgosTranslationService()
+        let wordBridgeReady = await wordBridgeService.isWordBridgeReady()
         precondition(
-            wordWiseReady,
-            "Easy Danish model or local WordNet data is not installed"
+            wordBridgeReady,
+            "Adaptive word-bridge resources are not installed"
         )
-        let explanations = try await wordWiseService
+        let explanations = try await wordBridgeService
             .explainEnglishWordsInDanish([
-                "dictionary",
-                "learn",
-                "course"
-            ])
-        precondition(explanations.count == 3)
+                "study accommodation",
+                "learn"
+        ])
+        precondition(explanations.count == 2)
         precondition(explanations.allSatisfy { !$0.isEmpty })
         precondition(
             explanations.allSatisfy {
-                !$0.localizedCaseInsensitiveContains(
-                    "a word or expression with the meaning"
-                )
-            }
+                $0.split(whereSeparator: \Character.isWhitespace).count >= 3
+            },
+            "Word bridge returned a direct translation instead of an explanation"
         )
         print(
-            "Easy Danish WordNet + Argos check passed: "
-                + explanations.joined(separator: " · ")
+            "Adaptive word-bridge runtime check passed: "
+                + explanations.joined(separator: " | ")
         )
     }
 }

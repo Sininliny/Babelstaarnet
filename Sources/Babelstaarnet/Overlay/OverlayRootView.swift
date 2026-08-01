@@ -1,12 +1,12 @@
 import SwiftUI
 
-struct OverlayRootView: View {
+struct WordBubbleView: View {
     @ObservedObject var state: OverlayState
 
     var body: some View {
         Group {
             if let hoverCard = state.hoverCard {
-                hoverBubble(hoverCard)
+                wordBubble(hoverCard)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             } else {
                 Color.clear
@@ -16,30 +16,16 @@ struct OverlayRootView: View {
     }
 
     @ViewBuilder
-    private func hoverBubble(_ card: HoverCard) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(card.word.sourceText)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+    private func wordBubble(_ card: HoverCard) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "character.book.closed")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
 
-                if card.translationMode == .english {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.tertiary)
-
-                    Text(card.word.translatedText)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                }
-
-                if let badgeTitle = card.explanationMode.badgeTitle {
-                    Text(badgeTitle)
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(.quaternary, in: Capsule())
-                }
+                Text("Word bridge")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
 
                 Spacer(minLength: 0)
 
@@ -48,89 +34,98 @@ struct OverlayRootView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if card.explanationMode != .none {
-                Divider().opacity(0.65)
+            Text(LearnerDisplayText.clean(card.word.sourceText))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .fixedSize(horizontal: false, vertical: true)
 
-                if card.explanationMode == .adaptive {
-                    MixedExplanationText(
-                        text: card.definition,
-                        englishTerms: adaptiveEnglishTerms(for: card)
-                    )
-                } else {
-                    Text(card.definition)
-                        .font(.system(size: 12, design: .rounded))
+            SentenceBridgeText(
+                text: LearnerDisplayText.clean(card.wordBridgeText),
+                englishTokenIndexes:
+                    card.wordBridgeEnglishTokenIndexes
+            )
+
+            if let englishSupport = card.englishSupport {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("EN")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+
+                    Text(LearnerDisplayText.clean(englishSupport))
+                        .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.secondary)
-                        .lineLimit(5)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
 
-                if let englishSupport = card.englishSupport {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("EN")
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundStyle(.tertiary)
+            if card.showsControlsInWordBridge {
+                BridgeFeedbackControls(state: state, card: card)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(width: WordBubbleMetrics.width, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .liquidGlassBubble(tint: .primary.opacity(0.05), cornerRadius: 12)
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+    }
+}
 
-                        Text(englishSupport)
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+struct SentenceBridgeBubbleView: View {
+    @ObservedObject var state: OverlayState
 
-                if card.explanationMode == .adaptive {
-                    Divider().opacity(0.45)
+    var body: some View {
+        Group {
+            if let hoverCard = state.hoverCard {
+                sentenceBubble(hoverCard)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else {
+                Color.clear
+            }
+        }
+        .animation(.easeOut(duration: 0.14), value: state.hoverCard)
+    }
 
-                    HStack(spacing: 10) {
-                        Button("1  Knew") {
-                            state.onKnown()
-                        }
+    @ViewBuilder
+    private func sentenceBubble(_ card: HoverCard) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "text.quote")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
 
-                        Button(
-                            card.englishIsExpanded
-                                ? "2  Explained"
-                                : "2  Don’t know"
-                        ) {
-                            state.onDontKnow()
-                        }
-                        .disabled(card.englishIsExpanded)
-
-                        Text(state.isPinned ? "3  Unpin" : "3  Pin")
-
-                        Spacer(minLength: 0)
-
-                        if let familiarityLabel = card.familiarityLabel {
-                            Text(familiarityLabel)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                Text("Sentence bridge")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                    HStack(spacing: 4) {
-                        Image(
-                            systemName: state.isOptionHeld
-                                ? "pin.fill"
-                                : "option"
-                        )
-                        Text(
-                            state.isOptionHeld
-                                ? "Held open while Option is down"
-                                : (state.isPinned
-                                    ? "Pinned · press 3 to release"
-                                    : state.isStationaryHeld
-                                        ? "Held only while there is no input"
-                                        : "Stay still, hold Option, or press 3")
-                        )
-                    }
-                    .font(.system(size: 9, design: .rounded))
-                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
+            }
+
+            SentenceBridgeText(
+                text: LearnerDisplayText.clean(card.learningText),
+                englishTokenIndexes: card.adaptiveEnglishTokenIndexes
+            )
+
+            if card.showsEnglishSupportInSentenceBridge,
+               let englishSupport = card.englishSupport {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("EN")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+
+                    Text(LearnerDisplayText.clean(englishSupport))
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+
+            if card.showsControlsInSentenceBridge {
+                BridgeFeedbackControls(state: state, card: card)
             }
         }
         .padding(12)
         .frame(
-            width: HoverBubbleMetrics.width,
+            width: SentenceBubbleMetrics.width,
             alignment: .topLeading
         )
         .fixedSize(horizontal: false, vertical: true)
@@ -138,35 +133,63 @@ struct OverlayRootView: View {
         .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 
-    private func adaptiveEnglishTerms(for card: HoverCard) -> [String] {
-        if !card.word.adaptiveEnglishTerms.isEmpty {
-            return card.word.adaptiveEnglishTerms
+}
+
+private struct BridgeFeedbackControls: View {
+    @ObservedObject var state: OverlayState
+    let card: HoverCard
+
+    var body: some View {
+        Divider().opacity(0.45)
+
+        HStack(spacing: 10) {
+            Button("\(card.knownShortcutLabel)  Knew") {
+                state.onKnown()
+            }
+
+            Button(
+                card.englishIsExpanded
+                    ? "\(card.dontKnowShortcutLabel)  Explained"
+                    : "\(card.dontKnowShortcutLabel)  Don’t know"
+            ) {
+                state.onDontKnow()
+            }
+            .disabled(card.englishIsExpanded)
+
+            Text(
+                state.isPinned
+                    ? "\(card.pinShortcutLabel)  Unpin"
+                    : "\(card.pinShortcutLabel)  Pin"
+            )
+
+            Spacer(minLength: 0)
         }
-        guard card.word.adaptiveExplanation.isEmpty,
-              !card.word.translatedText.isEmpty else {
-            return []
-        }
-        return [card.word.translatedText]
+        .buttonStyle(.plain)
+        .font(.system(size: 10, weight: .regular, design: .rounded))
+        .foregroundStyle(.tertiary)
     }
 }
 
-private struct MixedExplanationText: View {
-    let text: String
-    let englishTerms: [String]
-
-    private var englishTokens: Set<String> {
-        Set(
-            englishTerms
-                .flatMap { $0.split(whereSeparator: \Character.isWhitespace) }
-                .map { normalized(String($0)) }
-                .filter { !$0.isEmpty }
-        )
+private enum LearnerDisplayText {
+    static func clean(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{2026}", with: ".")
+            .replacingOccurrences(
+                of: #"\.{2,}"#,
+                with: ".",
+                options: .regularExpression
+            )
     }
+}
+
+private struct SentenceBridgeText: View {
+    let text: String
+    let englishTokenIndexes: [Int]
 
     var body: some View {
+        let englishIndexes = Set(englishTokenIndexes)
         InlineTokenLayout(spacing: 3, lineSpacing: 3) {
-            ForEach(Array(tokens.enumerated()), id: \.offset) { _, token in
-                if englishTokens.contains(normalized(token)) {
+            ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
+                if englishIndexes.contains(index) {
                     Text(token)
                         .font(.system(size: 12, design: .rounded))
                         .foregroundStyle(.primary)
@@ -192,12 +215,6 @@ private struct MixedExplanationText: View {
 
     private var tokens: [String] {
         text.split(whereSeparator: \Character.isWhitespace).map(String.init)
-    }
-
-    private func normalized(_ token: String) -> String {
-        token.lowercased().trimmingCharacters(
-            in: .whitespacesAndNewlines.union(.punctuationCharacters)
-        )
     }
 }
 

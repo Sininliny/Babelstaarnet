@@ -7,7 +7,7 @@ project_dir="$(cd "$script_dir/.." && pwd)"
 support_dir="${HOME}/Library/Application Support/Babelstaarnet"
 virtual_environment="$support_dir/argos-venv"
 argos_data_root="$support_dir/Argos"
-wordwise_data_root="$support_dir/WordWise"
+word_bridge_data_root="$support_dir/WordWise"
 if [[ -f "$script_dir/argos_bridge.py" ]]; then
     bridge="$script_dir/argos_bridge.py"
 else
@@ -40,24 +40,23 @@ mkdir -p \
     "$argos_data_root/data" \
     "$argos_data_root/config" \
     "$argos_data_root/cache" \
-    "$wordwise_data_root"
+    "$word_bridge_data_root"
 
 export XDG_DATA_HOME="$argos_data_root/data"
 export XDG_CONFIG_HOME="$argos_data_root/config"
 export XDG_CACHE_HOME="$argos_data_root/cache"
 export ARGOS_CHUNK_TYPE=MINISBD
 export ARGOS_DEVICE_TYPE=cpu
-export NLTK_DATA="$wordwise_data_root"
-
+export NLTK_DATA="$word_bridge_data_root"
 "$python_path" -m venv "$virtual_environment"
 "$virtual_environment/bin/python3" -m pip install --upgrade \
     pip \
     argostranslate \
     nltk
-wordnet_directory="$wordwise_data_root/corpora/wordnet"
+wordnet_directory="$word_bridge_data_root/corpora/wordnet"
 if [[ ! -f "$wordnet_directory/index.noun" ]]; then
-    mkdir -p "$wordwise_data_root/corpora"
-    wordnet_archive="$wordwise_data_root/wordnet.zip"
+    mkdir -p "$word_bridge_data_root/corpora"
+    wordnet_archive="$word_bridge_data_root/wordnet.zip"
     /usr/bin/curl \
         --fail \
         --location \
@@ -69,7 +68,7 @@ if [[ ! -f "$wordnet_directory/index.noun" ]]; then
         -x \
         -k \
         "$wordnet_archive" \
-        "$wordwise_data_root/corpora"
+        "$word_bridge_data_root/corpora"
 fi
 "$virtual_environment/bin/python3" "$bridge" \
     --install \
@@ -80,4 +79,4 @@ fi
     --source en \
     --target da
 
-echo "Tesseract OCR, Danish ↔ English translation, and Easy Danish definitions are ready."
+echo "OCR, translation, and the adaptive word bridge are ready."

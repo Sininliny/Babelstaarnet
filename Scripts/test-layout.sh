@@ -50,21 +50,23 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/HotKeyConfiguration.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/HotKeyConfigurationChecks.swift" \
+    -framework AppKit \
+    -framework Carbon \
+    -o "$output_dir/HotKeyConfigurationChecks"
+
+"$output_dir/HotKeyConfigurationChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Services/DictionaryService.swift" \
     "$project_dir/Tests/BabelstaarnetTests/DictionaryServiceChecks.swift" \
     -framework CoreServices \
     -o "$output_dir/DictionaryServiceChecks"
 
 "$output_dir/DictionaryServiceChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/LearningModeChecks.swift" \
-    -o "$output_dir/LearningModeChecks"
-
-"$output_dir/LearningModeChecks"
 
 swiftc \
     -parse-as-library \
@@ -79,11 +81,21 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/MixedLanguageExplanationService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/MixedLanguageExplanationChecks.swift" \
-    -o "$output_dir/MixedLanguageExplanationChecks"
+    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveSentenceBridgeService.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/AdaptiveSentenceBridgeChecks.swift" \
+    -o "$output_dir/AdaptiveSentenceBridgeChecks"
 
-"$output_dir/MixedLanguageExplanationChecks"
+"$output_dir/AdaptiveSentenceBridgeChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/BeginnerDanishService.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveSentenceBridgeService.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/AdaptiveWordBridgeChecks.swift" \
+    -o "$output_dir/AdaptiveWordBridgeChecks"
+
+"$output_dir/AdaptiveWordBridgeChecks"
 
 swiftc \
     -parse-as-library \
@@ -93,15 +105,6 @@ swiftc \
     -o "$output_dir/TranslationQualityChecks"
 
 "$output_dir/TranslationQualityChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/BeginnerDanishService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/BeginnerDanishServiceChecks.swift" \
-    -o "$output_dir/BeginnerDanishServiceChecks"
-
-"$output_dir/BeginnerDanishServiceChecks"
 
 swiftc \
     -parse-as-library \

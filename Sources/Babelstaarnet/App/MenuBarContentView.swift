@@ -16,11 +16,11 @@ struct MenuBarContentView: View {
 
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Translate · \(model.translationMode.shortTitle)")
-                        Text("Explain · \(model.explanationMode.title)")
+                        Text("Learning translator")
+                        Text("Danish first · English when needed")
                     }
                     Spacer()
-                    Text("fn  Z")
+                    Text(model.toggleLearningShortcutLabel)
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
@@ -28,6 +28,29 @@ struct MenuBarContentView: View {
                 }
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+
+                HStack(spacing: 14) {
+                    Toggle(
+                        "Word bridge",
+                        isOn: Binding(
+                            get: {
+                                model.bridgeConfiguration.showsWordBridge
+                            },
+                            set: model.setWordBridgeEnabled
+                        )
+                    )
+                    Toggle(
+                        "Sentence bridge",
+                        isOn: Binding(
+                            get: {
+                                model.bridgeConfiguration.showsSentenceBridge
+                            },
+                            set: model.setSentenceBridgeEnabled
+                        )
+                    )
+                }
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
 
             } else {
                 permissionControl
@@ -109,7 +132,7 @@ struct MenuBarContentView: View {
 
                     Text(
                         model.phase.isWorking
-                            ? "Reading the screen…"
+                            ? "Reading the screen"
                             : model.detectionSuspendedForIdle
                                 ? "Paused until your next input"
                                 : "Hover any Danish word"

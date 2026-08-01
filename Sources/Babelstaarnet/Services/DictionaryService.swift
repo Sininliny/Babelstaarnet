@@ -2,52 +2,19 @@ import CoreServices
 import Foundation
 
 struct DictionaryService {
-    func definition(for translatedWord: String, sourceWord: String) -> String {
-        fullDefinition(
-            for: translatedWord,
-            sourceWord: sourceWord
-        ).truncatedDefinition()
-    }
-
-    func beginnerExplanation(
-        for translatedWord: String,
-        sourceWord: String
-    ) -> String {
-        fullDefinition(
-            for: translatedWord,
-            sourceWord: sourceWord
-        ).beginnerGloss()
-    }
-
     func adaptiveEnglishGloss(
         for translatedWord: String,
         sourceWord: String
     ) -> String {
-        adaptiveExplanation(
+        learnerGloss(
             for: translatedWord,
-            sourceWord: sourceWord,
-            wordLimit: 16,
-            expanded: false
+            sourceWord: sourceWord
         )
     }
 
-    func adaptiveExpandedEnglish(
+    private func learnerGloss(
         for translatedWord: String,
         sourceWord: String
-    ) -> String {
-        adaptiveExplanation(
-            for: translatedWord,
-            sourceWord: sourceWord,
-            wordLimit: 34,
-            expanded: true
-        )
-    }
-
-    private func adaptiveExplanation(
-        for translatedWord: String,
-        sourceWord: String,
-        wordLimit: Int,
-        expanded: Bool
     ) -> String {
         let meaning = translatedWord.compacted
         guard !meaning.isEmpty else {
@@ -63,8 +30,7 @@ struct DictionaryService {
             return "Means “\(meaning)”."
         }
         let sense = definition.learnerSense(
-            wordLimit: wordLimit,
-            expanded: expanded
+            wordLimit: 16
         )
         guard !sense.isEmpty else {
             return "Means “\(meaning)”."
@@ -124,17 +90,7 @@ private extension String {
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func truncatedDefinition(limit: Int = 320) -> String {
-        compacted.truncated(to: limit)
-    }
-
-    func beginnerGloss(limit: Int = 150) -> String {
-        let compact = compacted
-        let firstSentence = compact.firstSentence ?? compact
-        return firstSentence.truncated(to: limit)
-    }
-
-    func learnerSense(wordLimit: Int, expanded: Bool) -> String {
+    func learnerSense(wordLimit: Int) -> String {
         var value = compacted
         if let partOfSpeech = value.range(
             of: #"\|\s*(?:(?:plural|mass|proper|auxiliary|modal)\s+)?(noun|verb|adjective|adverb|preposition|pronoun|conjunction|determiner|exclamation)\s+"#,
@@ -156,33 +112,12 @@ private extension String {
         if let example = value.firstIndex(of: ":") {
             value = String(value[..<example])
         }
-        if expanded {
-            value = value.replacingOccurrences(of: ";", with: ".")
-        } else if let boundary = value.rangeOfCharacter(
+        if let boundary = value.rangeOfCharacter(
             from: CharacterSet(charactersIn: ";.")
         ) {
             value = String(value[..<boundary.lowerBound])
         }
         return value.compacted.completeWords(limit: wordLimit)
-    }
-
-    var firstSentence: String? {
-        let boundaries = CharacterSet(charactersIn: ".!?")
-        guard let boundary = rangeOfCharacter(from: boundaries) else {
-            return isEmpty ? nil : self
-        }
-        return String(self[...boundary.lowerBound])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            + String(self[boundary.lowerBound])
-    }
-
-    func truncated(to limit: Int) -> String {
-        guard count > limit else {
-            return self
-        }
-        let end = index(startIndex, offsetBy: limit)
-        return String(self[..<end])
-            .trimmingCharacters(in: .whitespaces) + "…"
     }
 
     func completeWords(limit: Int) -> String {

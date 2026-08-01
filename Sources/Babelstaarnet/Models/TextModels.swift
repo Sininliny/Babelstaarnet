@@ -1,55 +1,6 @@
 import CoreGraphics
 import Foundation
 
-enum TranslationMode: String, CaseIterable, Identifiable, Sendable {
-    case english
-    case none
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .english:
-            return "Danish → English"
-        case .none:
-            return "None"
-        }
-    }
-
-    var shortTitle: String {
-        self == .english ? "English" : "No translation"
-    }
-}
-
-enum ExplanationMode: String, CaseIterable, Identifiable, Sendable {
-    case adaptive
-    case beginner
-    case easyDanish
-    case english
-    case none
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .adaptive:
-            return "Adaptive"
-        case .beginner:
-            return "Beginner"
-        case .easyDanish:
-            return "Easy Danish"
-        case .english:
-            return "English"
-        case .none:
-            return "None"
-        }
-    }
-
-    var badgeTitle: String? {
-        nil
-    }
-}
-
 struct CapturedDisplay: @unchecked Sendable {
     let displayID: CGDirectDisplayID
     let image: CGImage
@@ -73,9 +24,10 @@ struct WordRegion: Identifiable, Hashable, Sendable {
     let id: UUID
     let sourceText: String
     var translatedText: String
-    var beginnerExplanation: String
-    var adaptiveExplanation: String
-    var adaptiveEnglishTerms: [String]
+    var wordBridgeDanishText: String
+    var wordBridgeTranslations: [String: String]
+    var wordBridgeText: String
+    var wordBridgeEnglishTokenIndexes: [Int]
     let frame: CGRect
     let screenFrame: CGRect
     let displayID: CGDirectDisplayID
@@ -84,9 +36,10 @@ struct WordRegion: Identifiable, Hashable, Sendable {
         id: UUID = UUID(),
         sourceText: String,
         translatedText: String = "",
-        beginnerExplanation: String = "",
-        adaptiveExplanation: String = "",
-        adaptiveEnglishTerms: [String] = [],
+        wordBridgeDanishText: String = "",
+        wordBridgeTranslations: [String: String] = [:],
+        wordBridgeText: String = "",
+        wordBridgeEnglishTokenIndexes: [Int] = [],
         frame: CGRect,
         screenFrame: CGRect,
         displayID: CGDirectDisplayID
@@ -94,9 +47,10 @@ struct WordRegion: Identifiable, Hashable, Sendable {
         self.id = id
         self.sourceText = sourceText
         self.translatedText = translatedText
-        self.beginnerExplanation = beginnerExplanation
-        self.adaptiveExplanation = adaptiveExplanation
-        self.adaptiveEnglishTerms = adaptiveEnglishTerms
+        self.wordBridgeDanishText = wordBridgeDanishText
+        self.wordBridgeTranslations = wordBridgeTranslations
+        self.wordBridgeText = wordBridgeText
+        self.wordBridgeEnglishTokenIndexes = wordBridgeEnglishTokenIndexes
         self.frame = frame
         self.screenFrame = screenFrame
         self.displayID = displayID
@@ -106,7 +60,6 @@ struct WordRegion: Identifiable, Hashable, Sendable {
 struct TextRegion: Identifiable, Hashable, Sendable {
     let id: UUID
     let sourceText: String
-    var translatedText: String
     let frame: CGRect
     let screenFrame: CGRect
     let displayID: CGDirectDisplayID
@@ -115,7 +68,6 @@ struct TextRegion: Identifiable, Hashable, Sendable {
     init(
         id: UUID = UUID(),
         sourceText: String,
-        translatedText: String = "",
         frame: CGRect,
         screenFrame: CGRect,
         displayID: CGDirectDisplayID,
@@ -123,7 +75,6 @@ struct TextRegion: Identifiable, Hashable, Sendable {
     ) {
         self.id = id
         self.sourceText = sourceText
-        self.translatedText = translatedText
         self.frame = frame
         self.screenFrame = screenFrame
         self.displayID = displayID
@@ -133,29 +84,62 @@ struct TextRegion: Identifiable, Hashable, Sendable {
 
 struct HoverCard: Equatable, Sendable {
     let word: WordRegion
-    let definition: String
+    let wordBridgeText: String
+    let wordBridgeEnglishTokenIndexes: [Int]
+    let learningText: String
     let englishSupport: String?
-    let familiarityLabel: String?
     let englishIsExpanded: Bool
-    let translationMode: TranslationMode
-    let explanationMode: ExplanationMode
+    let adaptiveEnglishTokenIndexes: [Int]
+    let showsControlsInWordBridge: Bool
+    let showsControlsInSentenceBridge: Bool
+    let showsEnglishSupportInSentenceBridge: Bool
+    let knownShortcutLabel: String
+    let dontKnowShortcutLabel: String
+    let pinShortcutLabel: String
 
     init(
         word: WordRegion,
-        definition: String,
+        wordBridgeText: String = "",
+        wordBridgeEnglishTokenIndexes: [Int] = [],
+        learningText: String,
         englishSupport: String? = nil,
-        familiarityLabel: String? = nil,
         englishIsExpanded: Bool = false,
-        translationMode: TranslationMode,
-        explanationMode: ExplanationMode
+        adaptiveEnglishTokenIndexes: [Int] = [],
+        showsControlsInWordBridge: Bool = false,
+        showsControlsInSentenceBridge: Bool = false,
+        showsEnglishSupportInSentenceBridge: Bool = false,
+        knownShortcutLabel: String = "1",
+        dontKnowShortcutLabel: String = "2",
+        pinShortcutLabel: String = "3"
     ) {
         self.word = word
-        self.definition = definition
+        self.wordBridgeText = wordBridgeText
+        self.wordBridgeEnglishTokenIndexes = wordBridgeEnglishTokenIndexes
+        self.learningText = learningText
         self.englishSupport = englishSupport
-        self.familiarityLabel = familiarityLabel
         self.englishIsExpanded = englishIsExpanded
-        self.translationMode = translationMode
-        self.explanationMode = explanationMode
+        self.adaptiveEnglishTokenIndexes = adaptiveEnglishTokenIndexes
+        self.showsControlsInWordBridge = showsControlsInWordBridge
+        self.showsControlsInSentenceBridge = showsControlsInSentenceBridge
+        self.showsEnglishSupportInSentenceBridge =
+            showsEnglishSupportInSentenceBridge
+        self.knownShortcutLabel = knownShortcutLabel
+        self.dontKnowShortcutLabel = dontKnowShortcutLabel
+        self.pinShortcutLabel = pinShortcutLabel
+    }
+}
+
+struct LearningBridgeConfiguration: Codable, Equatable, Sendable {
+    var showsWordBridge: Bool
+    var showsSentenceBridge: Bool
+
+    static let both = Self(
+        showsWordBridge: true,
+        showsSentenceBridge: true
+    )
+
+    var hasVisibleBridge: Bool {
+        showsWordBridge || showsSentenceBridge
     }
 }
 
@@ -172,11 +156,11 @@ enum ScanPhase: Equatable {
         case .idle:
             return "Ready"
         case .capturing:
-            return "Capturing displays…"
+            return "Capturing displays"
         case .recognizing:
-            return "Reading Danish text…"
+            return "Reading Danish text"
         case .translating:
-            return "Translating on device…"
+            return "Translating on device"
         case let .showing(regionCount):
             return "Hover learning active · \(regionCount) words"
         case let .failed(message):
