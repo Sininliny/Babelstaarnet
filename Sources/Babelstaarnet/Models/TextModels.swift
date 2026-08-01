@@ -22,6 +22,7 @@ enum TranslationMode: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum ExplanationMode: String, CaseIterable, Identifiable, Sendable {
+    case adaptive
     case beginner
     case easyDanish
     case english
@@ -31,6 +32,8 @@ enum ExplanationMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
+        case .adaptive:
+            return "Adaptive"
         case .beginner:
             return "Beginner"
         case .easyDanish:
@@ -43,16 +46,7 @@ enum ExplanationMode: String, CaseIterable, Identifiable, Sendable {
     }
 
     var badgeTitle: String? {
-        switch self {
-        case .beginner:
-            return "BEGINNER"
-        case .easyDanish:
-            return "LET DANSK"
-        case .english:
-            return "ENGLISH"
-        case .none:
-            return nil
-        }
+        nil
     }
 }
 
@@ -80,6 +74,7 @@ struct WordRegion: Identifiable, Hashable, Sendable {
     let sourceText: String
     var translatedText: String
     var beginnerExplanation: String
+    var adaptiveExplanation: String
     let frame: CGRect
     let screenFrame: CGRect
     let displayID: CGDirectDisplayID
@@ -89,6 +84,7 @@ struct WordRegion: Identifiable, Hashable, Sendable {
         sourceText: String,
         translatedText: String = "",
         beginnerExplanation: String = "",
+        adaptiveExplanation: String = "",
         frame: CGRect,
         screenFrame: CGRect,
         displayID: CGDirectDisplayID
@@ -97,6 +93,7 @@ struct WordRegion: Identifiable, Hashable, Sendable {
         self.sourceText = sourceText
         self.translatedText = translatedText
         self.beginnerExplanation = beginnerExplanation
+        self.adaptiveExplanation = adaptiveExplanation
         self.frame = frame
         self.screenFrame = screenFrame
         self.displayID = displayID
@@ -134,8 +131,29 @@ struct TextRegion: Identifiable, Hashable, Sendable {
 struct HoverCard: Equatable, Sendable {
     let word: WordRegion
     let definition: String
+    let englishSupport: String?
+    let familiarityLabel: String?
+    let englishIsExpanded: Bool
     let translationMode: TranslationMode
     let explanationMode: ExplanationMode
+
+    init(
+        word: WordRegion,
+        definition: String,
+        englishSupport: String? = nil,
+        familiarityLabel: String? = nil,
+        englishIsExpanded: Bool = false,
+        translationMode: TranslationMode,
+        explanationMode: ExplanationMode
+    ) {
+        self.word = word
+        self.definition = definition
+        self.englishSupport = englishSupport
+        self.familiarityLabel = familiarityLabel
+        self.englishIsExpanded = englishIsExpanded
+        self.translationMode = translationMode
+        self.explanationMode = explanationMode
+    }
 }
 
 enum ScanPhase: Equatable {

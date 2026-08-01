@@ -31,6 +31,14 @@ enum PowerSavingPolicyChecks {
                 idleDuration: 60
             )
         )
+        precondition(
+            PowerSavingPolicy.stationaryRefreshInterval(idleDuration: 0.5)
+                == 1.5
+        )
+        precondition(
+            PowerSavingPolicy.stationaryRefreshInterval(idleDuration: 2)
+                == 3.5
+        )
 
         print("Idle power-saving policy checks passed")
     }

@@ -19,6 +19,28 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Overlay/BubbleInteractionPolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/BubbleInteractionChecks.swift" \
+    -o "$output_dir/BubbleInteractionChecks"
+
+"$output_dir/BubbleInteractionChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Overlay/OverlayState.swift" \
+    "$project_dir/Sources/Babelstaarnet/Overlay/OverlayRootView.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/BubbleViewSizingChecks.swift" \
+    -framework AppKit \
+    -framework SwiftUI \
+    -o "$output_dir/BubbleViewSizingChecks"
+
+"$output_dir/BubbleViewSizingChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Tests/BabelstaarnetTests/HotKeyRegistrationCheck.swift" \
     -framework Carbon \
     -o "$output_dir/HotKeyRegistrationCheck"
@@ -43,6 +65,34 @@ swiftc \
     -o "$output_dir/LearningModeChecks"
 
 "$output_dir/LearningModeChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/LearnerProfileStore.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveExplanationService.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/AdaptiveLearningChecks.swift" \
+    -o "$output_dir/AdaptiveLearningChecks"
+
+"$output_dir/AdaptiveLearningChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/MixedLanguageExplanationService.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/MixedLanguageExplanationChecks.swift" \
+    -o "$output_dir/MixedLanguageExplanationChecks"
+
+"$output_dir/MixedLanguageExplanationChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/TranslationQualityService.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/TranslationQualityChecks.swift" \
+    -o "$output_dir/TranslationQualityChecks"
+
+"$output_dir/TranslationQualityChecks"
 
 swiftc \
     -parse-as-library \

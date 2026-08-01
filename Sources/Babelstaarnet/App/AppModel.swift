@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Translation
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -17,6 +18,9 @@ final class AppModel: ObservableObject {
         target: Locale.Language(identifier: "en")
     )
     @Published var learningModeActive = false
+    @Published private(set) var learnerTrackedWordCount = 0
+    @Published private(set) var learnerFamiliarWordCount = 0
+    @Published private(set) var learnerDataMessage: String?
     @Published private(set) var detectionSuspendedForIdle = false
     @Published var screenPermissionGranted = false
     @Published var screenPermissionWasRequested: Bool
@@ -78,13 +82,21 @@ final class AppModel: ObservableObject {
     private let argosTranslationService = ArgosTranslationService()
     private let wordWiseTranslationService = ArgosTranslationService()
     private let beginnerDanishService = BeginnerDanishService()
+    private let mixedExplanationService = MixedLanguageExplanationService()
+    private let translationQualityService = TranslationQualityService()
+    private let learnerProfileStore = LearnerProfileStore()
     private let systemIdleMonitor = SystemIdleMonitor()
     private let engineInstallerService = EngineInstallerService()
     private let speechService = SpeechService()
-    private lazy var overlayController = OverlayWindowController {
-        [weak self] word in
-        self?.speechService.speak(word, language: "da-DK")
-    }
+    private lazy var overlayController = OverlayWindowController(
+        learnerProfile: learnerProfileStore,
+        onSpeakDanish: { [weak self] word in
+            self?.speechService.speak(word, language: "da-DK")
+        },
+        onLearnerProfileChanged: { [weak self] in
+            self?.refreshLearnerProfileSummary()
+        }
+    )
     private lazy var hotKeyService = HotKeyService { [weak self] in
         Task {
             await self?.toggleLearningMode()
@@ -101,7 +113,7 @@ final class AppModel: ObservableObject {
     private var lastCaptureDate: Date?
     private var translationCache: [String: String] = [:]
     private var beginnerExplanationCache: [String: String] = [:]
-    private let stationaryRefreshInterval = 1.2
+    private var mixedWordTranslationCache: [String: String] = [:]
 
     init() {
         let defaults = UserDefaults.standard
@@ -118,6 +130,7 @@ final class AppModel: ObservableObject {
             .flatMap(TranslationMode.init(rawValue:)) ?? .english
         explanationMode = defaults.string(forKey: Keys.explanationMode)
             .flatMap(ExplanationMode.init(rawValue:)) ?? .english
+        refreshLearnerProfileSummary()
 
         Task { @MainActor [weak self] in
             self?.start()
@@ -257,6 +270,91 @@ final class AppModel: ObservableObject {
             return
         }
         NSWorkspace.shared.open(url)
+    }
+
+    func resetLearnerProfile() {
+        learnerProfileStore.reset()
+        refreshLearnerProfileSummary()
+        Task {
+            await refreshCurrentExplanations()
+        }
+    }
+
+    func confirmAndResetLearnerProfile() {
+        let alert = NSAlert()
+        alert.messageText = "Reset the adaptive learning profile?"
+        alert.informativeText = "This removes all locally stored word familiarity signals."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Reset Profile")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+        resetLearnerProfile()
+    }
+
+    func exportLearnerProfile() {
+        do {
+            let data = try learnerProfileStore.exportData()
+            let panel = NSSavePanel()
+            panel.title = "Export Learning Profile"
+            panel.prompt = "Export"
+            panel.allowedContentTypes = [.json]
+            panel.canCreateDirectories = true
+            panel.nameFieldStringValue = "Babelstaarnet-Learning-Profile-\(Self.exportDateString()).json"
+            guard panel.runModal() == .OK,
+                  let url = panel.url else {
+                return
+            }
+            let hasSecurityAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if hasSecurityAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            try data.write(to: url, options: .atomic)
+            learnerDataMessage = "Exported \(Self.wordCountDescription(learnerTrackedWordCount)) to \(url.lastPathComponent)."
+        } catch {
+            showLearnerProfileError(
+                title: "Couldn’t Export Learning Profile",
+                error: error
+            )
+        }
+    }
+
+    func importLearnerProfile() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Learning Profile"
+        panel.prompt = "Import"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK,
+              let url = panel.url else {
+            return
+        }
+
+        do {
+            let hasSecurityAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if hasSecurityAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            let data = try Data(contentsOf: url)
+            let summary = try learnerProfileStore.importArchiveData(data)
+            refreshLearnerProfileSummary()
+            Task {
+                await refreshCurrentExplanations()
+            }
+            learnerDataMessage = "Imported \(Self.recordCountDescription(summary.importedWordCount)). Your profile now has \(Self.wordCountDescription(summary.totalWordCount))."
+        } catch {
+            showLearnerProfileError(
+                title: "Couldn’t Import Learning Profile",
+                error: error
+            )
+        }
     }
 
     func toggleLearningMode() async {
@@ -432,14 +530,19 @@ final class AppModel: ObservableObject {
                     translationCache[$0.lowercased()] == nil
                 }
                 if !missingTexts.isEmpty {
-                    let translations = try await argosTranslationService.translate(
+                    let translations = try await translationsWithLocalRecovery(
                         missingTexts
                     )
                     for (source, translation) in zip(
                         missingTexts,
                         translations
                     ) {
-                        translationCache[source.lowercased()] = translation
+                        if !translationQualityService.needsRetry(
+                            source: source,
+                            translation: translation
+                        ) {
+                            translationCache[source.lowercased()] = translation
+                        }
                     }
                 }
                 let map = Dictionary(
@@ -461,10 +564,14 @@ final class AppModel: ObservableObject {
                 let explanations = await beginnerExplanations(
                     for: sourceTranslations
                 )
+                let adaptiveExplanations = await mixedExplanations(
+                    from: explanations
+                )
                 translationEngineName = "Argos Translate"
                 apply(
                     translations: map,
                     explanations: explanations,
+                    adaptiveExplanations: adaptiveExplanations,
                     to: allRegions,
                     generation: generation
                 )
@@ -528,11 +635,22 @@ final class AppModel: ObservableObject {
     ) async {
         let bySourceText = Dictionary(
             uniqueKeysWithValues: responses.map {
-                ($0.sourceText.lowercased(), $0.targetText)
+                (
+                    $0.sourceText.lowercased(),
+                    translationQualityService.bestTranslation(
+                        source: $0.sourceText,
+                        primary: $0.targetText
+                    )
+                )
             }
         )
         for (source, translation) in bySourceText {
-            translationCache[source] = translation
+            if !translationQualityService.needsRetry(
+                source: source,
+                translation: translation
+            ) {
+                translationCache[source] = translation
+            }
         }
         let responseMap = Dictionary(
             uniqueKeysWithValues: translationJobs(for: regions).map {
@@ -542,9 +660,13 @@ final class AppModel: ObservableObject {
         let explanations = await beginnerExplanations(
             for: bySourceText
         )
+        let adaptiveExplanations = await mixedExplanations(
+            from: explanations
+        )
         apply(
             translations: responseMap,
             explanations: explanations,
+            adaptiveExplanations: adaptiveExplanations,
             to: regions,
             generation: generation
         )
@@ -553,6 +675,7 @@ final class AppModel: ObservableObject {
     private func apply(
         translations: [String: String],
         explanations: [String: String] = [:],
+        adaptiveExplanations: [String: String] = [:],
         to regions: [TextRegion],
         generation: UUID
     ) {
@@ -572,6 +695,9 @@ final class AppModel: ObservableObject {
                 ] ?? beginnerDanishService.localExplanation(
                     for: word.sourceText
                 ) ?? ""
+                translatedWord.adaptiveExplanation = adaptiveExplanations[
+                    word.sourceText.lowercased()
+                ] ?? ""
                 return translatedWord
             }
             return translatedRegion
@@ -610,7 +736,8 @@ final class AppModel: ObservableObject {
             return
         }
 
-        if explanationMode != .easyDanish {
+        if explanationMode != .easyDanish,
+           explanationMode != .adaptive {
             showOverlay()
             return
         }
@@ -625,9 +752,13 @@ final class AppModel: ObservableObject {
         let explanations = await beginnerExplanations(
             for: sourceTranslations
         )
+        let adaptiveExplanations = await mixedExplanations(
+            from: explanations
+        )
         guard generation == scanGeneration,
               learningModeActive,
-              explanationMode == .easyDanish else {
+              explanationMode == .easyDanish
+                || explanationMode == .adaptive else {
             return
         }
         translatedRegions = translatedRegions.map { region in
@@ -639,6 +770,9 @@ final class AppModel: ObservableObject {
                 ] ?? beginnerDanishService.localExplanation(
                     for: word.sourceText
                 ) ?? ""
+                updatedWord.adaptiveExplanation = adaptiveExplanations[
+                    word.sourceText.lowercased()
+                ] ?? ""
                 return updatedWord
             }
             return updatedRegion
@@ -649,7 +783,8 @@ final class AppModel: ObservableObject {
     private func beginnerExplanations(
         for sourceTranslations: [String: String]
     ) async -> [String: String] {
-        guard explanationMode == .easyDanish else {
+        guard explanationMode == .easyDanish
+                || explanationMode == .adaptive else {
             return [:]
         }
 
@@ -694,6 +829,100 @@ final class AppModel: ObservableObject {
         return result
     }
 
+    private func mixedExplanations(
+        from danishExplanations: [String: String]
+    ) async -> [String: String] {
+        guard explanationMode == .adaptive,
+              !danishExplanations.isEmpty else {
+            return [:]
+        }
+
+        var needed = Set<String>()
+        for explanation in danishExplanations.values {
+            needed.formUnion(
+                mixedExplanationService.wordsNeedingEnglish(
+                    in: explanation,
+                    isFamiliar: { learnerProfileStore.isFamiliar($0) }
+                )
+            )
+        }
+
+        for word in needed where mixedWordTranslationCache[word] == nil {
+            if let cached = translationCache[word] {
+                mixedWordTranslationCache[word] = cached
+            }
+        }
+
+        let missing = needed
+            .filter { mixedWordTranslationCache[$0] == nil }
+            .sorted()
+        if !missing.isEmpty {
+            do {
+                let translated = try await translationsWithLocalRecovery(
+                    missing
+                )
+                for (danish, english) in zip(missing, translated) {
+                    if !translationQualityService.needsRetry(
+                        source: danish,
+                        translation: english
+                    ) {
+                        mixedWordTranslationCache[danish] = english
+                    }
+                }
+            } catch {
+                // The card still shows a short local Danish/English fallback.
+                // No network service is used when the local model is absent.
+            }
+        }
+
+        return danishExplanations.mapValues { explanation in
+            mixedExplanationService.mix(
+                danishExplanation: explanation,
+                englishByDanishWord: mixedWordTranslationCache,
+                isFamiliar: { learnerProfileStore.isFamiliar($0) }
+            )
+        }
+    }
+
+    private func translationsWithLocalRecovery(
+        _ sourceTexts: [String]
+    ) async throws -> [String] {
+        let primary = try await argosTranslationService.translate(sourceTexts)
+        let retryIndexes = sourceTexts.indices.filter {
+            translationQualityService.needsRetry(
+                source: sourceTexts[$0],
+                translation: primary[$0]
+            )
+        }
+        guard !retryIndexes.isEmpty else {
+            return primary
+        }
+
+        let retrySources = retryIndexes.map {
+            sourceTexts[$0].lowercased()
+        }
+        let retryTranslations = try? await argosTranslationService.translate(
+            retrySources
+        )
+        var retryByIndex: [Int: String] = [:]
+        if let retryTranslations {
+            for (index, translation) in zip(
+                retryIndexes,
+                retryTranslations
+            ) {
+                retryByIndex[index] = translation
+            }
+        }
+
+        return sourceTexts.indices.map { index in
+            translationQualityService.bestTranslation(
+                source: sourceTexts[index],
+                primary: primary[index],
+                lowercaseRetry: retryByIndex[index]
+            )
+        }
+    }
+
     private func updateLiveMode() {
         liveTask?.cancel()
         liveTask = nil
@@ -734,7 +963,11 @@ final class AppModel: ObservableObject {
                     return
                 }
                 let cursor = NSEvent.mouseLocation
-                guard self.shouldScan(at: cursor, now: Date()) else {
+                guard self.shouldScan(
+                    at: cursor,
+                    now: Date(),
+                    idleDuration: idleDuration
+                ) else {
                     continue
                 }
                 await self.scanScreen(
@@ -755,9 +988,13 @@ final class AppModel: ObservableObject {
 
     private func shouldScan(
         at cursor: CGPoint,
-        now: Date
+        now: Date,
+        idleDuration: TimeInterval
     ) -> Bool {
         guard !phase.isWorking else {
+            return false
+        }
+        guard !overlayController.isHoldingInteraction else {
             return false
         }
         guard let lastCapturePoint, let lastCaptureDate else {
@@ -773,7 +1010,9 @@ final class AppModel: ObservableObject {
         )
         return movement >= movementThreshold
             || now.timeIntervalSince(lastCaptureDate)
-                >= stationaryRefreshInterval
+                >= PowerSavingPolicy.stationaryRefreshInterval(
+                    idleDuration: idleDuration
+                )
     }
 
     private func cursorVelocity(
@@ -803,6 +1042,40 @@ final class AppModel: ObservableObject {
             false,
             forKey: Keys.screenPermissionWasRequested
         )
+    }
+
+    private func refreshLearnerProfileSummary() {
+        learnerTrackedWordCount = learnerProfileStore.trackedWordCount
+        learnerFamiliarWordCount = learnerProfileStore.familiarWordCount()
+    }
+
+    private func showLearnerProfileError(
+        title: String,
+        error: Error
+    ) {
+        learnerDataMessage = nil
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private static func exportDateString(_ date: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private static func wordCountDescription(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "word" : "words")"
+    }
+
+    private static func recordCountDescription(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "record" : "records")"
     }
 
     private enum Keys {

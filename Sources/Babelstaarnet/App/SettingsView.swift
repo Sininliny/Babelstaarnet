@@ -57,11 +57,54 @@ struct SettingsView: View {
 
                 if model.powerSavingEnabled {
                     Text(
-                        "Screen capture and OCR pause after 5 seconds without keyboard or pointer input, then resume automatically."
+                        "Screen capture and OCR back off while the pointer is still, stop while a bubble is held, and pause after 5 seconds without input."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
+            }
+
+            Section("Learning data") {
+                LabeledContent(
+                    "Learning profile",
+                    value: wordCountDescription(
+                        model.learnerTrackedWordCount
+                    )
+                )
+                LabeledContent(
+                    "Probably understood",
+                    value: wordCountDescription(
+                        model.learnerFamiliarWordCount
+                    )
+                )
+
+                Text(
+                    "The profile controls which words stay Danish in mixed explanations. It is stored only on this Mac; imports merge without double-counting."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                HStack {
+                    Button("Export Profile…") {
+                        model.exportLearnerProfile()
+                    }
+                    .disabled(model.learnerTrackedWordCount == 0)
+
+                    Button("Import Profile…") {
+                        model.importLearnerProfile()
+                    }
+                }
+
+                if let learnerDataMessage = model.learnerDataMessage {
+                    Text(learnerDataMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button("Reset learning profile", role: .destructive) {
+                    model.confirmAndResetLearnerProfile()
+                }
+                .disabled(model.learnerTrackedWordCount == 0)
             }
 
             Section("Local engines") {
@@ -112,7 +155,10 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 555)
+        .frame(
+            width: 480,
+            height: 680
+        )
     }
 
     private var configurationHelp: String {
@@ -121,6 +167,8 @@ struct SettingsView: View {
             : "Hide the translation."
         let explanation: String
         switch model.explanationMode {
+        case .adaptive:
+            explanation = "Mix Danish with English according to your local learning profile."
         case .beginner:
             explanation = "Use a short beginner-friendly English gloss."
         case .easyDanish:
@@ -131,5 +179,9 @@ struct SettingsView: View {
             explanation = "Hide the explanation."
         }
         return "\(translation) \(explanation)"
+    }
+
+    private func wordCountDescription(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "word" : "words")"
     }
 }

@@ -17,8 +17,8 @@ struct SystemIdleMonitor {
 
 enum PowerSavingPolicy {
     static let defaultIdleThreshold: TimeInterval = 5
-    static let activePollInterval = Duration.milliseconds(140)
-    static let suspendedPollInterval = Duration.milliseconds(500)
+    static let activePollInterval = Duration.milliseconds(220)
+    static let suspendedPollInterval = Duration.seconds(1)
 
     static func shouldSuspend(
         enabled: Bool,
@@ -29,5 +29,11 @@ enum PowerSavingPolicy {
         enabled
             && learningModeActive
             && idleDuration >= threshold
+    }
+
+    static func stationaryRefreshInterval(
+        idleDuration: TimeInterval
+    ) -> TimeInterval {
+        idleDuration < 1.5 ? 1.5 : 3.5
     }
 }

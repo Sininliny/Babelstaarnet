@@ -22,8 +22,23 @@ This repository currently contains the first working MVP for Danish → English.
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
 - Independent learning layers: show or hide Danish → English translation, then
-  freely combine it with a Beginner gloss, Easy Danish explanation, full
-  English definition, or no explanation
+  freely combine it with an Adaptive explanation, Beginner gloss, Easy Danish
+  explanation, full English definition, or no explanation
+- A private adaptive learning profile that treats hovering as exposure only,
+  learns from explicit **Knew** and **Don’t know** feedback, gradually
+  reduces English support, and can be reset from Settings
+- Learner-first mixed explanations keep Danish word order and grammar words,
+  while locally replacing unfamiliar content words with English. Familiar words
+  gradually remain in Danish; extra English appears only after **Don’t know**.
+- Stable, content-sized adaptive cards: `1` marks a word known, `2` marks it
+  unknown and shows extra English, and `3` pins or unpins the card. Holding
+  Option keeps it open while the pointer moves to its controls. After 0.75
+  seconds without input, the bubble is held temporarily; any pointer or keyboard
+  input releases that temporary hold. These keys exist only while an
+  adaptive card is visible.
+- Versioned local JSON export/import for backing up or moving the adaptive
+  learning profile without exporting screenshots or source sentences; imports
+  merge idempotently with existing progress
 - Easy Danish hints from a local learner lexicon plus
   [Princeton WordNet](https://wordnet.princeton.edu/) definitions translated
   through the local English → Danish Argos model
@@ -38,8 +53,8 @@ This repository currently contains the first working MVP for Danish → English.
 - Distinct active and inactive menu-bar icons
 - Movement-driven refresh with a low-frequency stationary fallback for scrolling
   and screen changes
-- Automatic idle suspension: screen capture and OCR pause after five seconds
-  without keyboard or pointer input and resume on the next input
+- Adaptive power saving: OCR refreshes back off while the pointer is still,
+  stop while a bubble is held, and suspend after five seconds without input
 - Persistent warmed Argos worker and translation cache for low hover latency
 - One independent overlay per display to preserve OCR coordinate alignment
 - First-launch dashboard with permission and engine readiness checks
@@ -134,9 +149,12 @@ On first use:
 3. Relaunch the app if macOS requests it.
 4. Choose **Activate hover learning** or press `Fn+Z`.
 5. In Settings, independently choose **Translate: Danish → English / None** and
-   **Explain: Beginner / Easy Danish / English / None**.
+  **Explain: Adaptive / Beginner / Easy Danish / English / None**.
 6. Hover a Danish word to hear it and see the selected explanation.
-7. Press `Fn+Z` again to deactivate.
+7. With an Adaptive card visible, use `1` for **Knew**, `2` for **Don’t know**,
+   or `3` to pin it. Hold Option while moving to its controls. Leaving the
+   pointer still temporarily holds the bubble until the next input.
+8. Press `Fn+Z` again to deactivate.
 
 Power saving is enabled by default. It can be disabled under **Settings →
 Learning → Pause screen reading when idle**. While suspended, detection remains
@@ -161,9 +179,9 @@ cursor movement → adaptive local crop → contrast-adaptive Tesseract
                                              │
                          cached persistent Argos translation
                                              │
-                         English meaning / Easy Danish WordNet hint
+                    English meaning / adaptive Danish + English hint
                                              │
-                                    click-through overlay
+                              nonactivating hover bubble
                                              │
                                       hover hit-test
                                           ┌──┴──┐
@@ -171,15 +189,15 @@ cursor movement → adaptive local crop → contrast-adaptive Tesseract
                                     Dictionary  local TTS
 ```
 
-The capture, OCR, translation, dictionary, speech, overlay layout, and app state
-are separate. The capture planner uses cursor speed and the most recently
-observed text height to choose a local region, then retries with a larger crop
-only when words touch its boundary or no text is found. Tesseract emits TSV
-word geometry from normal and inverted high-contrast passes. Only uncached
-unique Danish words are sent to the warmed local Argos worker. The app creates
-an independent click-through overlay per display and renders nothing until the
-cursor enters an OCR word box. Apple adapters are fallbacks, not network
-services.
+The capture, OCR, translation, learner profile, dictionary, speech, overlay
+layout, and app state are separate. The capture planner uses cursor speed and
+the most recently observed text height to choose a local region, then retries
+with a larger crop only when words touch its boundary or no text is found.
+Tesseract emits TSV word geometry from normal and inverted high-contrast
+passes. Only uncached unique Danish words are sent to the warmed local Argos
+worker. The app keeps hit-test data per display and renders one small,
+nonactivating interactive bubble only when the cursor enters an OCR word box.
+Apple adapters are fallbacks, not network services.
 
 ## Current MVP limitations
 

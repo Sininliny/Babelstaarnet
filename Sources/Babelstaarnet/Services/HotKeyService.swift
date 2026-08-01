@@ -4,6 +4,7 @@ import Foundation
 
 @MainActor
 final class HotKeyService {
+    private static let signature = fourCharacterCode("BSTR")
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var keyStateTimer: Timer?
@@ -42,7 +43,9 @@ final class HotKeyService {
                     nil,
                     &hotKeyID
                 )
-                guard status == noErr, hotKeyID.id == 1 else {
+                guard status == noErr,
+                      hotKeyID.signature == HotKeyService.signature,
+                      hotKeyID.id == 1 else {
                     return OSStatus(eventNotHandledErr)
                 }
 
@@ -61,7 +64,7 @@ final class HotKeyService {
         )
 
         let identifier = EventHotKeyID(
-            signature: Self.fourCharacterCode("BSTR"),
+            signature: Self.signature,
             id: 1
         )
         let status = RegisterEventHotKey(
