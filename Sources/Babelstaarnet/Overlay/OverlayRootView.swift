@@ -143,12 +143,24 @@ private struct BridgeFeedbackControls: View {
         Divider().opacity(0.45)
 
         HStack(spacing: 10) {
-            Button("\(card.knownShortcutLabel)  Knew") {
+            Button {
                 state.onKnown()
+            } label: {
+                if state.feedbackConfirmation == .markedKnown {
+                    Label("Marked known", systemImage: "checkmark")
+                } else {
+                    Text("\(card.knownShortcutLabel)  Knew")
+                }
             }
 
-            Button("\(card.dontKnowShortcutLabel)  Don’t know") {
+            Button {
                 state.onDontKnow()
+            } label: {
+                if state.feedbackConfirmation == .englishRestored {
+                    Label("English restored", systemImage: "checkmark")
+                } else {
+                    Text("\(card.dontKnowShortcutLabel)  Don’t know")
+                }
             }
 
             Text(
@@ -162,6 +174,10 @@ private struct BridgeFeedbackControls: View {
         .buttonStyle(.plain)
         .font(.system(size: 10, weight: .regular, design: .rounded))
         .foregroundStyle(.tertiary)
+        .animation(
+            .easeOut(duration: 0.12),
+            value: state.feedbackConfirmation
+        )
     }
 }
 

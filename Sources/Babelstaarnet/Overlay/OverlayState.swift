@@ -1,12 +1,38 @@
 import Combine
 import CoreGraphics
 
+enum BridgeFeedbackConfirmation: Equatable {
+    case markedKnown
+    case englishRestored
+}
+
 @MainActor
 final class OverlayState: ObservableObject {
     @Published var hoverCard: HoverCard?
     @Published var isPinned = false
+    @Published var feedbackConfirmation: BridgeFeedbackConfirmation?
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
+    private var feedbackClearTask: Task<Void, Never>?
+
+    func showFeedback(_ confirmation: BridgeFeedbackConfirmation) {
+        feedbackClearTask?.cancel()
+        feedbackConfirmation = confirmation
+        feedbackClearTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.feedbackConfirmation = nil
+            self?.feedbackClearTask = nil
+        }
+    }
+
+    func clearFeedback() {
+        feedbackClearTask?.cancel()
+        feedbackClearTask = nil
+        feedbackConfirmation = nil
+    }
 }
 
 enum WordBubbleMetrics {

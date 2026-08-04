@@ -120,6 +120,13 @@ enum BubbleViewSizingChecks {
                 from: data
             ) == wordOnly
         )
+
+        state.showFeedback(.markedKnown)
+        precondition(state.feedbackConfirmation == .markedKnown)
+        state.showFeedback(.englishRestored)
+        precondition(state.feedbackConfirmation == .englishRestored)
+        state.clearFeedback()
+        precondition(state.feedbackConfirmation == nil)
     }
 
     private static func measuredWordHeight(

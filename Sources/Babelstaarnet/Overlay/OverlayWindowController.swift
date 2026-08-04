@@ -236,6 +236,7 @@ final class OverlayWindowController {
         if targetChanged {
             hoverSpeechTimer?.invalidate()
             hoverSpeechTimer = nil
+            bubbleState.clearFeedback()
         }
         currentWord = match?.word
         currentRegion = match?.region
@@ -540,6 +541,7 @@ final class OverlayWindowController {
             expandedEnglishWords.remove(evictionCandidate)
         }
         expandedEnglishWords.insert(key)
+        bubbleState.showFeedback(.englishRestored)
         onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
     }
@@ -552,6 +554,7 @@ final class OverlayWindowController {
         expandedEnglishWords.remove(
             LearnerProfileStore.normalizedKey(for: currentWord.sourceText)
         )
+        bubbleState.showFeedback(.markedKnown)
         onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
     }
@@ -660,6 +663,7 @@ final class OverlayWindowController {
     }
 
     private func dismissBubble() {
+        bubbleState.clearFeedback()
         bubbleState.hoverCard = nil
         wordBubblePanel.orderOut(nil)
         sentenceBubblePanel.orderOut(nil)

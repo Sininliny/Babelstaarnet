@@ -33,7 +33,8 @@ This repository currently contains the first working MVP for Danish → English.
   known word stable. Level 0 uses English substitution, levels 1–2 show Danish
   beside concise English, level 3 quietly tests comprehension in Danish, and
   levels 4–5 keep the word Danish. Internal levels are intentionally absent
-  from the reading bubbles.
+  from the reading bubbles. Feedback briefly confirms **Marked known** or
+  **English restored** directly in the active bubble.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
   receive a brief outlined English bridge, and new meaning-bearing words use
