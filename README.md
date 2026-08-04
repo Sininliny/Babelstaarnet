@@ -1,12 +1,60 @@
 # Babelstårnet
 
-Babelstårnet is a private, local-first macOS learning overlay. It reads Danish
-text visible across your displays and turns each Danish OCR word into a
-hoverable learning target. Hovering speaks the original Danish word and shows
-the surrounding Danish sentence with only the English support the learner
-currently needs, beside—not over—the source.
+**Understand Danish without escaping into English.**
 
-This repository currently contains the first working MVP for Danish → English.
+Babelstårnet is a local-first macOS reading layer for learning Danish. It reads
+the text under the pointer and gives the learner enough English to recover the
+meaning, but never replaces the Danish sentence. You are supported through the
+source language instead of being given an English route around it.
+
+It is intentionally not a conventional translator, vocabulary-card system, or
+parallel subtitle layer. Its purpose is language transfer: keep the learner
+reading Danish, place English only beneath concepts that are not yet known, and
+quietly remove that help as comprehension grows.
+
+## The gap between Babelstårnet and a translator
+
+A normal translator optimizes for obtaining the answer in another language.
+That is useful for communication, but it also makes it easy to stop processing
+the source language. Babelstårnet optimizes for a different outcome: obtaining
+the meaning while still having to read and understand Danish.
+
+| | Conventional translator | Babelstårnet |
+| --- | --- | --- |
+| Primary text | The translated language | The original Danish |
+| English help | Replaces the sentence or appears as a full parallel version | Appears only under selected unknown concepts |
+| Learner model | Usually the same output for every reader | A private knowledge level for each word |
+| Change over time | Repeating the request gives the same help | English fades as a word becomes known and returns immediately after **Don’t know** |
+| Interaction | Select, copy, or submit text | Hover the Danish text already on screen |
+| Reading pressure | The source can be skipped | Meaning is available, but Danish remains necessary |
+| Processing | Depends on the translation service | Screen reading, learning state, translation, and speech remain local |
+
+## Meaning without escape
+
+The learning design follows four rules:
+
+1. **Danish never disappears.** The source word and Danish sentence structure
+   remain the visual foundation.
+2. **English is scaffolding, not the product.** Babelstårnet adds at most a few
+   concise English meaning anchors instead of translating everything.
+3. **Help follows the learner.** Unknown words receive support; learning words
+   are tested with less support; known words remain Danish-only.
+4. **Feedback is exceptional, not homework.** Hovering is passive. The learner
+   presses **Knew** or **Don’t know** only when the bridge has judged a word
+   incorrectly.
+
+The two independent bridges serve different reading problems:
+
+- **Word bridge**, above the pointer, explains the focused word in concise
+  Danish and adds English only for concepts the learner does not yet know.
+- **Sentence bridge**, below the pointer, preserves Danish order and grammar
+  while attaching no more than three English anchors for whole-sentence
+  comprehension.
+
+Both bubbles use one frozen OCR snapshot, so the support does not keep changing
+after the pointer stops. `1` means **Knew**, `2` means **Don’t know**, and `3`
+pins the bubbles. The result is a reading tool that makes Danish understandable
+without making Danish optional.
 
 ## What works
 
