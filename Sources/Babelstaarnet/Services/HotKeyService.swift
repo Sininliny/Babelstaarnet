@@ -9,14 +9,16 @@ final class HotKeyService {
     private var eventHandler: EventHandlerRef?
     private var keyStateTimer: Timer?
     private var chordWasDown = false
+    private var shortcut = HotKeyConfiguration.defaults.toggleLearning
     private let action: () -> Void
 
     init(action: @escaping () -> Void) {
         self.action = action
     }
 
-    func register() {
+    func register(shortcut: AppShortcut) {
         unregister()
+        self.shortcut = shortcut
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -52,7 +54,7 @@ final class HotKeyService {
                 let service = Unmanaged<HotKeyService>
                     .fromOpaque(userData)
                     .takeUnretainedValue()
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     service.action()
                 }
                 return noErr
@@ -68,15 +70,15 @@ final class HotKeyService {
             id: 1
         )
         let status = RegisterEventHotKey(
-            UInt32(kVK_ANSI_Z),
-            UInt32(kEventKeyModifierFnMask),
+            shortcut.keyCode,
+            shortcut.modifiers.carbonFlags,
             identifier,
             GetApplicationEventTarget(),
             0,
             &hotKey
         )
         if status != noErr {
-            startFnZPolling()
+            startPollingFallback()
         }
     }
 
@@ -104,25 +106,20 @@ final class HotKeyService {
         keyStateTimer?.invalidate()
     }
 
-    private func startFnZPolling() {
+    private func startPollingFallback() {
         let timer = Timer(timeInterval: 0.04, repeats: true) {
             [weak self] _ in
-            Task { @MainActor in
-                self?.pollFnZ()
+            MainActor.assumeIsolated {
+                self?.pollShortcut()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
         keyStateTimer = timer
     }
 
-    private func pollFnZ() {
+    private func pollShortcut() {
         let flags = CGEventSource.flagsState(.combinedSessionState)
-        let functionDown = flags.contains(.maskSecondaryFn)
-        let zDown = CGEventSource.keyState(
-            .combinedSessionState,
-            key: CGKeyCode(kVK_ANSI_Z)
-        )
-        let chordDown = functionDown && zDown
+        let chordDown = shortcut.isPressed(using: flags)
 
         if chordDown, !chordWasDown {
             action()

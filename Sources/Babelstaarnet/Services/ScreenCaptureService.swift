@@ -24,6 +24,8 @@ actor ScreenCaptureService {
 
     private var cachedContent: SCShareableContent?
     private var contentCachedAt = Date.distantPast
+    private var cachedScreens: [ScreenGeometry] = []
+    private var screensCachedAt = Date.distantPast
 
     nonisolated var hasPermission: Bool {
         CGPreflightScreenCaptureAccess()
@@ -44,19 +46,7 @@ actor ScreenCaptureService {
             throw ScreenCaptureError.permissionDenied
         }
 
-        let screens = await MainActor.run {
-            NSScreen.screens.compactMap { screen -> ScreenGeometry? in
-                guard let number = screen.deviceDescription[
-                    NSDeviceDescriptionKey("NSScreenNumber")
-                ] as? NSNumber else {
-                    return nil
-                }
-                return ScreenGeometry(
-                    displayID: CGDirectDisplayID(number.uint32Value),
-                    frame: screen.frame
-                )
-            }
-        }
+        let screens = await screenGeometries()
         guard let screen = screens.first(where: { $0.frame.contains(cursor) })
             ?? screens.min(by: {
                 distance(from: cursor, to: $0.frame)
@@ -70,6 +60,7 @@ actor ScreenCaptureService {
             $0.displayID == screen.displayID
         }) else {
             cachedContent = nil
+            cachedScreens.removeAll()
             throw ScreenCaptureError.noDisplays
         }
 
@@ -114,7 +105,7 @@ actor ScreenCaptureService {
 
     private func shareableContent() async throws -> SCShareableContent {
         if let cachedContent,
-           Date().timeIntervalSince(contentCachedAt) < 15 {
+           Date().timeIntervalSince(contentCachedAt) < 60 {
             return cachedContent
         }
         let content = try await SCShareableContent.excludingDesktopWindows(
@@ -124,6 +115,29 @@ actor ScreenCaptureService {
         cachedContent = content
         contentCachedAt = Date()
         return content
+    }
+
+    private func screenGeometries() async -> [ScreenGeometry] {
+        if !cachedScreens.isEmpty,
+           Date().timeIntervalSince(screensCachedAt) < 5 {
+            return cachedScreens
+        }
+        let screens = await MainActor.run {
+            NSScreen.screens.compactMap { screen -> ScreenGeometry? in
+                guard let number = screen.deviceDescription[
+                    NSDeviceDescriptionKey("NSScreenNumber")
+                ] as? NSNumber else {
+                    return nil
+                }
+                return ScreenGeometry(
+                    displayID: CGDirectDisplayID(number.uint32Value),
+                    frame: screen.frame
+                )
+            }
+        }
+        cachedScreens = screens
+        screensCachedAt = Date()
+        return screens
     }
 
     private func distance(

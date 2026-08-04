@@ -6,14 +6,14 @@ enum BubbleHotKeyAction: UInt32, CaseIterable {
     case dontKnow = 2
     case togglePin = 3
 
-    var keyCode: UInt32 {
+    var configurableAction: ConfigurableHotKeyAction {
         switch self {
         case .known:
-            UInt32(kVK_ANSI_1)
+            .known
         case .dontKnow:
-            UInt32(kVK_ANSI_2)
+            .dontKnow
         case .togglePin:
-            UInt32(kVK_ANSI_3)
+            .togglePin
         }
     }
 }
@@ -26,13 +26,18 @@ final class BubbleHotKeyService {
     private var eventHandler: EventHandlerRef?
     private var keyStateTimer: Timer?
     private var keysPreviouslyDown = Set<BubbleHotKeyAction>()
+    private var configuration = HotKeyConfiguration.defaults
     private let action: (BubbleHotKeyAction) -> Void
 
     init(action: @escaping (BubbleHotKeyAction) -> Void) {
         self.action = action
     }
 
-    func register() {
+    func register(configuration: HotKeyConfiguration) {
+        if self.configuration != configuration {
+            unregister()
+            self.configuration = configuration
+        }
         guard hotKeys.isEmpty,
               eventHandler == nil,
               keyStateTimer == nil else {
@@ -72,7 +77,7 @@ final class BubbleHotKeyService {
                 let service = Unmanaged<BubbleHotKeyService>
                     .fromOpaque(userData)
                     .takeUnretainedValue()
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     service.action(action)
                 }
                 return noErr
@@ -96,8 +101,8 @@ final class BubbleHotKeyService {
                 id: action.rawValue
             )
             let status = RegisterEventHotKey(
-                action.keyCode,
-                0,
+                shortcut(for: action).keyCode,
+                shortcut(for: action).modifiers.carbonFlags,
                 identifier,
                 GetApplicationEventTarget(),
                 0,
@@ -139,7 +144,7 @@ final class BubbleHotKeyService {
     private func installPollingFallback() {
         let timer = Timer(timeInterval: 0.04, repeats: true) {
             [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.pollNumberKeys()
             }
         }
@@ -149,25 +154,21 @@ final class BubbleHotKeyService {
 
     private func pollNumberKeys() {
         let flags = CGEventSource.flagsState(.combinedSessionState)
-        let hasDisallowedModifier = flags.contains(.maskCommand)
-            || flags.contains(.maskControl)
-            || flags.contains(.maskAlternate)
-            || flags.contains(.maskShift)
         var keysDown = Set<BubbleHotKeyAction>()
         for candidate in BubbleHotKeyAction.allCases {
-            let isDown = CGEventSource.keyState(
-                .combinedSessionState,
-                key: CGKeyCode(candidate.keyCode)
-            )
+            let isDown = shortcut(for: candidate).isPressed(using: flags)
             if isDown {
                 keysDown.insert(candidate)
-                if !hasDisallowedModifier,
-                   !keysPreviouslyDown.contains(candidate) {
+                if !keysPreviouslyDown.contains(candidate) {
                     action(candidate)
                 }
             }
         }
         keysPreviouslyDown = keysDown
+    }
+
+    private func shortcut(for action: BubbleHotKeyAction) -> AppShortcut {
+        configuration.shortcut(for: action.configurableAction)
     }
 
     private static func fourCharacterCode(_ string: String) -> OSType {

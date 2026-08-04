@@ -33,6 +33,16 @@ binary_path="$(
 mkdir -p "$binary_dir" "$resource_dir"
 cp "$binary_path" "$binary_dir/Babelstaarnet"
 cp "$project_dir/Resources/Info.plist" "$app_dir/Contents/Info.plist"
+iconset_dir="$project_dir/.build/Babelstaarnet.iconset"
+mkdir -p "$iconset_dir"
+env \
+    CLANG_MODULE_CACHE_PATH="$module_cache" \
+    SWIFTPM_MODULECACHE_OVERRIDE="$module_cache" \
+    swift "$project_dir/Scripts/generate-app-icon.swift" "$iconset_dir"
+iconutil \
+    -c icns \
+    "$iconset_dir" \
+    -o "$resource_dir/Babelstaarnet.icns"
 mkdir -p "$resource_dir/LocalEngines"
 cp "$project_dir/Resources/LocalEngines/argos_bridge.py" \
     "$resource_dir/LocalEngines/argos_bridge.py"

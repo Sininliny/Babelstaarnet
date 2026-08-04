@@ -27,7 +27,8 @@ actor ArgosTranslationService {
 
     func isReady(
         source: String = "da",
-        target: String = "en"
+        target: String = "en",
+        keepWarm: Bool = true
     ) async -> Bool {
         do {
             _ = try request(
@@ -35,6 +36,9 @@ actor ArgosTranslationService {
                 source: source,
                 target: target
             )
+            if !keepWarm {
+                resetServer()
+            }
             return true
         } catch {
             resetServer()
@@ -49,9 +53,12 @@ actor ArgosTranslationService {
         _ = try? request(texts: [], source: source, target: target)
     }
 
-    func isWordWiseReady() async -> Bool {
+    func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
         do {
             _ = try requestDefinitions(words: [])
+            if !keepWarm {
+                resetServer()
+            }
             return true
         } catch {
             resetServer()
@@ -65,7 +72,6 @@ actor ArgosTranslationService {
         guard !words.isEmpty else {
             return []
         }
-
         do {
             return try requestDefinitions(words: words)
         } catch {
@@ -99,6 +105,10 @@ actor ArgosTranslationService {
         }
     }
 
+    func shutdown() {
+        resetServer()
+    }
+
     private func request(
         texts: [String],
         source: String,
@@ -125,16 +135,14 @@ actor ArgosTranslationService {
         return response.translations
     }
 
-    private func requestDefinitions(
-        words: [String]
-    ) throws -> [String] {
+    private func requestDefinitions(words: [String]) throws -> [String] {
         try ensureServer(source: "en", target: "da")
         guard let input, let output else {
             throw ArgosTranslationError.unavailable
         }
 
         var requestData = try JSONEncoder().encode(
-            WordWiseRequest(defineWords: words)
+            WordBridgeRequest(defineWords: words)
         )
         requestData.append(0x0A)
         try input.write(contentsOf: requestData)
@@ -302,7 +310,7 @@ private struct BatchResponse: Decodable {
     let translations: [String]
 }
 
-private struct WordWiseRequest: Encodable {
+private struct WordBridgeRequest: Encodable {
     let defineWords: [String]
 
     enum CodingKeys: String, CodingKey {

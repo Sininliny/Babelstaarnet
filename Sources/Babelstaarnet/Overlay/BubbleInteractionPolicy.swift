@@ -16,6 +16,14 @@ enum BubbleInteractionPolicy {
             <= stationaryTolerance
     }
 
+    static func shouldKeepLearningSnapshot(
+        pointer: CGPoint,
+        anchor: CGPoint?,
+        interactionIsHeld: Bool
+    ) -> Bool {
+        interactionIsHeld || pointerIsStationary(pointer, since: anchor)
+    }
+
     static func shouldPinAfterStationaryHover(
         point: CGPoint,
         anchor: CGPoint?,

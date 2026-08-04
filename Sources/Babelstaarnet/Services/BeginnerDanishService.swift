@@ -1,6 +1,10 @@
 import Foundation
 
 struct BeginnerDanishService {
+    private static let danishLocale = Locale(identifier: "da_DK")
+    private static let wordTrimmingCharacters =
+        CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+
     func localExplanation(for word: String) -> String? {
         Self.explanations[Self.normalized(word)]
     }
@@ -8,7 +12,7 @@ struct BeginnerDanishService {
     func clean(explanation: String) -> String {
         let compact = explanation
             .replacingOccurrences(
-                of: "\\s+",
+                of: #"\s+"#,
                 with: " ",
                 options: .regularExpression
             )
@@ -16,39 +20,22 @@ struct BeginnerDanishService {
         guard !compact.isEmpty else {
             return ""
         }
-
-        let limited: String
-        if compact.count > 220 {
-            let end = compact.index(
-                compact.startIndex,
-                offsetBy: 220
-            )
-            limited = String(compact[..<end])
-                .trimmingCharacters(in: .whitespaces)
-                + "…"
-        } else {
-            limited = compact
-        }
-
-        if limited.hasSuffix(".")
-            || limited.hasSuffix("!")
-            || limited.hasSuffix("?")
-            || limited.hasSuffix("…") {
+        let words = compact.split(whereSeparator: \Character.isWhitespace)
+        let limited = words.prefix(24).joined(separator: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ",;:-"))
+        guard limited.last.map({ ".!?".contains($0) }) != true else {
             return limited
         }
         return limited + "."
     }
 
     private static func normalized(_ word: String) -> String {
-        word.lowercased()
+        word.lowercased(with: danishLocale)
             .trimmingCharacters(
-                in: CharacterSet.whitespacesAndNewlines
-                    .union(.punctuationCharacters)
+                in: wordTrimmingCharacters
             )
     }
 
-    /// Hand-written hints cover frequent function words where a general
-    /// dictionary definition is usually less useful to a new learner.
     private static let explanations: [String: String] = [
         "og": "Binder to ting eller sætninger sammen.",
         "eller": "Viser, at der er et valg mellem flere muligheder.",
@@ -63,13 +50,13 @@ struct BeginnerDanishService {
         "en": "En ubestemt artikel foran et navneord.",
         "et": "En ubestemt artikel foran et intetkønsord.",
         "at": "Står ofte foran et udsagnsord i grundform.",
-        "er": "Nutid af “at være”.",
-        "var": "Datid af “at være”.",
+        "er": "Nutid af at være.",
+        "var": "Datid af at være.",
         "være": "At eksistere eller befinde sig i en bestemt tilstand.",
-        "har": "Nutid af “at have”.",
+        "har": "Nutid af at have.",
         "have": "At eje, få eller opleve noget.",
         "kan": "Har mulighed eller evne til at gøre noget.",
-        "kunne": "Datid eller en høflig form af “kan”.",
+        "kunne": "Datid eller en høflig form af kan.",
         "skal": "Viser en plan, pligt eller noget, der kommer til at ske.",
         "vil": "Viser et ønske eller noget, der kommer til at ske.",
         "må": "Har lov til eller er nødt til at gøre noget.",
@@ -78,7 +65,6 @@ struct BeginnerDanishService {
         "gå": "At bevæge sig til fods.",
         "kommer": "Bevæger sig hen til et sted.",
         "komme": "At bevæge sig hen til et sted.",
-        "kommet": "En form af “at komme”; nogen er nået frem.",
         "se": "At bruge øjnene eller forstå noget.",
         "sige": "At udtrykke noget med ord.",
         "tale": "At bruge stemmen til at kommunikere.",
@@ -99,8 +85,12 @@ struct BeginnerDanishService {
         "hjem": "Det sted, hvor en person bor og føler sig hjemme.",
         "hus": "En bygning, som mennesker kan bo i.",
         "skole": "Et sted, hvor mennesker underviser og lærer.",
+        "studiebolig": "En bolig, der er lavet til en studerende.",
+        "studieboliger": "Boliger, der er lavet til studerende.",
+        "studentbolig": "En bolig, der er lavet til en studerende.",
+        "studentboliger": "Boliger, der er lavet til studerende.",
         "kursus": "Et forløb, hvor man lærer om et bestemt emne.",
-        "kurser": "Flertal af “kursus”: flere læringsforløb.",
+        "kurser": "Flertal af kursus: flere læringsforløb.",
         "ord": "En del af et sprog med en bestemt betydning.",
         "sprog": "Et system af ord og regler, som mennesker kommunikerer med.",
         "dansk": "Det sprog, man hovedsageligt taler i Danmark.",

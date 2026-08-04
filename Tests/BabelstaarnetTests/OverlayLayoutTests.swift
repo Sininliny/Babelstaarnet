@@ -3,11 +3,124 @@ import CoreGraphics
 @main
 struct OverlayLayoutChecks {
     static func main() {
+        pairedLearningBubblesStaySeparateFromTextAndEachOther()
+        pairedBubblesStackSafelyNearScreenEdge()
+        pairedBubblesKeepTheirOrderNearLowerScreenEdge()
         translationBubbleNeverCoversSourceWhenThereIsRoomBelow()
         translationBubbleMovesAboveNearBottomEdge()
         hoverBubbleStaysInsideNegativeOriginDisplay()
         hoverBubbleFallsBackWhenDenseTextBlocksEveryPreferredPosition()
         print("Overlay layout checks passed")
+    }
+
+    static func pairedLearningBubblesStaySeparateFromTextAndEachOther() {
+        let word = CGRect(x: 610, y: 430, width: 72, height: 24)
+        let source = CGRect(x: 430, y: 426, width: 520, height: 32)
+        let wordSize = CGSize(width: 280, height: 64)
+        let sentenceSize = CGSize(width: 420, height: 126)
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+
+        guard let centers = OverlayLayout.learningBubbleCenters(
+            wordFrame: word,
+            sourceFrame: source,
+            wordSize: wordSize,
+            sentenceSize: sentenceSize,
+            screenFrame: screen
+        ) else {
+            preconditionFailure("Expected two safe learning bubble positions")
+        }
+        let wordBubble = CGRect(
+            x: centers.word.x - wordSize.width / 2,
+            y: centers.word.y - wordSize.height / 2,
+            width: wordSize.width,
+            height: wordSize.height
+        )
+        let sentenceBubble = CGRect(
+            x: centers.sentence.x - sentenceSize.width / 2,
+            y: centers.sentence.y - sentenceSize.height / 2,
+            width: sentenceSize.width,
+            height: sentenceSize.height
+        )
+        precondition(screen.contains(wordBubble))
+        precondition(screen.contains(sentenceBubble))
+        precondition(!wordBubble.intersects(source))
+        precondition(!sentenceBubble.intersects(source))
+        precondition(!wordBubble.intersects(sentenceBubble))
+        precondition(wordBubble.minY > sentenceBubble.maxY)
+        precondition(wordBubble.midY > source.midY)
+        precondition(sentenceBubble.midY < source.midY)
+    }
+
+    static func pairedBubblesStackSafelyNearScreenEdge() {
+        let screen = CGRect(x: 0, y: 0, width: 900, height: 700)
+        let source = CGRect(x: 8, y: 650, width: 884, height: 28)
+        let word = CGRect(x: 420, y: 652, width: 70, height: 24)
+        let wordSize = CGSize(width: 280, height: 64)
+        let sentenceSize = CGSize(width: 420, height: 126)
+
+        guard let centers = OverlayLayout.learningBubbleCenters(
+            wordFrame: word,
+            sourceFrame: source,
+            wordSize: wordSize,
+            sentenceSize: sentenceSize,
+            screenFrame: screen
+        ) else {
+            preconditionFailure("Edge placement should stack both bubbles")
+        }
+        let wordBubble = CGRect(
+            x: centers.word.x - wordSize.width / 2,
+            y: centers.word.y - wordSize.height / 2,
+            width: wordSize.width,
+            height: wordSize.height
+        )
+        let sentenceBubble = CGRect(
+            x: centers.sentence.x - sentenceSize.width / 2,
+            y: centers.sentence.y - sentenceSize.height / 2,
+            width: sentenceSize.width,
+            height: sentenceSize.height
+        )
+        precondition(screen.contains(wordBubble))
+        precondition(screen.contains(sentenceBubble))
+        precondition(!wordBubble.intersects(source))
+        precondition(!sentenceBubble.intersects(source))
+        precondition(!wordBubble.intersects(sentenceBubble))
+        precondition(wordBubble.minY > sentenceBubble.maxY)
+    }
+
+    static func pairedBubblesKeepTheirOrderNearLowerScreenEdge() {
+        let screen = CGRect(x: 0, y: 0, width: 900, height: 700)
+        let source = CGRect(x: 8, y: 12, width: 884, height: 28)
+        let word = CGRect(x: 420, y: 14, width: 70, height: 24)
+        let wordSize = CGSize(width: 280, height: 64)
+        let sentenceSize = CGSize(width: 420, height: 126)
+
+        guard let centers = OverlayLayout.learningBubbleCenters(
+            wordFrame: word,
+            sourceFrame: source,
+            wordSize: wordSize,
+            sentenceSize: sentenceSize,
+            screenFrame: screen
+        ) else {
+            preconditionFailure("Lower-edge placement should keep both bubbles")
+        }
+        let wordBubble = CGRect(
+            x: centers.word.x - wordSize.width / 2,
+            y: centers.word.y - wordSize.height / 2,
+            width: wordSize.width,
+            height: wordSize.height
+        )
+        let sentenceBubble = CGRect(
+            x: centers.sentence.x - sentenceSize.width / 2,
+            y: centers.sentence.y - sentenceSize.height / 2,
+            width: sentenceSize.width,
+            height: sentenceSize.height
+        )
+        precondition(screen.contains(wordBubble))
+        precondition(screen.contains(sentenceBubble))
+        precondition(!wordBubble.intersects(source))
+        precondition(!sentenceBubble.intersects(source))
+        precondition(!wordBubble.intersects(sentenceBubble))
+        precondition(wordBubble.minY > sentenceBubble.maxY)
     }
 
     static func translationBubbleNeverCoversSourceWhenThereIsRoomBelow() {

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import OSLog
 import Translation
 import UniformTypeIdentifiers
 
@@ -7,10 +8,10 @@ import UniformTypeIdentifiers
 final class AppModel: ObservableObject {
     @Published var phase: ScanPhase = .idle
     @Published var pendingRegions: [TextRegion] = []
-    @Published var ocrEngineName = "Detecting…"
-    @Published var translationEngineName = "Detecting…"
-    @Published var wordWiseEngineReady = false
-    @Published var engineSetupMessage = "Checking local engines…"
+    @Published var ocrEngineName = "Detecting"
+    @Published var translationEngineName = "Detecting"
+    @Published var wordBridgeEngineReady = false
+    @Published var engineSetupMessage = "Checking local engines"
     @Published var openSourceEnginesReady = false
     @Published var isInstallingEngines = false
     @Published var translationConfiguration = TranslationSession.Configuration(
@@ -21,6 +22,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var learnerTrackedWordCount = 0
     @Published private(set) var learnerFamiliarWordCount = 0
     @Published private(set) var learnerDataMessage: String?
+    @Published private(set) var shortcutMessage: String?
     @Published private(set) var detectionSuspendedForIdle = false
     @Published var screenPermissionGranted = false
     @Published var screenPermissionWasRequested: Bool
@@ -54,47 +56,36 @@ final class AppModel: ObservableObject {
             refreshOverlayPreferences()
         }
     }
-    @Published var translationMode: TranslationMode = .english {
-        didSet {
-            UserDefaults.standard.set(
-                translationMode.rawValue,
-                forKey: Keys.translationMode
-            )
-            refreshOverlayPreferences()
-        }
-    }
-    @Published var explanationMode: ExplanationMode = .english {
-        didSet {
-            UserDefaults.standard.set(
-                explanationMode.rawValue,
-                forKey: Keys.explanationMode
-            )
-            Task {
-                await refreshCurrentExplanations()
-            }
-        }
-    }
-    let sourceLanguage = Locale.Language(identifier: "da")
-    let targetLanguage = Locale.Language(identifier: "en")
+    @Published private(set) var hotKeyConfiguration =
+        HotKeyConfiguration.defaults
+    @Published private(set) var bridgeConfiguration =
+        LearningBridgeConfiguration.both
 
     private let captureService = ScreenCaptureService()
     private let ocrService = OCRService()
     private let argosTranslationService = ArgosTranslationService()
-    private let wordWiseTranslationService = ArgosTranslationService()
+    private let wordBridgeTranslationService = ArgosTranslationService()
     private let beginnerDanishService = BeginnerDanishService()
-    private let mixedExplanationService = MixedLanguageExplanationService()
+    private let adaptiveWordBridgeService = AdaptiveSentenceBridgeService()
     private let translationQualityService = TranslationQualityService()
     private let learnerProfileStore = LearnerProfileStore()
     private let systemIdleMonitor = SystemIdleMonitor()
     private let engineInstallerService = EngineInstallerService()
     private let speechService = SpeechService()
+    private let latencyClock = ContinuousClock()
+    private let latencyLogger = Logger(
+        subsystem: "dev.sinin.babelstaarnet",
+        category: "PipelineLatency"
+    )
     private lazy var overlayController = OverlayWindowController(
         learnerProfile: learnerProfileStore,
         onSpeakDanish: { [weak self] word in
             self?.speechService.speak(word, language: "da-DK")
         },
-        onLearnerProfileChanged: { [weak self] in
-            self?.refreshLearnerProfileSummary()
+        onLearnerProfileChanged: { [weak self] masteryChanged in
+            self?.refreshLearnerProfileSummary(
+                recalculateFamiliar: masteryChanged
+            )
         }
     )
     private lazy var hotKeyService = HotKeyService { [weak self] in
@@ -103,17 +94,25 @@ final class AppModel: ObservableObject {
         }
     }
     private var liveTask: Task<Void, Never>?
+    private var scanTask: Task<Void, Never>?
+    private var activeScanOrigin: CGPoint?
     private var translatedRegions: [TextRegion] = []
     private var hasStarted = false
     private var activationObserver: NSObjectProtocol?
+    private var terminationObserver: NSObjectProtocol?
     private var scanGeneration = UUID()
     private var pendingGeneration: UUID?
     private var estimatedTextHeight: CGFloat?
     private var lastCapturePoint: CGPoint?
     private var lastCaptureDate: Date?
-    private var translationCache: [String: String] = [:]
-    private var beginnerExplanationCache: [String: String] = [:]
-    private var mixedWordTranslationCache: [String: String] = [:]
+    private var lastCompletedScanDate: Date?
+    private let translationCache = BoundedCache<String, String>(capacity: 4_096)
+    private let beginnerExplanationCache = BoundedCache<String, String>(
+        capacity: 2_048
+    )
+    private let wordBridgeTranslationCache = BoundedCache<String, String>(
+        capacity: 4_096
+    )
 
     init() {
         let defaults = UserDefaults.standard
@@ -126,10 +125,21 @@ final class AppModel: ObservableObject {
         powerSavingEnabled = defaults.object(
             forKey: Keys.powerSavingEnabled
         ) as? Bool ?? true
-        translationMode = defaults.string(forKey: Keys.translationMode)
-            .flatMap(TranslationMode.init(rawValue:)) ?? .english
-        explanationMode = defaults.string(forKey: Keys.explanationMode)
-            .flatMap(ExplanationMode.init(rawValue:)) ?? .english
+        if let data = defaults.data(forKey: Keys.hotKeyConfiguration),
+           let decoded = try? JSONDecoder().decode(
+            HotKeyConfiguration.self,
+            from: data
+           ), decoded.isValid {
+            hotKeyConfiguration = decoded
+        }
+        if let data = defaults.data(forKey: Keys.bridgeConfiguration),
+           let decoded = try? JSONDecoder().decode(
+            LearningBridgeConfiguration.self,
+            from: data
+           ) {
+            bridgeConfiguration = decoded
+        }
+        Self.removeObsoleteLearningPreferences(from: defaults)
         refreshLearnerProfileSummary()
 
         Task { @MainActor [weak self] in
@@ -143,7 +153,9 @@ final class AppModel: ObservableObject {
         }
         hasStarted = true
         screenPermissionGranted = captureService.hasPermission
-        hotKeyService.register()
+        hotKeyService.register(
+            shortcut: hotKeyConfiguration.toggleLearning
+        )
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
@@ -153,21 +165,35 @@ final class AppModel: ObservableObject {
                 self?.refreshScreenPermission()
             }
         }
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.learnerProfileStore.flushPersistence()
+            }
+        }
         Task {
             await checkEngineReadiness()
         }
     }
 
     func checkEngineReadiness() async {
+        let keepTranslationWarm = bridgeConfiguration.hasVisibleBridge
+        let keepWordBridgeWarm = bridgeConfiguration.showsWordBridge
         async let tesseractCheck = ocrService.isOpenSourceEngineReady()
-        async let argosCheck = argosTranslationService.isReady()
-        async let wordWiseCheck = wordWiseTranslationService.isWordWiseReady()
-        let (tesseractReady, argosReady, wordWiseReady) = await (
+        async let argosCheck = argosTranslationService.isReady(
+            keepWarm: keepTranslationWarm
+        )
+        async let wordBridgeCheck = wordBridgeTranslationService
+            .isWordBridgeReady(keepWarm: keepWordBridgeWarm)
+        let (tesseractReady, argosReady, wordBridgeReady) = await (
             tesseractCheck,
             argosCheck,
-            wordWiseCheck
+            wordBridgeCheck
         )
-        wordWiseEngineReady = wordWiseReady
+        wordBridgeEngineReady = wordBridgeReady
 
         ocrEngineName = tesseractReady
             ? "Tesseract OCR — ready"
@@ -177,9 +203,9 @@ final class AppModel: ObservableObject {
             : "Argos Translate — not installed"
         openSourceEnginesReady = tesseractReady
             && argosReady
-            && wordWiseReady
+            && wordBridgeReady
 
-        switch (tesseractReady, argosReady, wordWiseReady) {
+        switch (tesseractReady, argosReady, wordBridgeReady) {
         case (true, true, true):
             engineSetupMessage = "All local learning engines are ready."
         case (false, false, _):
@@ -189,7 +215,7 @@ final class AppModel: ObservableObject {
         case (true, false, _):
             engineSetupMessage = "Tesseract is ready; Argos Danish → English is missing."
         case (true, true, false):
-            engineSetupMessage = "Install the local Easy Danish definition model."
+            engineSetupMessage = "Install the local adaptive word-bridge resources."
         }
     }
 
@@ -199,7 +225,7 @@ final class AppModel: ObservableObject {
         }
 
         isInstallingEngines = true
-        engineSetupMessage = "Installing local engines and language models…"
+        engineSetupMessage = "Installing local engines and language models"
         do {
             _ = try await engineInstallerService.install()
             await checkEngineReadiness()
@@ -272,12 +298,69 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    var toggleLearningShortcutLabel: String {
+        hotKeyConfiguration.toggleLearning.displayText
+    }
+
+    @discardableResult
+    func updateShortcut(
+        _ shortcut: AppShortcut,
+        for action: ConfigurableHotKeyAction
+    ) -> Bool {
+        guard shortcut.isValid else {
+            shortcutMessage = "That key cannot be used as a shortcut."
+            return false
+        }
+        if action.requiresModifier, shortcut.modifiers.isEmpty {
+            shortcutMessage = "Toggle hover learning needs at least one modifier key."
+            return false
+        }
+        if let conflict = hotKeyConfiguration.conflict(
+            for: shortcut,
+            excluding: action
+        ) {
+            shortcutMessage = "That shortcut is already used by \(conflict.title)."
+            return false
+        }
+        hotKeyConfiguration.set(shortcut, for: action)
+        shortcutMessage = nil
+        saveHotKeyConfiguration()
+        applyHotKeyConfiguration()
+        return true
+    }
+
+    func updateHoldModifier(_ modifier: BubbleHoldModifier) {
+        hotKeyConfiguration.holdModifier = modifier
+        shortcutMessage = nil
+        saveHotKeyConfiguration()
+        applyHotKeyConfiguration()
+    }
+
+    func setWordBridgeEnabled(_ enabled: Bool) {
+        bridgeConfiguration.showsWordBridge = enabled
+        saveBridgeConfiguration()
+        releaseUnusedTranslationWorkers()
+        refreshOverlayPreferences()
+    }
+
+    func setSentenceBridgeEnabled(_ enabled: Bool) {
+        bridgeConfiguration.showsSentenceBridge = enabled
+        saveBridgeConfiguration()
+        releaseUnusedTranslationWorkers()
+        refreshOverlayPreferences()
+    }
+
+    func resetHotKeyConfiguration() {
+        hotKeyConfiguration = .defaults
+        shortcutMessage = "Shortcuts restored to defaults."
+        saveHotKeyConfiguration()
+        applyHotKeyConfiguration()
+    }
+
     func resetLearnerProfile() {
         learnerProfileStore.reset()
         refreshLearnerProfileSummary()
-        Task {
-            await refreshCurrentExplanations()
-        }
+        refreshOverlayPreferences()
     }
 
     func confirmAndResetLearnerProfile() {
@@ -345,9 +428,7 @@ final class AppModel: ObservableObject {
             let data = try Data(contentsOf: url)
             let summary = try learnerProfileStore.importArchiveData(data)
             refreshLearnerProfileSummary()
-            Task {
-                await refreshCurrentExplanations()
-            }
+            refreshOverlayPreferences()
             learnerDataMessage = "Imported \(Self.recordCountDescription(summary.importedWordCount)). Your profile now has \(Self.wordCountDescription(summary.totalWordCount))."
         } catch {
             showLearnerProfileError(
@@ -374,7 +455,9 @@ final class AppModel: ObservableObject {
         scanGeneration = UUID()
         lastCapturePoint = nil
         lastCaptureDate = nil
-        await scanScreen(generation: scanGeneration)
+        lastCompletedScanDate = nil
+        requestScan(at: NSEvent.mouseLocation)
+        updateLiveMode()
     }
 
     func deactivateLearningMode() {
@@ -385,11 +468,20 @@ final class AppModel: ObservableObject {
         pendingRegions = []
         overlayController.hide()
         speechService.stop()
+        scanTask?.cancel()
+        scanTask = nil
+        activeScanOrigin = nil
         liveTask?.cancel()
         liveTask = nil
         lastCapturePoint = nil
         lastCaptureDate = nil
+        lastCompletedScanDate = nil
         phase = .idle
+        learnerProfileStore.flushPersistence()
+        Task {
+            await argosTranslationService.shutdown()
+            await wordBridgeTranslationService.shutdown()
+        }
     }
 
     func translatePendingRegions(using session: TranslationSession) async {
@@ -424,11 +516,39 @@ final class AppModel: ObservableObject {
         }
     }
 
-    var hasTranslatedRegions: Bool {
-        !translatedRegions.isEmpty
+    private func requestScan(at cursor: CGPoint) {
+        scanTask?.cancel()
+        let generation = UUID()
+        scanGeneration = generation
+        activeScanOrigin = cursor
+        phase = translatedRegions.isEmpty
+            ? .idle
+            : .showing(regionCount: wordCount(in: translatedRegions))
+
+        scanTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            await self.scanScreen(
+                generation: generation,
+                cursor: cursor
+            )
+            guard generation == self.scanGeneration else {
+                return
+            }
+            self.scanTask = nil
+            if self.phase == .translating,
+               self.pendingGeneration == generation {
+                return
+            }
+            self.activeScanOrigin = nil
+        }
     }
 
-    private func scanScreen(generation: UUID) async {
+    private func scanScreen(
+        generation: UUID,
+        cursor: CGPoint
+    ) async {
         guard !phase.isWorking,
               learningModeActive,
               generation == scanGeneration else {
@@ -443,25 +563,29 @@ final class AppModel: ObservableObject {
         }
 
         do {
-            let cursor = NSEvent.mouseLocation
+            let scanStartedAt = latencyClock.now
             let now = Date()
             let velocity = cursorVelocity(at: cursor, now: now)
             lastCapturePoint = cursor
             lastCaptureDate = now
 
             phase = .capturing
+            let captureStartedAt = latencyClock.now
             var capture = try await captureService.captureRegion(
                 around: cursor,
                 estimatedTextHeight: estimatedTextHeight,
                 velocity: velocity
             )
+            logLatency("capture", since: captureStartedAt)
             guard learningModeActive, generation == scanGeneration else {
                 return
             }
             phase = .recognizing
 
+            let recognitionStartedAt = latencyClock.now
             var result = try await ocrService.recognizeDanishText(
-                in: capture
+                in: capture,
+                focusPoint: cursor
             )
             ocrEngineName = result.engine
 
@@ -476,7 +600,8 @@ final class AppModel: ObservableObject {
                     expansion: 1.65
                 )
                 let expandedResult = try await ocrService.recognizeDanishText(
-                    in: expandedCapture
+                    in: expandedCapture,
+                    focusPoint: cursor
                 )
                 if expandedResult.regions.flatMap(\.words).count
                     >= result.regions.flatMap(\.words).count {
@@ -485,6 +610,7 @@ final class AppModel: ObservableObject {
                     ocrEngineName = expandedResult.engine
                 }
             }
+            logLatency("ocr", since: recognitionStartedAt)
             var allRegions = result.regions
 
             guard learningModeActive, generation == scanGeneration else {
@@ -494,18 +620,23 @@ final class AppModel: ObservableObject {
                 from: allRegions,
                 previous: estimatedTextHeight
             )
+            allRegions = FocusedRegionSelectionPolicy.foregroundRegions(
+                from: allRegions,
+                at: cursor
+            )
             allRegions = HoverHitTesting.stabilizeIdentifiers(
                 in: allRegions,
                 against: translatedRegions
             )
             guard !allRegions.isEmpty else {
                 translatedRegions = []
+                lastCompletedScanDate = Date()
                 overlayController.show(
                     regions: [],
                     autoSpeak: autoSpeak,
                     hoverDelay: hoverDelay,
-                    translationMode: translationMode,
-                    explanationMode: explanationMode
+                    hotKeyConfiguration: hotKeyConfiguration,
+                    bridgeConfiguration: bridgeConfiguration
                 )
                 phase = .showing(regionCount: 0)
                 if liveMode, liveTask == nil {
@@ -521,11 +652,21 @@ final class AppModel: ObservableObject {
                 return
             }
 
+            if !bridgeConfiguration.hasVisibleBridge {
+                apply(
+                    translations: [:],
+                    to: allRegions,
+                    generation: generation
+                )
+                return
+            }
+
             pendingRegions = allRegions
             pendingGeneration = generation
             phase = .translating
 
             do {
+                let translationStartedAt = latencyClock.now
                 let missingTexts = uniqueTexts.filter {
                     translationCache[$0.lowercased()] == nil
                 }
@@ -533,6 +674,10 @@ final class AppModel: ObservableObject {
                     let translations = try await translationsWithLocalRecovery(
                         missingTexts
                     )
+                    guard !Task.isCancelled,
+                          generation == scanGeneration else {
+                        return
+                    }
                     for (source, translation) in zip(
                         missingTexts,
                         translations
@@ -561,17 +706,27 @@ final class AppModel: ObservableObject {
                         )
                     }
                 )
-                let explanations = await beginnerExplanations(
-                    for: sourceTranslations
-                )
-                let adaptiveExplanations = await mixedExplanations(
-                    from: explanations
-                )
+                let explanations = bridgeConfiguration.showsWordBridge
+                    ? await beginnerExplanations(for: sourceTranslations)
+                    : [:]
+                guard !Task.isCancelled,
+                      generation == scanGeneration else {
+                    return
+                }
+                let wordBridges = bridgeConfiguration.showsWordBridge
+                    ? await adaptiveWordBridges(from: explanations)
+                    : [:]
+                guard !Task.isCancelled,
+                      generation == scanGeneration else {
+                    return
+                }
+                logLatency("bridges", since: translationStartedAt)
+                logLatency("total", since: scanStartedAt)
                 translationEngineName = "Argos Translate"
                 apply(
                     translations: map,
                     explanations: explanations,
-                    adaptiveExplanations: adaptiveExplanations,
+                    wordBridges: wordBridges,
                     to: allRegions,
                     generation: generation
                 )
@@ -582,6 +737,8 @@ final class AppModel: ObservableObject {
                 translationEngineName = "Apple Translation fallback"
                 translationConfiguration.invalidate()
             }
+        } catch is CancellationError {
+            return
         } catch {
             guard generation == scanGeneration else {
                 return
@@ -657,16 +814,16 @@ final class AppModel: ObservableObject {
                 ($0.key, bySourceText[$0.text.lowercased()] ?? $0.text)
             }
         )
-        let explanations = await beginnerExplanations(
-            for: bySourceText
-        )
-        let adaptiveExplanations = await mixedExplanations(
-            from: explanations
-        )
+        let explanations = bridgeConfiguration.showsWordBridge
+            ? await beginnerExplanations(for: bySourceText)
+            : [:]
+        let wordBridges = bridgeConfiguration.showsWordBridge
+            ? await adaptiveWordBridges(from: explanations)
+            : [:]
         apply(
             translations: responseMap,
             explanations: explanations,
-            adaptiveExplanations: adaptiveExplanations,
+            wordBridges: wordBridges,
             to: regions,
             generation: generation
         )
@@ -675,7 +832,7 @@ final class AppModel: ObservableObject {
     private func apply(
         translations: [String: String],
         explanations: [String: String] = [:],
-        adaptiveExplanations: [String: MixedLanguageExplanation] = [:],
+        wordBridges: [String: AdaptiveSentenceBridge] = [:],
         to regions: [TextRegion],
         generation: UUID
     ) {
@@ -690,16 +847,28 @@ final class AppModel: ObservableObject {
                 translatedWord.translatedText = translations[
                     "word:\(word.id.uuidString)"
                 ] ?? word.sourceText
-                translatedWord.beginnerExplanation = explanations[
-                    word.sourceText.lowercased()
-                ] ?? beginnerDanishService.localExplanation(
-                    for: word.sourceText
-                ) ?? ""
-                let mixed = adaptiveExplanations[
-                    word.sourceText.lowercased()
-                ]
-                translatedWord.adaptiveExplanation = mixed?.text ?? ""
-                translatedWord.adaptiveEnglishTerms = mixed?.englishTerms ?? []
+                let sourceKey = word.sourceText.lowercased()
+                let bridge = wordBridges[sourceKey]
+                translatedWord.wordBridgeText = bridge?.text
+                    ?? explanations[sourceKey]
+                    ?? ""
+                translatedWord.wordBridgeEnglishTokenIndexes = bridge?
+                    .englishTokenIndexes ?? []
+                translatedWord.wordBridgeDanishText = explanations[
+                    sourceKey
+                ] ?? ""
+                translatedWord.wordBridgeTranslations = Dictionary(
+                    uniqueKeysWithValues: adaptiveWordBridgeService
+                        .wordsNeedingEnglish(
+                            in: explanations[sourceKey] ?? "",
+                            stateForWord: { _ in .unknown }
+                        )
+                        .compactMap { term in
+                            wordBridgeTranslationCache[term].map {
+                                (term, $0)
+                            }
+                        }
+                )
                 return translatedWord
             }
             return translatedRegion
@@ -707,6 +876,8 @@ final class AppModel: ObservableObject {
 
         pendingRegions = []
         pendingGeneration = nil
+        activeScanOrigin = nil
+        lastCompletedScanDate = Date()
         showOverlay()
         phase = .showing(regionCount: wordCount(in: translatedRegions))
         if liveMode, liveTask == nil {
@@ -714,84 +885,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func showOverlay() {
-        overlayController.show(
-            regions: translatedRegions,
-            autoSpeak: autoSpeak,
-            hoverDelay: hoverDelay,
-            translationMode: translationMode,
-            explanationMode: explanationMode
-        )
-    }
-
-    private func refreshOverlayPreferences() {
-        guard learningModeActive, !translatedRegions.isEmpty else {
-            return
-        }
-        showOverlay()
-    }
-
-    private func refreshCurrentExplanations() async {
-        guard hasStarted,
-              learningModeActive,
-              !translatedRegions.isEmpty else {
-            return
-        }
-
-        if explanationMode != .easyDanish,
-           explanationMode != .adaptive {
-            showOverlay()
-            return
-        }
-
-        let generation = scanGeneration
-        showOverlay()
-        var sourceTranslations: [String: String] = [:]
-        for word in translatedRegions.flatMap(\.words) {
-            sourceTranslations[word.sourceText.lowercased()]
-                = word.translatedText
-        }
-        let explanations = await beginnerExplanations(
-            for: sourceTranslations
-        )
-        let adaptiveExplanations = await mixedExplanations(
-            from: explanations
-        )
-        guard generation == scanGeneration,
-              learningModeActive,
-              explanationMode == .easyDanish
-                || explanationMode == .adaptive else {
-            return
-        }
-        translatedRegions = translatedRegions.map { region in
-            var updatedRegion = region
-            updatedRegion.words = region.words.map { word in
-                var updatedWord = word
-                updatedWord.beginnerExplanation = explanations[
-                    word.sourceText.lowercased()
-                ] ?? beginnerDanishService.localExplanation(
-                    for: word.sourceText
-                ) ?? ""
-                let mixed = adaptiveExplanations[
-                    word.sourceText.lowercased()
-                ]
-                updatedWord.adaptiveExplanation = mixed?.text ?? ""
-                updatedWord.adaptiveEnglishTerms = mixed?.englishTerms ?? []
-                return updatedWord
-            }
-            return updatedRegion
-        }
-        showOverlay()
-    }
-
     private func beginnerExplanations(
         for sourceTranslations: [String: String]
     ) async -> [String: String] {
-        guard explanationMode == .easyDanish
-                || explanationMode == .adaptive else {
-            return [:]
-        }
-
         var result: [String: String] = [:]
         for source in sourceTranslations.keys {
             if let cached = beginnerExplanationCache[source] {
@@ -807,7 +903,7 @@ final class AppModel: ObservableObject {
         let missing = sourceTranslations.keys
             .filter { result[$0] == nil }
             .sorted()
-        guard !missing.isEmpty, wordWiseEngineReady else {
+        guard !missing.isEmpty, wordBridgeEngineReady else {
             return result
         }
 
@@ -815,8 +911,11 @@ final class AppModel: ObservableObject {
             let englishWords = missing.map {
                 sourceTranslations[$0] ?? $0
             }
-            let explanations = try await wordWiseTranslationService
+            let explanations = try await wordBridgeTranslationService
                 .explainEnglishWordsInDanish(englishWords)
+            guard !Task.isCancelled else {
+                return result
+            }
             for (source, explanation) in zip(missing, explanations) {
                 let cleaned = beginnerDanishService.clean(
                     explanation: explanation
@@ -828,70 +927,96 @@ final class AppModel: ObservableObject {
                 beginnerExplanationCache[source] = cleaned
             }
         } catch {
-            wordWiseEngineReady = false
+            wordBridgeEngineReady = false
         }
         return result
     }
 
-    private func mixedExplanations(
+    private func adaptiveWordBridges(
         from danishExplanations: [String: String]
-    ) async -> [String: MixedLanguageExplanation] {
-        guard explanationMode == .adaptive,
-              !danishExplanations.isEmpty else {
+    ) async -> [String: AdaptiveSentenceBridge] {
+        guard !danishExplanations.isEmpty else {
             return [:]
         }
 
         var needed = Set<String>()
         for explanation in danishExplanations.values {
             needed.formUnion(
-                mixedExplanationService.wordsNeedingEnglish(
+                adaptiveWordBridgeService.wordsNeedingEnglish(
                     in: explanation,
-                    isFamiliar: { learnerProfileStore.isFamiliar($0) }
+                    stateForWord: languageTransferState(for:)
                 )
             )
         }
-
-        for word in needed where mixedWordTranslationCache[word] == nil {
+        for word in needed where wordBridgeTranslationCache[word] == nil {
             if let cached = translationCache[word] {
-                mixedWordTranslationCache[word] = cached
+                wordBridgeTranslationCache[word] = cached
             }
         }
-
         let missing = needed
-            .filter { mixedWordTranslationCache[$0] == nil }
+            .filter { wordBridgeTranslationCache[$0] == nil }
             .sorted()
-        if !missing.isEmpty {
-            do {
-                let translated = try await translationsWithLocalRecovery(
-                    missing
-                )
-                for (danish, english) in zip(missing, translated) {
-                    if !translationQualityService.needsRetry(
-                        source: danish,
-                        translation: english
-                    ) {
-                        mixedWordTranslationCache[danish] = english
-                    }
+        if !missing.isEmpty,
+           let translated = try? await translationsWithLocalRecovery(missing) {
+            guard !Task.isCancelled else {
+                return [:]
+            }
+            for (danish, english) in zip(missing, translated) {
+                if !translationQualityService.needsRetry(
+                    source: danish,
+                    translation: english
+                ) {
+                    wordBridgeTranslationCache[danish] = english
                 }
-            } catch {
-                // The card still shows a short local Danish/English fallback.
-                // No network service is used when the local model is absent.
             }
         }
+        let currentTranslations = Dictionary(
+            uniqueKeysWithValues: needed.compactMap { word in
+                wordBridgeTranslationCache[word].map { (word, $0) }
+            }
+        )
 
         return danishExplanations.mapValues { explanation in
-            mixedExplanationService.mixResult(
-                danishExplanation: explanation,
-                englishByDanishWord: mixedWordTranslationCache,
-                isFamiliar: { learnerProfileStore.isFamiliar($0) }
+            adaptiveWordBridgeService.bridge(
+                danishSentence: explanation,
+                englishByDanishWord: currentTranslations,
+                focusWord: "",
+                stateForWord: languageTransferState(for:)
             )
         }
+    }
+
+    private func languageTransferState(
+        for word: String
+    ) -> LanguageTransferState {
+        let level = learnerProfileStore.progress(
+            for: word
+        ).effectiveKnowledgeLevel()
+        return LanguageTransferState.forKnowledgeLevel(level)
+    }
+
+    private func showOverlay() {
+        overlayController.show(
+            regions: translatedRegions,
+            autoSpeak: autoSpeak,
+            hoverDelay: hoverDelay,
+            hotKeyConfiguration: hotKeyConfiguration,
+            bridgeConfiguration: bridgeConfiguration
+        )
+    }
+
+    private func refreshOverlayPreferences() {
+        guard learningModeActive, !translatedRegions.isEmpty else {
+            return
+        }
+        showOverlay()
     }
 
     private func translationsWithLocalRecovery(
         _ sourceTexts: [String]
     ) async throws -> [String] {
         let primary = try await argosTranslationService.translate(sourceTexts)
+        try Task.checkCancellation()
         let retryIndexes = sourceTexts.indices.filter {
             translationQualityService.needsRetry(
                 source: sourceTexts[$0],
@@ -908,6 +1033,7 @@ final class AppModel: ObservableObject {
         let retryTranslations = try? await argosTranslationService.translate(
             retrySources
         )
+        try Task.checkCancellation()
         var retryByIndex: [Int: String] = [:]
         if let retryTranslations {
             for (index, translation) in zip(
@@ -938,6 +1064,9 @@ final class AppModel: ObservableObject {
 
         liveTask = Task { [weak self] in
             while !Task.isCancelled {
+                guard self?.learningModeActive == true else {
+                    return
+                }
                 let idleDuration = self?.systemIdleMonitor
                     .idleDuration() ?? 0
                 let shouldSuspend = PowerSavingPolicy.shouldSuspend(
@@ -967,6 +1096,17 @@ final class AppModel: ObservableObject {
                     return
                 }
                 let cursor = NSEvent.mouseLocation
+                if self.phase.isWorking,
+                   let origin = self.activeScanOrigin {
+                    if ScanSchedulingPolicy.shouldReplaceActiveScan(
+                        origin: origin,
+                        current: cursor,
+                        estimatedTextHeight: self.estimatedTextHeight
+                    ) {
+                        self.requestScan(at: cursor)
+                    }
+                    continue
+                }
                 guard self.shouldScan(
                     at: cursor,
                     now: Date(),
@@ -974,9 +1114,7 @@ final class AppModel: ObservableObject {
                 ) else {
                     continue
                 }
-                await self.scanScreen(
-                    generation: self.scanGeneration
-                )
+                self.requestScan(at: cursor)
             }
         }
     }
@@ -999,6 +1137,16 @@ final class AppModel: ObservableObject {
             return false
         }
         guard !overlayController.isHoldingInteraction else {
+            return false
+        }
+        if let lastCompletedScanDate,
+           ScanSchedulingPolicy.canReuseRecognizedWord(
+               at: cursor,
+               in: translatedRegions,
+               resultAge: now.timeIntervalSince(lastCompletedScanDate),
+               refreshInterval: PowerSavingPolicy
+                   .stationaryRefreshInterval(idleDuration: idleDuration)
+           ) {
             return false
         }
         guard let lastCapturePoint, let lastCaptureDate else {
@@ -1040,6 +1188,18 @@ final class AppModel: ObservableObject {
         regions.reduce(0) { $0 + $1.words.count }
     }
 
+    private func logLatency(
+        _ stage: String,
+        since start: ContinuousClock.Instant
+    ) {
+        let duration = start.duration(to: latencyClock.now).components
+        let milliseconds = Double(duration.seconds) * 1_000
+            + Double(duration.attoseconds) / 1_000_000_000_000_000
+        latencyLogger.debug(
+            "\(stage, privacy: .public)=\(milliseconds, privacy: .public)ms"
+        )
+    }
+
     private func clearPermissionRequestState() {
         screenPermissionWasRequested = false
         UserDefaults.standard.set(
@@ -1048,9 +1208,49 @@ final class AppModel: ObservableObject {
         )
     }
 
-    private func refreshLearnerProfileSummary() {
+    private func refreshLearnerProfileSummary(
+        recalculateFamiliar: Bool = true
+    ) {
         learnerTrackedWordCount = learnerProfileStore.trackedWordCount
-        learnerFamiliarWordCount = learnerProfileStore.familiarWordCount()
+        if recalculateFamiliar {
+            learnerFamiliarWordCount = learnerProfileStore.familiarWordCount()
+        }
+    }
+
+    private func saveHotKeyConfiguration() {
+        guard let data = try? JSONEncoder().encode(hotKeyConfiguration) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: Keys.hotKeyConfiguration)
+    }
+
+    private func saveBridgeConfiguration() {
+        guard let data = try? JSONEncoder().encode(bridgeConfiguration) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: Keys.bridgeConfiguration)
+    }
+
+    private func releaseUnusedTranslationWorkers() {
+        let wordBridgeNeeded = bridgeConfiguration.showsWordBridge
+        let translationNeeded = bridgeConfiguration.hasVisibleBridge
+        Task {
+            if !wordBridgeNeeded {
+                await wordBridgeTranslationService.shutdown()
+            }
+            if !translationNeeded {
+                await argosTranslationService.shutdown()
+            }
+        }
+    }
+
+    private func applyHotKeyConfiguration() {
+        if hasStarted {
+            hotKeyService.register(
+                shortcut: hotKeyConfiguration.toggleLearning
+            )
+        }
+        refreshOverlayPreferences()
     }
 
     private func showLearnerProfileError(
@@ -1082,13 +1282,23 @@ final class AppModel: ObservableObject {
         "\(count) \(count == 1 ? "record" : "records")"
     }
 
+    private static func removeObsoleteLearningPreferences(
+        from defaults: UserDefaults
+    ) {
+        [
+            "translationMode",
+            "explanationMode",
+            "sentenceBridgeEnabled"
+        ].forEach(defaults.removeObject(forKey:))
+    }
+
     private enum Keys {
         static let liveMode = "liveMode"
         static let powerSavingEnabled = "powerSavingEnabled"
         static let autoSpeak = "autoSpeak"
         static let hoverDelay = "hoverDelay"
-        static let translationMode = "translationMode"
-        static let explanationMode = "explanationMode"
+        static let hotKeyConfiguration = "hotKeyConfiguration"
+        static let bridgeConfiguration = "learningBridgeConfiguration"
         static let screenPermissionWasRequested = "screenPermissionWasRequested"
     }
 }

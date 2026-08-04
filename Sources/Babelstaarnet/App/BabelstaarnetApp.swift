@@ -5,16 +5,11 @@ struct BabelstaarnetApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        Window("Babelstårnet", id: "main") {
-            MainWindowView(model: model)
-        }
-        .defaultSize(width: 500, height: 400)
-        .windowResizability(.contentSize)
-
         MenuBarExtra {
             MenuBarContentView(model: model)
         } label: {
-            Label(menuBarTitle, systemImage: menuBarIcon)
+            Image(nsImage: menuBarIcon)
+                .accessibilityLabel(menuBarTitle)
                 .background {
                     TranslationHostView(model: model)
                 }
@@ -26,11 +21,10 @@ struct BabelstaarnetApp: App {
         }
     }
 
-    private var menuBarIcon: String {
-        if !model.learningModeActive {
-            return "eye.slash"
-        }
-        return model.detectionSuspendedForIdle ? "eye" : "eye.fill"
+    private var menuBarIcon: NSImage {
+        model.learningModeActive
+            ? BabelstaarnetIcon.activeMenuBarImage
+            : BabelstaarnetIcon.inactiveMenuBarImage
     }
 
     private var menuBarTitle: String {

@@ -10,6 +10,7 @@ final class OverlayWindowController {
 
     private let dictionary = DictionaryService()
     private let adaptiveExplanationService = AdaptiveExplanationService()
+    private let sentenceBridgeService = AdaptiveSentenceBridgeService()
     private let learnerProfile: LearnerProfileStore
     private let systemIdleMonitor = SystemIdleMonitor()
     private let bubbleState = OverlayState()
@@ -17,32 +18,41 @@ final class OverlayWindowController {
     private var mouseTimer: Timer?
     private var hoverSpeechTimer: Timer?
     private var currentWord: WordRegion?
+    private var currentRegion: TextRegion?
     private var hoverAnchorPoint: CGPoint?
     private var expandedEnglishWords = Set<String>()
     private var pinnedByUser = false
     private var temporarilyHeldForIdle = false
-    private var optionHeld = false
+    private var holdModifierPressed = false
     private var stationaryPoint: CGPoint?
     private var stationarySince: Date?
     private var autoSpeak = true
     private var hoverDelay = 0.7
-    private var translationMode: TranslationMode = .english
-    private var explanationMode: ExplanationMode = .english
+    private var hotKeyConfiguration = HotKeyConfiguration.defaults
+    private var bridgeConfiguration = LearningBridgeConfiguration.both
     private let onSpeakDanish: (String) -> Void
-    private let onLearnerProfileChanged: () -> Void
+    private let onLearnerProfileChanged: (Bool) -> Void
     private lazy var bubbleHotKeyService = BubbleHotKeyService {
         [weak self] action in
         self?.performBubbleAction(action)
     }
-    private lazy var bubbleHostingView = NSHostingView(
-        rootView: OverlayRootView(state: bubbleState)
+    private lazy var wordBubbleHostingView = NSHostingView(
+        rootView: WordBubbleView(state: bubbleState)
     )
-    private lazy var bubblePanel = makeBubblePanel()
+    private lazy var sentenceBubbleHostingView = NSHostingView(
+        rootView: SentenceBridgeBubbleView(state: bubbleState)
+    )
+    private lazy var wordBubblePanel = makeBubblePanel(
+        contentView: wordBubbleHostingView
+    )
+    private lazy var sentenceBubblePanel = makeBubblePanel(
+        contentView: sentenceBubbleHostingView
+    )
 
     init(
         learnerProfile: LearnerProfileStore,
         onSpeakDanish: @escaping (String) -> Void,
-        onLearnerProfileChanged: @escaping () -> Void
+        onLearnerProfileChanged: @escaping (Bool) -> Void
     ) {
         self.learnerProfile = learnerProfile
         self.onSpeakDanish = onSpeakDanish
@@ -59,13 +69,16 @@ final class OverlayWindowController {
         regions: [TextRegion],
         autoSpeak: Bool,
         hoverDelay: Double,
-        translationMode: TranslationMode,
-        explanationMode: ExplanationMode
+        hotKeyConfiguration: HotKeyConfiguration,
+        bridgeConfiguration: LearningBridgeConfiguration
     ) {
+        let presentationChanged = self.hotKeyConfiguration
+            != hotKeyConfiguration
+            || self.bridgeConfiguration != bridgeConfiguration
         self.autoSpeak = autoSpeak
         self.hoverDelay = hoverDelay
-        self.translationMode = translationMode
-        self.explanationMode = explanationMode
+        self.hotKeyConfiguration = hotKeyConfiguration
+        self.bridgeConfiguration = bridgeConfiguration
 
         let grouped = Dictionary(grouping: regions, by: \.displayID)
         let activeDisplayIDs = Set(grouped.keys)
@@ -83,20 +96,34 @@ final class OverlayWindowController {
 
         startMouseTracking()
         let pointer = NSEvent.mouseLocation
-        if bubblePanel.isVisible, let currentWord {
-            let candidates = overlays.values.flatMap { $0.regions }
-                .flatMap(\.words)
+        if presentationChanged,
+           currentWord != nil,
+           currentRegion != nil {
+            refreshCurrentCard(preservePosition: false)
+            return
+        }
+        if bubblesAreVisible, let currentWord {
+            if BubbleInteractionPolicy.shouldKeepLearningSnapshot(
+                pointer: pointer,
+                anchor: hoverAnchorPoint,
+                interactionIsHeld: isBubbleHeld
+            ) {
+                return
+            }
+
+            let regions = overlays.values.flatMap(\.regions)
+            let candidates = regions.flatMap(\.words)
             if let replacement = HoverHitTesting.replacement(
                 for: currentWord,
                 in: candidates
+            ), let replacementRegion = region(
+                containing: replacement,
+                in: regions
             ) {
                 self.currentWord = replacement
+                currentRegion = replacementRegion
+                hoverAnchorPoint = pointer
                 refreshCurrentCard(preservePosition: true)
-            }
-            if isBubbleHeld || BubbleInteractionPolicy.pointerIsStationary(
-                pointer,
-                since: hoverAnchorPoint
-            ) {
                 return
             }
         }
@@ -114,12 +141,12 @@ final class OverlayWindowController {
     }
 
     var isHoldingInteraction: Bool {
-        bubblePanel.isVisible && isBubbleHeld
+        bubblesAreVisible && isBubbleHeld
     }
 
-    private func makeBubblePanel() -> NSPanel {
-        bubbleHostingView.wantsLayer = true
-        bubbleHostingView.layer?.backgroundColor = NSColor.clear.cgColor
+    private func makeBubblePanel(contentView: NSView) -> NSPanel {
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
 
         let panel = NSPanel(
             contentRect: .zero,
@@ -139,7 +166,7 @@ final class OverlayWindowController {
             .stationary,
             .ignoresCycle
         ]
-        panel.contentView = bubbleHostingView
+        panel.contentView = contentView
         return panel
     }
 
@@ -149,9 +176,9 @@ final class OverlayWindowController {
         }
         let timer = Timer(timeInterval: 0.05, repeats: true) {
             [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 let point = NSEvent.mouseLocation
-                self?.updateOptionHoldState()
+                self?.updateHoldModifierState()
                 self?.updateStationaryHold(at: point)
                 self?.updateHover(at: point)
             }
@@ -164,19 +191,22 @@ final class OverlayWindowController {
         at point: CGPoint,
         force: Bool = false
     ) {
-        if !force, isBubbleHeld, bubblePanel.isVisible {
+        if !force, isBubbleHeld, bubblesAreVisible {
             return
         }
 
-        var match: (overlay: DisplayOverlay, word: WordRegion)?
+        var match: (region: TextRegion, word: WordRegion)?
         for overlay in overlays.values
         where overlay.screenFrame.contains(point) {
             if let word = HoverHitTesting.word(
                 at: point,
                 in: overlay.regions,
                 retaining: currentWord
+            ), let matchedRegion = region(
+                containing: word,
+                in: overlay.regions
             ) {
-                match = (overlay, word)
+                match = (matchedRegion, word)
                 break
             }
         }
@@ -192,6 +222,13 @@ final class OverlayWindowController {
             currentWord,
             match?.word
         )
+        if !targetChanged,
+           !BubbleInteractionPolicy.pointerIsStationary(
+            point,
+            since: hoverAnchorPoint
+           ) {
+            hoverAnchorPoint = point
+        }
         guard targetChanged || force else {
             return
         }
@@ -199,8 +236,10 @@ final class OverlayWindowController {
         if targetChanged {
             hoverSpeechTimer?.invalidate()
             hoverSpeechTimer = nil
+            bubbleState.clearFeedback()
         }
         currentWord = match?.word
+        currentRegion = match?.region
 
         guard let match else {
             dismissBubble()
@@ -211,18 +250,24 @@ final class OverlayWindowController {
         stationaryPoint = point
         stationarySince = Date()
         temporarilyHeldForIdle = false
-        bubbleState.isStationaryHeld = false
 
-        if targetChanged, explanationMode == .adaptive {
-            learnerProfile.recordEncounter(for: match.word.sourceText)
-            onLearnerProfileChanged()
+        if targetChanged {
+            if learnerProfile.recordEncounter(
+                for: match.word.sourceText,
+                context: match.region.sourceText
+            ) {
+                onLearnerProfileChanged(false)
+            }
         }
 
-        let card = hoverCard(for: match.word)
-        showBubble(
+        let card = hoverCard(
+            for: match.word,
+            in: match.region
+        )
+        showBubbles(
             card,
             near: match.word,
-            obstacles: sourceFrames(for: match.word)
+            sourceFrame: match.region.frame
         )
 
         guard targetChanged,
@@ -234,7 +279,7 @@ final class OverlayWindowController {
             timeInterval: hoverDelay,
             repeats: false
         ) { [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 guard HoverHitTesting.representsSameTarget(
                     self?.currentWord,
                     match.word
@@ -248,123 +293,326 @@ final class OverlayWindowController {
         hoverSpeechTimer = speechTimer
     }
 
-    private func hoverCard(for word: WordRegion) -> HoverCard {
-        let definition: String
-        var englishSupport: String?
-        var familiarityLabel: String?
-        var englishIsExpanded = false
-
-        switch explanationMode {
-        case .adaptive:
-            let key = LearnerProfileStore.normalizedKey(
-                for: word.sourceText
-            )
-            let expanded = expandedEnglishWords.contains(key)
-            let mixed = word.adaptiveExplanation.isEmpty
-                ? fallbackMixedExplanation(for: word)
-                : word.adaptiveExplanation
-            let explanation = adaptiveExplanationService.explanation(
-                easyDanish: mixed,
-                englishMeaning: word.translatedText,
-                shortEnglish: "Means “\(word.translatedText)”.",
-                fullEnglish: expanded
-                    ? dictionary.adaptiveEnglishGloss(
-                        for: word.translatedText,
-                        sourceWord: word.sourceText
-                    )
-                    : "",
-                progress: learnerProfile.progress(for: word.sourceText),
-                expandEnglish: expanded
-            )
-            definition = explanation.primaryText
-            englishSupport = explanation.englishSupport
-            familiarityLabel = explanation.familiarityLabel
-            englishIsExpanded = explanation.englishIsExpanded
-        case .beginner:
-            definition = dictionary.beginnerExplanation(
-                for: word.translatedText,
-                sourceWord: word.sourceText
-            )
-        case .english:
-            definition = dictionary.definition(
-                for: word.translatedText,
-                sourceWord: word.sourceText
-            )
-        case .easyDanish:
-            definition = word.beginnerExplanation.isEmpty
-                ? "Ingen kort dansk forklaring fundet."
-                : word.beginnerExplanation
-        case .none:
-            definition = ""
+    private func hoverCard(
+        for word: WordRegion,
+        in region: TextRegion
+    ) -> HoverCard {
+        let key = LearnerProfileStore.normalizedKey(for: word.sourceText)
+        let expanded = expandedEnglishWords.contains(key)
+        let now = Date()
+        var knowledgeLevelCache: [String: Int] = [:]
+        let knowledgeLevelForWord: (String) -> Int = {
+            [learnerProfile] candidate in
+            let normalized = LearnerProfileStore.normalizedKey(for: candidate)
+            if let cached = knowledgeLevelCache[normalized] {
+                return cached
+            }
+            let level = learnerProfile.progress(
+                for: normalized,
+                at: now
+            ).effectiveKnowledgeLevel(at: now)
+            knowledgeLevelCache[normalized] = level
+            return level
         }
+        let stateForWord: (String) -> LanguageTransferState = { candidate in
+            LanguageTransferState.forKnowledgeLevel(
+                knowledgeLevelForWord(candidate)
+            )
+        }
+        let bridge = adaptiveSentenceBridge(
+            for: word,
+            in: region,
+            stateForWord: stateForWord
+        )
+        let wordBridge = adaptiveWordBridge(
+            for: word,
+            stateForWord: stateForWord
+        )
+        let explanation = adaptiveExplanationService.explanation(
+            bridgeText: bridge?.text ?? fallbackBridge(for: word),
+            englishMeaning: word.translatedText,
+            expandedEnglish: expanded
+                ? dictionary.adaptiveEnglishGloss(
+                    for: word.translatedText,
+                    sourceWord: word.sourceText
+                )
+                : "",
+            expandEnglish: expanded
+        )
 
         return HoverCard(
             word: word,
-            definition: definition,
-            englishSupport: englishSupport,
-            familiarityLabel: familiarityLabel,
-            englishIsExpanded: englishIsExpanded,
-            translationMode: translationMode,
-            explanationMode: explanationMode
+            wordKnowledgeLevel: knowledgeLevelForWord(word.sourceText),
+            wordBridgeText: wordBridge.text,
+            wordBridgeEnglishTokenIndexes:
+                wordBridge.englishTokenIndexes,
+            wordBridgeKnowledgeLevels: tokenKnowledgeLevels(
+                in: wordBridge.text,
+                englishTokenIndexes: wordBridge.englishTokenIndexes,
+                knowledgeLevelForWord: knowledgeLevelForWord
+            ),
+            learningText: explanation.primaryText,
+            englishSupport: explanation.englishSupport,
+            englishIsExpanded: explanation.englishIsExpanded,
+            adaptiveEnglishTokenIndexes: bridge?.englishTokenIndexes ?? [],
+            sentenceBridgeKnowledgeLevels: tokenKnowledgeLevels(
+                in: explanation.primaryText,
+                englishTokenIndexes: bridge?.englishTokenIndexes ?? [],
+                knowledgeLevelForWord: knowledgeLevelForWord
+            ),
+            sentenceFocusTokenIndexes: tokenIndexes(
+                of: word.sourceText,
+                in: explanation.primaryText,
+                excluding: bridge?.englishTokenIndexes ?? []
+            ),
+            showsControlsInWordBridge:
+                bridgeConfiguration.showsWordBridge,
+            showsControlsInSentenceBridge:
+                !bridgeConfiguration.showsWordBridge
+                    && bridgeConfiguration.showsSentenceBridge,
+            showsEnglishSupportInSentenceBridge:
+                !bridgeConfiguration.showsWordBridge,
+            knownShortcutLabel: hotKeyConfiguration.known.displayText,
+            dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
+            pinShortcutLabel: hotKeyConfiguration.togglePin.displayText
         )
     }
 
-    private func showBubble(
+    private func tokenKnowledgeLevels(
+        in text: String,
+        englishTokenIndexes: [Int],
+        knowledgeLevelForWord: (String) -> Int
+    ) -> [Int: Int] {
+        let englishIndexes = Set(englishTokenIndexes)
+        return Dictionary(
+            uniqueKeysWithValues: text
+                .split(whereSeparator: \Character.isWhitespace)
+                .enumerated()
+                .compactMap { index, token in
+                    guard !englishIndexes.contains(index) else {
+                        return nil
+                    }
+                    let word = LearnerProfileStore.normalizedKey(
+                        for: String(token)
+                    )
+                    guard !word.isEmpty else {
+                        return nil
+                    }
+                    return (index, knowledgeLevelForWord(word))
+                }
+        )
+    }
+
+    private func tokenIndexes(
+        of word: String,
+        in text: String,
+        excluding excludedIndexes: [Int]
+    ) -> [Int] {
+        let target = LearnerProfileStore.normalizedKey(for: word)
+        let excluded = Set(excludedIndexes)
+        guard !target.isEmpty else {
+            return []
+        }
+        return text
+            .split(whereSeparator: \Character.isWhitespace)
+            .enumerated()
+            .compactMap { index, token in
+                guard !excluded.contains(index),
+                      LearnerProfileStore.normalizedKey(
+                        for: String(token)
+                      ) == target else {
+                    return nil
+                }
+                return index
+            }
+    }
+
+    private func adaptiveWordBridge(
+        for word: WordRegion,
+        stateForWord: (String) -> LanguageTransferState
+    ) -> AdaptiveSentenceBridge {
+        if !word.wordBridgeDanishText.isEmpty {
+            return sentenceBridgeService.bridge(
+                danishSentence: word.wordBridgeDanishText,
+                englishByDanishWord: word.wordBridgeTranslations,
+                focusWord: "",
+                stateForWord: stateForWord
+            )
+        }
+        if !word.wordBridgeText.isEmpty {
+            return AdaptiveSentenceBridge(
+                text: word.wordBridgeText,
+                englishTokenIndexes:
+                    word.wordBridgeEnglishTokenIndexes
+            )
+        }
+
+        let meaning = word.translatedText.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !meaning.isEmpty,
+              LearnerProfileStore.normalizedKey(for: meaning)
+                != LearnerProfileStore.normalizedKey(
+                    for: word.sourceText
+                ) else {
+            return AdaptiveSentenceBridge(
+                text: "Ingen lokal ordforklaring fundet.",
+                englishTokenIndexes: []
+            )
+        }
+        let text = "Betyder \(meaning)."
+        let tokenCount = text.split(
+            whereSeparator: \Character.isWhitespace
+        ).count
+        return AdaptiveSentenceBridge(
+            text: text,
+            englishTokenIndexes: Array(1..<tokenCount)
+        )
+    }
+
+    private func adaptiveSentenceBridge(
+        for word: WordRegion,
+        in region: TextRegion,
+        stateForWord: (String) -> LanguageTransferState
+    ) -> AdaptiveSentenceBridge? {
+        var translations: [String: String] = [:]
+        for candidate in region.words {
+            translations[
+                LearnerProfileStore.normalizedKey(for: candidate.sourceText)
+            ] = candidate.translatedText
+        }
+        let focusKey = LearnerProfileStore.normalizedKey(for: word.sourceText)
+        let focusIndex = region.words.firstIndex(where: { $0.id == word.id })
+            ?? 0
+        let focusOccurrence = region.words[..<focusIndex].filter {
+            LearnerProfileStore.normalizedKey(for: $0.sourceText) == focusKey
+        }.count
+        let result = sentenceBridgeService.bridge(
+            danishSentence: region.sourceText,
+            englishByDanishWord: translations,
+            focusWord: word.sourceText,
+            focusOccurrence: focusOccurrence,
+            stateForWord: stateForWord
+        )
+        guard !result.text.isEmpty else {
+            return nil
+        }
+        return result
+    }
+
+    private func showBubbles(
         _ card: HoverCard,
         near word: WordRegion,
-        obstacles: [CGRect]
+        sourceFrame: CGRect
     ) {
-        let size = prepareBubble(card)
-        guard let center = OverlayLayout.hoverCenter(
-            wordFrame: word.frame,
-            estimatedSize: size,
-            screenFrame: word.screenFrame,
-            obstacles: obstacles
-        ) else {
-            bubbleState.hoverCard = nil
-            bubblePanel.orderOut(nil)
+        let sizes = prepareBubbles(card)
+        bubbleState.hoverCard = card
+
+        switch (
+            bridgeConfiguration.showsWordBridge,
+            bridgeConfiguration.showsSentenceBridge
+        ) {
+        case (true, true):
+            guard let centers = OverlayLayout.learningBubbleCenters(
+                wordFrame: word.frame,
+                sourceFrame: sourceFrame,
+                wordSize: sizes.word,
+                sentenceSize: sizes.sentence,
+                screenFrame: word.screenFrame
+            ) else {
+                hideBridgePanels()
+                return
+            }
+            wordBubblePanel.setFrame(
+                bubbleFrame(center: centers.word, size: sizes.word),
+                display: true
+            )
+            sentenceBubblePanel.setFrame(
+                bubbleFrame(center: centers.sentence, size: sizes.sentence),
+                display: true
+            )
+            wordBubblePanel.orderFrontRegardless()
+            sentenceBubblePanel.orderFrontRegardless()
+
+        case (true, false):
+            guard let center = OverlayLayout.hoverCenter(
+                wordFrame: word.frame,
+                estimatedSize: sizes.word,
+                screenFrame: word.screenFrame,
+                obstacles: [sourceFrame]
+            ) else {
+                hideBridgePanels()
+                return
+            }
+            sentenceBubblePanel.orderOut(nil)
+            wordBubblePanel.setFrame(
+                bubbleFrame(center: center, size: sizes.word),
+                display: true
+            )
+            wordBubblePanel.orderFrontRegardless()
+
+        case (false, true):
+            guard let center = OverlayLayout.translationCenter(
+                sourceFrame: sourceFrame,
+                estimatedSize: sizes.sentence,
+                screenFrame: word.screenFrame,
+                obstacles: [sourceFrame]
+            ) ?? OverlayLayout.hoverCenter(
+                wordFrame: word.frame,
+                estimatedSize: sizes.sentence,
+                screenFrame: word.screenFrame,
+                obstacles: [sourceFrame]
+            ) else {
+                hideBridgePanels()
+                return
+            }
+            wordBubblePanel.orderOut(nil)
+            sentenceBubblePanel.setFrame(
+                bubbleFrame(center: center, size: sizes.sentence),
+                display: true
+            )
+            sentenceBubblePanel.orderFrontRegardless()
+
+        case (false, false):
+            hideBridgePanels()
             return
         }
-        bubbleState.hoverCard = card
-        bubblePanel.setFrame(
-            CGRect(
-                x: center.x - size.width / 2,
-                y: center.y - size.height / 2,
-                width: size.width,
-                height: size.height
-            ),
-            display: true
-        )
-        bubblePanel.orderFrontRegardless()
+
         updateBubbleHotKeys()
     }
 
-    private func sourceFrames(for word: WordRegion) -> [CGRect] {
-        for overlay in overlays.values {
-            if let line = overlay.regions.first(where: {
-                $0.words.contains(where: { $0.id == word.id })
-            }) {
-                return [line.frame]
-            }
-        }
-        return [word.frame]
+    private func hideBridgePanels() {
+            wordBubblePanel.orderOut(nil)
+            sentenceBubblePanel.orderOut(nil)
+        bubbleHotKeyService.unregister()
+    }
+
+    private func bubbleFrame(center: CGPoint, size: CGSize) -> CGRect {
+        CGRect(
+            x: center.x - size.width / 2,
+            y: center.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
     }
 
     private func markCurrentWordUnknown() {
-        guard let currentWord,
-              explanationMode == .adaptive else {
+        guard let currentWord else {
             return
         }
         let key = LearnerProfileStore.normalizedKey(
             for: currentWord.sourceText
         )
-        guard !expandedEnglishWords.contains(key) else {
-            return
-        }
         learnerProfile.recordUnknown(for: currentWord.sourceText)
+        if expandedEnglishWords.count >= 256,
+           !expandedEnglishWords.contains(key),
+           let evictionCandidate = expandedEnglishWords.first {
+            expandedEnglishWords.remove(evictionCandidate)
+        }
         expandedEnglishWords.insert(key)
-        onLearnerProfileChanged()
+        onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
+        bubbleState.showFeedback(.englishRestored)
     }
 
     private func markCurrentWordKnown() {
@@ -375,98 +623,145 @@ final class OverlayWindowController {
         expandedEnglishWords.remove(
             LearnerProfileStore.normalizedKey(for: currentWord.sourceText)
         )
-        onLearnerProfileChanged()
+        onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
+        bubbleState.showFeedback(.markedKnown)
     }
 
     private func refreshCurrentCard(preservePosition: Bool) {
-        guard let currentWord else {
+        guard let currentWord,
+              let currentRegion else {
             return
         }
-        let replacement = overlays.values
-            .compactMap {
-                HoverHitTesting.replacement(
-                    for: currentWord,
-                    in: $0.regions.flatMap(\.words)
+        let card = hoverCard(
+            for: currentWord,
+            in: currentRegion
+        )
+        if preservePosition, bubblesAreVisible {
+            let sizes = prepareBubbles(card)
+            if bridgeConfiguration.showsWordBridge {
+                let wordFrame = BubbleInteractionPolicy.preservedFrame(
+                    oldFrame: wordBubblePanel.frame,
+                    newSize: sizes.word,
+                    screenFrame: currentWord.screenFrame
                 )
+                wordBubblePanel.setFrame(wordFrame, display: true)
+                wordBubblePanel.orderFrontRegardless()
+            } else {
+                wordBubblePanel.orderOut(nil)
             }
-            .first ?? currentWord
-        self.currentWord = replacement
-        let card = hoverCard(for: replacement)
-        if preservePosition, bubblePanel.isVisible {
-            let size = prepareBubble(card)
-            let frame = BubbleInteractionPolicy.preservedFrame(
-                oldFrame: bubblePanel.frame,
-                newSize: size,
-                screenFrame: replacement.screenFrame
-            )
-            bubblePanel.setFrame(frame, display: true)
-            bubblePanel.orderFrontRegardless()
+            if bridgeConfiguration.showsSentenceBridge {
+                let sentenceFrame = BubbleInteractionPolicy.preservedFrame(
+                    oldFrame: sentenceBubblePanel.frame,
+                    newSize: sizes.sentence,
+                    screenFrame: currentWord.screenFrame
+                )
+                sentenceBubblePanel.setFrame(sentenceFrame, display: true)
+                sentenceBubblePanel.orderFrontRegardless()
+            } else {
+                sentenceBubblePanel.orderOut(nil)
+            }
             updateBubbleHotKeys()
         } else {
-            showBubble(
+            showBubbles(
                 card,
-                near: replacement,
-                obstacles: sourceFrames(for: replacement)
+                near: currentWord,
+                sourceFrame: currentRegion.frame
             )
         }
     }
 
     private var isBubbleHeld: Bool {
-        pinnedByUser || temporarilyHeldForIdle || optionHeld
+        pinnedByUser || temporarilyHeldForIdle || holdModifierPressed
     }
 
-    private func fallbackMixedExplanation(for word: WordRegion) -> String {
+    private var bubblesAreVisible: Bool {
+        wordBubblePanel.isVisible || sentenceBubblePanel.isVisible
+    }
+
+    private func region(
+        containing word: WordRegion,
+        in regions: [TextRegion]
+    ) -> TextRegion? {
+        regions.first { region in
+            region.words.contains { $0.id == word.id }
+        } ?? regions.first { region in
+            region.words.contains {
+                HoverHitTesting.representsSameTarget($0, word)
+            }
+        }
+    }
+
+    private func fallbackBridge(for word: WordRegion) -> String {
         let meaning = word.translatedText.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
-        if !word.beginnerExplanation.isEmpty, !meaning.isEmpty {
-            return "\(word.sourceText) = \(meaning). \(word.beginnerExplanation)"
-        }
-        if !meaning.isEmpty {
+        if !meaning.isEmpty,
+           LearnerProfileStore.normalizedKey(for: meaning)
+            != LearnerProfileStore.normalizedKey(for: word.sourceText) {
             return "\(word.sourceText) = \(meaning)."
         }
-        return word.beginnerExplanation
+        return word.sourceText
     }
 
-    private func prepareBubble(_ card: HoverCard) -> CGSize {
+    private func prepareBubbles(
+        _ card: HoverCard
+    ) -> (word: CGSize, sentence: CGSize) {
         bubbleState.hoverCard = card
-        bubbleHostingView.rootView = OverlayRootView(state: bubbleState)
-        bubbleHostingView.invalidateIntrinsicContentSize()
-        bubbleHostingView.layoutSubtreeIfNeeded()
-        return HoverBubbleMetrics.fittedSize(bubbleHostingView.fittingSize)
+        var wordSize = CGSize.zero
+        var sentenceSize = CGSize.zero
+        if bridgeConfiguration.showsWordBridge {
+            wordBubbleHostingView.rootView = WordBubbleView(state: bubbleState)
+            wordBubbleHostingView.invalidateIntrinsicContentSize()
+            wordBubbleHostingView.layoutSubtreeIfNeeded()
+            wordSize = WordBubbleMetrics.fittedSize(
+                wordBubbleHostingView.fittingSize
+            )
+        }
+        if bridgeConfiguration.showsSentenceBridge {
+            sentenceBubbleHostingView.rootView = SentenceBridgeBubbleView(
+                state: bubbleState
+            )
+            sentenceBubbleHostingView.invalidateIntrinsicContentSize()
+            sentenceBubbleHostingView.layoutSubtreeIfNeeded()
+            sentenceSize = SentenceBubbleMetrics.fittedSize(
+                sentenceBubbleHostingView.fittingSize
+            )
+        }
+        return (wordSize, sentenceSize)
     }
 
     private func dismissBubble() {
+        bubbleState.clearFeedback()
         bubbleState.hoverCard = nil
-        bubblePanel.orderOut(nil)
+        wordBubblePanel.orderOut(nil)
+        sentenceBubblePanel.orderOut(nil)
         bubbleHotKeyService.unregister()
         currentWord = nil
+        currentRegion = nil
         hoverAnchorPoint = nil
         pinnedByUser = false
         temporarilyHeldForIdle = false
-        optionHeld = false
+        holdModifierPressed = false
         stationaryPoint = nil
         stationarySince = nil
         bubbleState.isPinned = false
-        bubbleState.isStationaryHeld = false
-        bubbleState.isOptionHeld = false
     }
 
     private func updateBubbleHotKeys() {
-        if bubblePanel.isVisible,
-           currentWord != nil,
-           explanationMode == .adaptive {
-            bubbleHotKeyService.register()
+        if bubblesAreVisible,
+           currentWord != nil {
+            bubbleHotKeyService.register(
+                configuration: hotKeyConfiguration
+            )
         } else {
             bubbleHotKeyService.unregister()
         }
     }
 
     private func performBubbleAction(_ action: BubbleHotKeyAction) {
-        guard bubblePanel.isVisible,
-              currentWord != nil,
-              explanationMode == .adaptive else {
+        guard bubblesAreVisible,
+              currentWord != nil else {
             return
         }
         switch action {
@@ -480,7 +775,7 @@ final class OverlayWindowController {
     }
 
     private func toggleBubblePin() {
-        guard bubblePanel.isVisible else {
+        guard bubblesAreVisible else {
             return
         }
         if pinnedByUser {
@@ -490,7 +785,6 @@ final class OverlayWindowController {
         } else {
             pinnedByUser = true
             temporarilyHeldForIdle = false
-            bubbleState.isStationaryHeld = false
         }
         bubbleState.isPinned = pinnedByUser
         refreshCurrentCard(preservePosition: true)
@@ -499,32 +793,30 @@ final class OverlayWindowController {
         }
     }
 
-    private func updateOptionHoldState() {
-        let down = CGEventSource.flagsState(.combinedSessionState)
-            .contains(.maskAlternate)
-        guard bubblePanel.isVisible else {
-            optionHeld = false
-            bubbleState.isOptionHeld = false
+    private func updateHoldModifierState() {
+        let down = hotKeyConfiguration.holdModifier.isPressed(
+            in: CGEventSource.flagsState(.combinedSessionState)
+        )
+        guard bubblesAreVisible else {
+            holdModifierPressed = false
             bubbleState.isPinned = pinnedByUser
             return
         }
-        guard down != optionHeld else {
+        guard down != holdModifierPressed else {
             return
         }
-        optionHeld = down
-        bubbleState.isOptionHeld = down
+        holdModifierPressed = down
         bubbleState.isPinned = pinnedByUser
-        refreshCurrentCard(preservePosition: true)
         if !down, !pinnedByUser {
             updateHover(at: NSEvent.mouseLocation)
         }
     }
 
     private func updateStationaryHold(at point: CGPoint) {
-        guard bubblePanel.isVisible,
+        guard bubblesAreVisible,
               let currentWord,
               !pinnedByUser,
-              !optionHeld else {
+              !holdModifierPressed else {
             return
         }
 
@@ -541,7 +833,6 @@ final class OverlayWindowController {
                 idleDuration: idleDuration
             ) {
                 temporarilyHeldForIdle = false
-                bubbleState.isStationaryHeld = false
                 stationaryPoint = point
                 stationarySince = Date()
             }
@@ -565,7 +856,5 @@ final class OverlayWindowController {
         }
 
         temporarilyHeldForIdle = true
-        bubbleState.isStationaryHeld = true
-        refreshCurrentCard(preservePosition: true)
     }
 }

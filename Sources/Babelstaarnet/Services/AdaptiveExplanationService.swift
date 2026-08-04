@@ -3,56 +3,42 @@ import Foundation
 struct AdaptiveExplanation: Equatable, Sendable {
     let primaryText: String
     let englishSupport: String?
-    let familiarityLabel: String
     let englishIsExpanded: Bool
 }
 
 struct AdaptiveExplanationService {
     func explanation(
-        easyDanish: String,
+        bridgeText: String,
         englishMeaning: String,
-        shortEnglish: String,
-        fullEnglish: String,
-        progress: LearnerWordProgress,
-        expandEnglish: Bool,
-        at date: Date = Date()
+        expandedEnglish: String,
+        expandEnglish: Bool
     ) -> AdaptiveExplanation {
-        let mixed = brief(easyDanish, wordLimit: 20)
+        // A sentence bridge contains at most 20 Danish words and three short
+        // English glosses. Keep the complete Danish context instead of
+        // truncating it because gloss tokens increased the raw word count.
+        let bridge = brief(bridgeText, wordLimit: 36)
         let meaning = englishMeaning.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
-        let short = brief(shortEnglish, wordLimit: 16)
-        let full = brief(fullEnglish, wordLimit: 24)
-        let selectedEnglish: String
-        if expandEnglish, !full.isEmpty {
-            selectedEnglish = full
-        } else if !short.isEmpty {
-            selectedEnglish = short
-        } else if !meaning.isEmpty {
-            selectedEnglish = "Means “\(meaning)”."
-        } else {
-            selectedEnglish = ""
-        }
+        let expanded = brief(expandedEnglish, wordLimit: 24)
 
-        if mixed.isEmpty {
+        if bridge.isEmpty {
             return AdaptiveExplanation(
                 primaryText: meaning.isEmpty
                     ? "No local explanation found."
                     : "Betyder “\(meaning)”.",
-                englishSupport: expandEnglish && !selectedEnglish.isEmpty
-                    ? selectedEnglish
+                englishSupport: expandEnglish && !expanded.isEmpty
+                    ? expanded
                     : nil,
-                familiarityLabel: progress.level(at: date).title,
                 englishIsExpanded: expandEnglish
             )
         }
 
         return AdaptiveExplanation(
-            primaryText: mixed,
-            englishSupport: expandEnglish && !selectedEnglish.isEmpty
-                ? selectedEnglish
+            primaryText: bridge,
+            englishSupport: expandEnglish && !expanded.isEmpty
+                ? expanded
                 : nil,
-            familiarityLabel: progress.level(at: date).title,
             englishIsExpanded: expandEnglish
         )
     }
