@@ -127,6 +127,10 @@ enum BubbleViewSizingChecks {
         precondition(state.feedbackConfirmation == .englishRestored)
         state.clearFeedback()
         precondition(state.feedbackConfirmation == nil)
+
+        let opacities = (0...5).map(KnowledgeTone.opacity(for:))
+        precondition(opacities == opacities.sorted(by: >))
+        precondition(opacities[0] - opacities[5] < 0.30)
     }
 
     private static func measuredWordHeight(

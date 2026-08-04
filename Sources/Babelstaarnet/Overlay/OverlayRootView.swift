@@ -36,12 +36,18 @@ struct WordBubbleView: View {
 
             Text(LearnerDisplayText.clean(card.word.sourceText))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(
+                    .primary.opacity(
+                        KnowledgeTone.opacity(for: card.wordKnowledgeLevel)
+                    )
+                )
                 .fixedSize(horizontal: false, vertical: true)
 
             SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.wordBridgeText),
                 englishTokenIndexes:
-                    card.wordBridgeEnglishTokenIndexes
+                    card.wordBridgeEnglishTokenIndexes,
+                knowledgeLevels: card.wordBridgeKnowledgeLevels
             )
 
             if let englishSupport = card.englishSupport {
@@ -102,7 +108,8 @@ struct SentenceBridgeBubbleView: View {
 
             SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.learningText),
-                englishTokenIndexes: card.adaptiveEnglishTokenIndexes
+                englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
+                knowledgeLevels: card.sentenceBridgeKnowledgeLevels
             )
 
             if card.showsEnglishSupportInSentenceBridge,
@@ -195,6 +202,7 @@ private enum LearnerDisplayText {
 private struct SentenceBridgeText: View {
     let text: String
     let englishTokenIndexes: [Int]
+    let knowledgeLevels: [Int: Int]
 
     var body: some View {
         let englishIndexes = Set(englishTokenIndexes)
@@ -216,7 +224,13 @@ private struct SentenceBridgeText: View {
                 } else {
                     Text(token)
                         .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(
+                            .primary.opacity(
+                                KnowledgeTone.opacity(
+                                    for: knowledgeLevels[index] ?? 0
+                                )
+                            )
+                        )
                         .padding(.vertical, 1)
                 }
             }
@@ -226,6 +240,19 @@ private struct SentenceBridgeText: View {
 
     private var tokens: [String] {
         text.split(whereSeparator: \Character.isWhitespace).map(String.init)
+    }
+}
+
+enum KnowledgeTone {
+    static func opacity(for level: Int) -> Double {
+        switch min(max(level, 0), 5) {
+        case 0: 1.00
+        case 1: 0.95
+        case 2: 0.90
+        case 3: 0.85
+        case 4: 0.80
+        default: 0.74
+        }
     }
 }
 

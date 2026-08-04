@@ -300,20 +300,24 @@ final class OverlayWindowController {
         let key = LearnerProfileStore.normalizedKey(for: word.sourceText)
         let expanded = expandedEnglishWords.contains(key)
         let now = Date()
-        var transferStateCache: [String: LanguageTransferState] = [:]
-        let stateForWord: (String) -> LanguageTransferState = {
+        var knowledgeLevelCache: [String: Int] = [:]
+        let knowledgeLevelForWord: (String) -> Int = {
             [learnerProfile] candidate in
             let normalized = LearnerProfileStore.normalizedKey(for: candidate)
-            if let cached = transferStateCache[normalized] {
+            if let cached = knowledgeLevelCache[normalized] {
                 return cached
             }
             let level = learnerProfile.progress(
                 for: normalized,
                 at: now
             ).effectiveKnowledgeLevel(at: now)
-            let state = LanguageTransferState.forKnowledgeLevel(level)
-            transferStateCache[normalized] = state
-            return state
+            knowledgeLevelCache[normalized] = level
+            return level
+        }
+        let stateForWord: (String) -> LanguageTransferState = { candidate in
+            LanguageTransferState.forKnowledgeLevel(
+                knowledgeLevelForWord(candidate)
+            )
         }
         let bridge = adaptiveSentenceBridge(
             for: word,
@@ -338,13 +342,24 @@ final class OverlayWindowController {
 
         return HoverCard(
             word: word,
+            wordKnowledgeLevel: knowledgeLevelForWord(word.sourceText),
             wordBridgeText: wordBridge.text,
             wordBridgeEnglishTokenIndexes:
                 wordBridge.englishTokenIndexes,
+            wordBridgeKnowledgeLevels: tokenKnowledgeLevels(
+                in: wordBridge.text,
+                englishTokenIndexes: wordBridge.englishTokenIndexes,
+                knowledgeLevelForWord: knowledgeLevelForWord
+            ),
             learningText: explanation.primaryText,
             englishSupport: explanation.englishSupport,
             englishIsExpanded: explanation.englishIsExpanded,
             adaptiveEnglishTokenIndexes: bridge?.englishTokenIndexes ?? [],
+            sentenceBridgeKnowledgeLevels: tokenKnowledgeLevels(
+                in: explanation.primaryText,
+                englishTokenIndexes: bridge?.englishTokenIndexes ?? [],
+                knowledgeLevelForWord: knowledgeLevelForWord
+            ),
             showsControlsInWordBridge:
                 bridgeConfiguration.showsWordBridge,
             showsControlsInSentenceBridge:
@@ -355,6 +370,31 @@ final class OverlayWindowController {
             knownShortcutLabel: hotKeyConfiguration.known.displayText,
             dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
             pinShortcutLabel: hotKeyConfiguration.togglePin.displayText
+        )
+    }
+
+    private func tokenKnowledgeLevels(
+        in text: String,
+        englishTokenIndexes: [Int],
+        knowledgeLevelForWord: (String) -> Int
+    ) -> [Int: Int] {
+        let englishIndexes = Set(englishTokenIndexes)
+        return Dictionary(
+            uniqueKeysWithValues: text
+                .split(whereSeparator: \Character.isWhitespace)
+                .enumerated()
+                .compactMap { index, token in
+                    guard !englishIndexes.contains(index) else {
+                        return nil
+                    }
+                    let word = LearnerProfileStore.normalizedKey(
+                        for: String(token)
+                    )
+                    guard !word.isEmpty else {
+                        return nil
+                    }
+                    return (index, knowledgeLevelForWord(word))
+                }
         )
     }
 

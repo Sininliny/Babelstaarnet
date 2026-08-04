@@ -84,12 +84,15 @@ struct TextRegion: Identifiable, Hashable, Sendable {
 
 struct HoverCard: Equatable, Sendable {
     let word: WordRegion
+    let wordKnowledgeLevel: Int
     let wordBridgeText: String
     let wordBridgeEnglishTokenIndexes: [Int]
+    let wordBridgeKnowledgeLevels: [Int: Int]
     let learningText: String
     let englishSupport: String?
     let englishIsExpanded: Bool
     let adaptiveEnglishTokenIndexes: [Int]
+    let sentenceBridgeKnowledgeLevels: [Int: Int]
     let showsControlsInWordBridge: Bool
     let showsControlsInSentenceBridge: Bool
     let showsEnglishSupportInSentenceBridge: Bool
@@ -99,12 +102,15 @@ struct HoverCard: Equatable, Sendable {
 
     init(
         word: WordRegion,
+        wordKnowledgeLevel: Int = 0,
         wordBridgeText: String = "",
         wordBridgeEnglishTokenIndexes: [Int] = [],
+        wordBridgeKnowledgeLevels: [Int: Int] = [:],
         learningText: String,
         englishSupport: String? = nil,
         englishIsExpanded: Bool = false,
         adaptiveEnglishTokenIndexes: [Int] = [],
+        sentenceBridgeKnowledgeLevels: [Int: Int] = [:],
         showsControlsInWordBridge: Bool = false,
         showsControlsInSentenceBridge: Bool = false,
         showsEnglishSupportInSentenceBridge: Bool = false,
@@ -113,12 +119,16 @@ struct HoverCard: Equatable, Sendable {
         pinShortcutLabel: String = "3"
     ) {
         self.word = word
+        self.wordKnowledgeLevel = wordKnowledgeLevel
         self.wordBridgeText = wordBridgeText
         self.wordBridgeEnglishTokenIndexes = wordBridgeEnglishTokenIndexes
+        self.wordBridgeKnowledgeLevels = wordBridgeKnowledgeLevels
         self.learningText = learningText
         self.englishSupport = englishSupport
         self.englishIsExpanded = englishIsExpanded
         self.adaptiveEnglishTokenIndexes = adaptiveEnglishTokenIndexes
+        self.sentenceBridgeKnowledgeLevels =
+            sentenceBridgeKnowledgeLevels
         self.showsControlsInWordBridge = showsControlsInWordBridge
         self.showsControlsInSentenceBridge = showsControlsInSentenceBridge
         self.showsEnglishSupportInSentenceBridge =
