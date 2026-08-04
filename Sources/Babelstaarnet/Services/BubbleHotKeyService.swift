@@ -77,7 +77,7 @@ final class BubbleHotKeyService {
                 let service = Unmanaged<BubbleHotKeyService>
                     .fromOpaque(userData)
                     .takeUnretainedValue()
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     service.action(action)
                 }
                 return noErr
@@ -144,7 +144,7 @@ final class BubbleHotKeyService {
     private func installPollingFallback() {
         let timer = Timer(timeInterval: 0.04, repeats: true) {
             [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.pollNumberKeys()
             }
         }

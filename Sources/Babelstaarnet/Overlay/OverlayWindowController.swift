@@ -31,7 +31,7 @@ final class OverlayWindowController {
     private var hotKeyConfiguration = HotKeyConfiguration.defaults
     private var bridgeConfiguration = LearningBridgeConfiguration.both
     private let onSpeakDanish: (String) -> Void
-    private let onLearnerProfileChanged: () -> Void
+    private let onLearnerProfileChanged: (Bool) -> Void
     private lazy var bubbleHotKeyService = BubbleHotKeyService {
         [weak self] action in
         self?.performBubbleAction(action)
@@ -52,7 +52,7 @@ final class OverlayWindowController {
     init(
         learnerProfile: LearnerProfileStore,
         onSpeakDanish: @escaping (String) -> Void,
-        onLearnerProfileChanged: @escaping () -> Void
+        onLearnerProfileChanged: @escaping (Bool) -> Void
     ) {
         self.learnerProfile = learnerProfile
         self.onSpeakDanish = onSpeakDanish
@@ -176,7 +176,7 @@ final class OverlayWindowController {
         }
         let timer = Timer(timeInterval: 0.05, repeats: true) {
             [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 let point = NSEvent.mouseLocation
                 self?.updateHoldModifierState()
                 self?.updateStationaryHold(at: point)
@@ -249,11 +249,11 @@ final class OverlayWindowController {
         stationaryPoint = point
         stationarySince = Date()
         temporarilyHeldForIdle = false
-        bubbleState.isStationaryHeld = false
 
         if targetChanged {
-            learnerProfile.recordEncounter(for: match.word.sourceText)
-            onLearnerProfileChanged()
+            if learnerProfile.recordEncounter(for: match.word.sourceText) {
+                onLearnerProfileChanged(false)
+            }
         }
 
         let card = hoverCard(
@@ -275,7 +275,7 @@ final class OverlayWindowController {
             timeInterval: hoverDelay,
             repeats: false
         ) { [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 guard HoverHitTesting.representsSameTarget(
                     self?.currentWord,
                     match.word
@@ -295,11 +295,33 @@ final class OverlayWindowController {
     ) -> HoverCard {
         let key = LearnerProfileStore.normalizedKey(for: word.sourceText)
         let expanded = expandedEnglishWords.contains(key)
+        let now = Date()
+        let progress = learnerProfile.progress(for: word.sourceText, at: now)
+        let effectiveKnowledgeLevel = progress.effectiveKnowledgeLevel(at: now)
+        var transferStateCache: [String: LanguageTransferState] = [:]
+        let stateForWord: (String) -> LanguageTransferState = {
+            [learnerProfile] candidate in
+            let normalized = LearnerProfileStore.normalizedKey(for: candidate)
+            if let cached = transferStateCache[normalized] {
+                return cached
+            }
+            let level = learnerProfile.progress(
+                for: normalized,
+                at: now
+            ).effectiveKnowledgeLevel(at: now)
+            let state = LanguageTransferState.forKnowledgeLevel(level)
+            transferStateCache[normalized] = state
+            return state
+        }
         let bridge = adaptiveSentenceBridge(
             for: word,
-            in: region
+            in: region,
+            stateForWord: stateForWord
         )
-        let wordBridge = adaptiveWordBridge(for: word)
+        let wordBridge = adaptiveWordBridge(
+            for: word,
+            stateForWord: stateForWord
+        )
         let explanation = adaptiveExplanationService.explanation(
             bridgeText: bridge?.text ?? fallbackBridge(for: word),
             englishMeaning: word.translatedText,
@@ -328,6 +350,12 @@ final class OverlayWindowController {
                     && bridgeConfiguration.showsSentenceBridge,
             showsEnglishSupportInSentenceBridge:
                 !bridgeConfiguration.showsWordBridge,
+            knowledgeLevel: effectiveKnowledgeLevel,
+            maximumKnowledgeLevel:
+                LearnerWordProgress.maximumKnowledgeLevel,
+            knowledgeStageTitle: LearnerWordProgress.knowledgeStageTitle(
+                for: effectiveKnowledgeLevel
+            ),
             knownShortcutLabel: hotKeyConfiguration.known.displayText,
             dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
             pinShortcutLabel: hotKeyConfiguration.togglePin.displayText
@@ -335,23 +363,15 @@ final class OverlayWindowController {
     }
 
     private func adaptiveWordBridge(
-        for word: WordRegion
+        for word: WordRegion,
+        stateForWord: (String) -> LanguageTransferState
     ) -> AdaptiveSentenceBridge {
         if !word.wordBridgeDanishText.isEmpty {
             return sentenceBridgeService.bridge(
                 danishSentence: word.wordBridgeDanishText,
                 englishByDanishWord: word.wordBridgeTranslations,
                 focusWord: "",
-                stateForWord: { [learnerProfile] candidate in
-                    let familiarity = learnerProfile.progress(
-                        for: candidate
-                    ).effectiveFamiliarity()
-                    switch familiarity {
-                    case ..<0.25: return .unknown
-                    case ..<0.65: return .learning
-                    default: return .known
-                    }
-                }
+                stateForWord: stateForWord
             )
         }
         if !word.wordBridgeText.isEmpty {
@@ -387,7 +407,8 @@ final class OverlayWindowController {
 
     private func adaptiveSentenceBridge(
         for word: WordRegion,
-        in region: TextRegion
+        in region: TextRegion,
+        stateForWord: (String) -> LanguageTransferState
     ) -> AdaptiveSentenceBridge? {
         var translations: [String: String] = [:]
         for candidate in region.words {
@@ -406,16 +427,7 @@ final class OverlayWindowController {
             englishByDanishWord: translations,
             focusWord: word.sourceText,
             focusOccurrence: focusOccurrence,
-            stateForWord: { [learnerProfile] candidate in
-                let familiarity = learnerProfile.progress(
-                    for: candidate
-                ).effectiveFamiliarity()
-                switch familiarity {
-                case ..<0.25: return .unknown
-                case ..<0.65: return .learning
-                default: return .known
-                }
-            }
+            stateForWord: stateForWord
         )
         guard !result.text.isEmpty else {
             return nil
@@ -526,12 +538,14 @@ final class OverlayWindowController {
         let key = LearnerProfileStore.normalizedKey(
             for: currentWord.sourceText
         )
-        guard !expandedEnglishWords.contains(key) else {
-            return
-        }
         learnerProfile.recordUnknown(for: currentWord.sourceText)
+        if expandedEnglishWords.count >= 256,
+           !expandedEnglishWords.contains(key),
+           let evictionCandidate = expandedEnglishWords.first {
+            expandedEnglishWords.remove(evictionCandidate)
+        }
         expandedEnglishWords.insert(key)
-        onLearnerProfileChanged()
+        onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
     }
 
@@ -543,7 +557,7 @@ final class OverlayWindowController {
         expandedEnglishWords.remove(
             LearnerProfileStore.normalizedKey(for: currentWord.sourceText)
         )
-        onLearnerProfileChanged()
+        onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
     }
 
@@ -627,20 +641,27 @@ final class OverlayWindowController {
         _ card: HoverCard
     ) -> (word: CGSize, sentence: CGSize) {
         bubbleState.hoverCard = card
-        wordBubbleHostingView.rootView = WordBubbleView(state: bubbleState)
-        sentenceBubbleHostingView.rootView = SentenceBridgeBubbleView(
-            state: bubbleState
-        )
-        wordBubbleHostingView.invalidateIntrinsicContentSize()
-        sentenceBubbleHostingView.invalidateIntrinsicContentSize()
-        wordBubbleHostingView.layoutSubtreeIfNeeded()
-        sentenceBubbleHostingView.layoutSubtreeIfNeeded()
-        return (
-            WordBubbleMetrics.fittedSize(wordBubbleHostingView.fittingSize),
-            SentenceBubbleMetrics.fittedSize(
+        var wordSize = CGSize.zero
+        var sentenceSize = CGSize.zero
+        if bridgeConfiguration.showsWordBridge {
+            wordBubbleHostingView.rootView = WordBubbleView(state: bubbleState)
+            wordBubbleHostingView.invalidateIntrinsicContentSize()
+            wordBubbleHostingView.layoutSubtreeIfNeeded()
+            wordSize = WordBubbleMetrics.fittedSize(
+                wordBubbleHostingView.fittingSize
+            )
+        }
+        if bridgeConfiguration.showsSentenceBridge {
+            sentenceBubbleHostingView.rootView = SentenceBridgeBubbleView(
+                state: bubbleState
+            )
+            sentenceBubbleHostingView.invalidateIntrinsicContentSize()
+            sentenceBubbleHostingView.layoutSubtreeIfNeeded()
+            sentenceSize = SentenceBubbleMetrics.fittedSize(
                 sentenceBubbleHostingView.fittingSize
             )
-        )
+        }
+        return (wordSize, sentenceSize)
     }
 
     private func dismissBubble() {
@@ -657,8 +678,6 @@ final class OverlayWindowController {
         stationaryPoint = nil
         stationarySince = nil
         bubbleState.isPinned = false
-        bubbleState.isStationaryHeld = false
-        bubbleState.isHoldModifierPressed = false
     }
 
     private func updateBubbleHotKeys() {
@@ -698,7 +717,6 @@ final class OverlayWindowController {
         } else {
             pinnedByUser = true
             temporarilyHeldForIdle = false
-            bubbleState.isStationaryHeld = false
         }
         bubbleState.isPinned = pinnedByUser
         refreshCurrentCard(preservePosition: true)
@@ -713,7 +731,6 @@ final class OverlayWindowController {
         )
         guard bubblesAreVisible else {
             holdModifierPressed = false
-            bubbleState.isHoldModifierPressed = false
             bubbleState.isPinned = pinnedByUser
             return
         }
@@ -721,9 +738,7 @@ final class OverlayWindowController {
             return
         }
         holdModifierPressed = down
-        bubbleState.isHoldModifierPressed = down
         bubbleState.isPinned = pinnedByUser
-        refreshCurrentCard(preservePosition: true)
         if !down, !pinnedByUser {
             updateHover(at: NSEvent.mouseLocation)
         }
@@ -750,7 +765,6 @@ final class OverlayWindowController {
                 idleDuration: idleDuration
             ) {
                 temporarilyHeldForIdle = false
-                bubbleState.isStationaryHeld = false
                 stationaryPoint = point
                 stationarySince = Date()
             }
@@ -774,7 +788,5 @@ final class OverlayWindowController {
         }
 
         temporarilyHeldForIdle = true
-        bubbleState.isStationaryHeld = true
-        refreshCurrentCard(preservePosition: true)
     }
 }

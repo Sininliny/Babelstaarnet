@@ -54,7 +54,7 @@ final class HotKeyService {
                 let service = Unmanaged<HotKeyService>
                     .fromOpaque(userData)
                     .takeUnretainedValue()
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     service.action()
                 }
                 return noErr
@@ -109,7 +109,7 @@ final class HotKeyService {
     private func startPollingFallback() {
         let timer = Timer(timeInterval: 0.04, repeats: true) {
             [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.pollShortcut()
             }
         }

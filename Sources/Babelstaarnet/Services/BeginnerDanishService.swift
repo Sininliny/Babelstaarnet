@@ -1,6 +1,10 @@
 import Foundation
 
 struct BeginnerDanishService {
+    private static let danishLocale = Locale(identifier: "da_DK")
+    private static let wordTrimmingCharacters =
+        CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+
     func localExplanation(for word: String) -> String? {
         Self.explanations[Self.normalized(word)]
     }
@@ -26,10 +30,9 @@ struct BeginnerDanishService {
     }
 
     private static func normalized(_ word: String) -> String {
-        word.lowercased(with: Locale(identifier: "da_DK"))
+        word.lowercased(with: danishLocale)
             .trimmingCharacters(
-                in: CharacterSet.whitespacesAndNewlines
-                    .union(.punctuationCharacters)
+                in: wordTrimmingCharacters
             )
     }
 

@@ -67,71 +67,75 @@ struct TesseractOCRService {
                 throw TesseractError.imageEncodingFailed
             }
 
-            let normalTSV = try Self.runTesseract(
+            let imageSize = CGSize(
+                width: capture.image.width,
+                height: capture.image.height
+            )
+            let primaryPageSegmentation = capture.frame == capture.screenFrame
+                ? 3
+                : 6
+
+            async let normalTSV = Self.runTesseract(
                 executableURL: executableURL,
                 png: png,
                 automaticInversion: true,
-                pageSegmentationMode: capture.frame == capture.screenFrame
-                    ? 3
-                    : 6
+                pageSegmentationMode: primaryPageSegmentation
             )
+
+            let invertedPNG = Self.invertedHighContrastPNG(
+                from: capture.image
+            )
+            async let invertedTSV: String? = {
+                guard let invertedPNG else {
+                    return nil
+                }
+                return try? Self.runTesseract(
+                    executableURL: executableURL,
+                    png: invertedPNG,
+                    automaticInversion: false,
+                    pageSegmentationMode: primaryPageSegmentation
+                )
+            }()
+
+            let chromaPNG = Self.lightTextOnColorPNG(from: capture.image)
+            async let chromaTSV: String? = {
+                guard let chromaPNG else {
+                    return nil
+                }
+                return try? Self.runTesseract(
+                    executableURL: executableURL,
+                    png: chromaPNG,
+                    automaticInversion: false,
+                    pageSegmentationMode: 3
+                )
+            }()
+
+            let passResults = try await (normalTSV, invertedTSV, chromaTSV)
             let normalRegions = Self.parse(
-                tsv: normalTSV,
-                imageSize: CGSize(
-                    width: capture.image.width,
-                    height: capture.image.height
-                ),
+                tsv: passResults.0,
+                imageSize: imageSize,
                 captureFrame: capture.frame,
                 screenFrame: capture.screenFrame,
                 displayID: capture.displayID
             )
-
-            let invertedRegions: [TextRegion]
-            if let invertedPNG = Self.invertedHighContrastPNG(
-                from: capture.image
-            ), let invertedTSV = try? Self.runTesseract(
-                executableURL: executableURL,
-                png: invertedPNG,
-                automaticInversion: false,
-                pageSegmentationMode: capture.frame == capture.screenFrame
-                    ? 3
-                    : 6
-            ) {
-                invertedRegions = Self.parse(
-                    tsv: invertedTSV,
-                    imageSize: CGSize(
-                        width: capture.image.width,
-                        height: capture.image.height
-                    ),
+            let invertedRegions = passResults.1.map {
+                Self.parse(
+                    tsv: $0,
+                    imageSize: imageSize,
                     captureFrame: capture.frame,
                     screenFrame: capture.screenFrame,
                     displayID: capture.displayID
                 )
-            } else {
-                invertedRegions = []
-            }
-
-            let contrastRegions: [TextRegion]
-            if let chromaPNG = Self.lightTextOnColorPNG(from: capture.image),
-               let chromaTSV = try? Self.runTesseract(
-                   executableURL: executableURL,
-                   png: chromaPNG,
-                   automaticInversion: false,
-                   pageSegmentationMode: 3
-               ) {
-                contrastRegions = Self.parse(
-                    tsv: chromaTSV,
-                    imageSize: CGSize(
-                        width: capture.image.width,
-                        height: capture.image.height
-                    ),
+            } ?? []
+            let contrastRegions = passResults.2.map {
+                Self.parse(
+                    tsv: $0,
+                    imageSize: imageSize,
                     captureFrame: capture.frame,
                     screenFrame: capture.screenFrame,
                     displayID: capture.displayID
                 )
-            } else {
-                contrastRegions = []
-            }
+            } ?? []
 
             let mergedRegions = Self.merge(
                 Self.merge(normalRegions, with: invertedRegions),

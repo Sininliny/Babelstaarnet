@@ -3,6 +3,12 @@ import Foundation
 @main
 enum AdaptiveSentenceBridgeChecks {
     static func main() {
+        precondition(LanguageTransferState.forKnowledgeLevel(0) == .unknown)
+        precondition(LanguageTransferState.forKnowledgeLevel(1) == .learning)
+        precondition(LanguageTransferState.forKnowledgeLevel(3) == .learning)
+        precondition(LanguageTransferState.forKnowledgeLevel(4) == .known)
+        precondition(LanguageTransferState.forKnowledgeLevel(5) == .known)
+
         let service = AdaptiveSentenceBridgeService()
         let sentence = "Hun tøvede, før hun svarede."
 

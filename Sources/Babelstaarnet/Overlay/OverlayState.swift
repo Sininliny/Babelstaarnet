@@ -5,8 +5,6 @@ import CoreGraphics
 final class OverlayState: ObservableObject {
     @Published var hoverCard: HoverCard?
     @Published var isPinned = false
-    @Published var isStationaryHeld = false
-    @Published var isHoldModifierPressed = false
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
 }

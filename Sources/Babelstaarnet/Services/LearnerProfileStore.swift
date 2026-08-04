@@ -73,37 +73,197 @@ enum LearnerFamiliarity: String, Codable, Sendable {
 }
 
 struct LearnerWordProgress: Codable, Equatable, Sendable {
+    static let maximumKnowledgeLevel = 5
+
     let word: String
-    var familiarity: Double
+    var knowledgeLevel: Int
     var encounterCount: Int
     var moreEnglishCount: Int
     var knownConfirmationCount: Int
     var lastSeen: Date
+    var lastReviewedAt: Date?
+
+    init(
+        word: String,
+        knowledgeLevel: Int,
+        encounterCount: Int,
+        moreEnglishCount: Int,
+        knownConfirmationCount: Int,
+        lastSeen: Date,
+        lastReviewedAt: Date? = nil
+    ) {
+        self.word = word
+        self.knowledgeLevel = knowledgeLevel
+        self.encounterCount = encounterCount
+        self.moreEnglishCount = moreEnglishCount
+        self.knownConfirmationCount = knownConfirmationCount
+        self.lastSeen = lastSeen
+        self.lastReviewedAt = lastReviewedAt
+    }
+
+    /// Kept as a normalized compatibility view for older profile archives.
+    var familiarity: Double {
+        Double(knowledgeLevel) / Double(Self.maximumKnowledgeLevel)
+    }
+
+    func effectiveKnowledgeLevel(at date: Date = Date()) -> Int {
+        var effectiveLevel = min(
+            max(knowledgeLevel, 0),
+            Self.maximumKnowledgeLevel
+        )
+        guard effectiveLevel > 0,
+              let lastReviewedAt else {
+            return effectiveLevel
+        }
+
+        var elapsed = max(0, date.timeIntervalSince(lastReviewedAt))
+        while effectiveLevel > 0 {
+            let retention = Self.retentionInterval(
+                for: effectiveLevel
+            )
+            guard elapsed >= retention else {
+                break
+            }
+            elapsed -= retention
+            effectiveLevel -= 1
+        }
+        return effectiveLevel
+    }
 
     func effectiveFamiliarity(at date: Date = Date()) -> Double {
-        let elapsed = max(0, date.timeIntervalSince(lastSeen))
-        let halfLife = 180.0 * 24 * 60 * 60
-        return familiarity * pow(0.5, elapsed / halfLife)
+        Double(effectiveKnowledgeLevel(at: date))
+            / Double(Self.maximumKnowledgeLevel)
     }
 
     func level(at date: Date = Date()) -> LearnerFamiliarity {
-        switch effectiveFamiliarity(at: date) {
-        case ..<0.25:
-            return .new
-        case ..<0.65:
-            return .learning
-        case ..<0.88:
-            return .familiar
-        default:
-            return .established
+        switch effectiveKnowledgeLevel(at: date) {
+        case 0: .new
+        case 1...2: .learning
+        case 3...4: .familiar
+        default: .established
         }
+    }
+
+    func knowledgeStageTitle(at date: Date = Date()) -> String {
+        Self.knowledgeStageTitle(
+            for: effectiveKnowledgeLevel(at: date)
+        )
+    }
+
+    static func knowledgeStageTitle(for level: Int) -> String {
+        switch level {
+        case 0: "New"
+        case 1: "Recognizing"
+        case 2: "Learning"
+        case 3: "Mostly known"
+        case 4: "Known"
+        default: "Mastered"
+        }
+    }
+
+    private static func retentionInterval(for level: Int) -> TimeInterval {
+        let day: TimeInterval = 24 * 60 * 60
+        switch level {
+        case 1: return 7 * day
+        case 2: return 21 * day
+        case 3: return 60 * day
+        case 4: return 180 * day
+        default: return 365 * day
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case word
+        case knowledgeLevel
+        case familiarity
+        case encounterCount
+        case moreEnglishCount
+        case knownConfirmationCount
+        case lastSeen
+        case lastReviewedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        word = try container.decode(String.self, forKey: .word)
+        if let storedLevel = try container.decodeIfPresent(
+            Int.self,
+            forKey: .knowledgeLevel
+        ) {
+            knowledgeLevel = storedLevel
+        } else {
+            let legacyFamiliarity = try container.decodeIfPresent(
+                Double.self,
+                forKey: .familiarity
+            ) ?? 0
+            knowledgeLevel = legacyFamiliarity.isFinite
+                ? Int(
+                    (legacyFamiliarity
+                        * Double(Self.maximumKnowledgeLevel)).rounded()
+                )
+                : -1
+        }
+        encounterCount = try container.decode(
+            Int.self,
+            forKey: .encounterCount
+        )
+        moreEnglishCount = try container.decode(
+            Int.self,
+            forKey: .moreEnglishCount
+        )
+        knownConfirmationCount = try container.decode(
+            Int.self,
+            forKey: .knownConfirmationCount
+        )
+        lastSeen = try container.decode(Date.self, forKey: .lastSeen)
+        lastReviewedAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .lastReviewedAt
+        )
+        if lastReviewedAt == nil,
+           (knownConfirmationCount > 0 || moreEnglishCount > 0) {
+            lastReviewedAt = lastSeen
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(word, forKey: .word)
+        try container.encode(knowledgeLevel, forKey: .knowledgeLevel)
+        try container.encode(familiarity, forKey: .familiarity)
+        try container.encode(encounterCount, forKey: .encounterCount)
+        try container.encode(moreEnglishCount, forKey: .moreEnglishCount)
+        try container.encode(
+            knownConfirmationCount,
+            forKey: .knownConfirmationCount
+        )
+        try container.encode(lastSeen, forKey: .lastSeen)
+        try container.encodeIfPresent(
+            lastReviewedAt,
+            forKey: .lastReviewedAt
+        )
     }
 }
 
 final class LearnerProfileStore {
+    static let maximumStoredWordCount = 100_000
+    private static let danishLocale = Locale(identifier: "da_DK")
+    private static let keyTrimmingCharacters =
+        CharacterSet.whitespacesAndNewlines
+            .union(.punctuationCharacters)
+            .union(.symbols)
+    private static let encounterSaveBatchSize = 20
+    private static let encounterSaveInterval: TimeInterval = 10
+
     private let defaults: UserDefaults
     private let storageKey: String
+    private let persistenceQueue = DispatchQueue(
+        label: "dev.sinin.babelstaarnet.learner-profile",
+        qos: .utility
+    )
     private var entries: [String: LearnerWordProgress]
+    private var pendingEncounterSaves = 0
+    private var lastSavedAt = Date.distantPast
 
     init(
         defaults: UserDefaults = .standard,
@@ -116,7 +276,7 @@ final class LearnerProfileStore {
                [String: LearnerWordProgress].self,
                from: data
            ) {
-            entries = decoded
+            entries = decoded.filter { Self.isValid($0.value) }
         } else {
             entries = [:]
         }
@@ -128,7 +288,7 @@ final class LearnerProfileStore {
 
     func familiarWordCount(at date: Date = Date()) -> Int {
         entries.values.filter {
-            $0.effectiveFamiliarity(at: date) >= 0.65
+            $0.effectiveKnowledgeLevel(at: date) >= 4
         }.count
     }
 
@@ -136,7 +296,7 @@ final class LearnerProfileStore {
         _ word: String,
         at date: Date = Date()
     ) -> Bool {
-        progress(for: word, at: date).effectiveFamiliarity(at: date) >= 0.65
+        progress(for: word, at: date).effectiveKnowledgeLevel(at: date) >= 4
     }
 
     func progress(
@@ -146,7 +306,7 @@ final class LearnerProfileStore {
         let key = Self.normalizedKey(for: word)
         return entries[key] ?? LearnerWordProgress(
             word: key,
-            familiarity: 0.12,
+            knowledgeLevel: 0,
             encounterCount: 0,
             moreEnglishCount: 0,
             knownConfirmationCount: 0,
@@ -155,19 +315,24 @@ final class LearnerProfileStore {
     }
 
     /// A hover is an exposure only. It must not silently increase mastery.
+    @discardableResult
     func recordEncounter(
         for word: String,
         at date: Date = Date()
-    ) {
+    ) -> Bool {
         let key = Self.normalizedKey(for: word)
         guard !key.isEmpty else {
-            return
+            return false
         }
+        let isNewWord = entries[key] == nil
+        makeRoomIfNeeded(for: key)
         var entry = progress(for: key, at: date)
         entry.encounterCount += 1
         entry.lastSeen = date
         entries[key] = entry
-        save()
+        pendingEncounterSaves += 1
+        saveEncountersIfNeeded(at: date)
+        return isNewWord
     }
 
     func recordUnknown(
@@ -178,13 +343,15 @@ final class LearnerProfileStore {
         guard !key.isEmpty else {
             return
         }
+        makeRoomIfNeeded(for: key)
         var entry = progress(for: key, at: date)
-        entry.familiarity = max(
-            0,
-            entry.effectiveFamiliarity(at: date) - 0.28
+        entry.knowledgeLevel = max(
+            entry.effectiveKnowledgeLevel(at: date) - 1,
+            0
         )
         entry.moreEnglishCount += 1
         entry.lastSeen = date
+        entry.lastReviewedAt = date
         entries[key] = entry
         save()
     }
@@ -197,19 +364,24 @@ final class LearnerProfileStore {
         guard !key.isEmpty else {
             return
         }
+        makeRoomIfNeeded(for: key)
         var entry = progress(for: key, at: date)
-        entry.familiarity = min(
-            1,
-            entry.effectiveFamiliarity(at: date) + 0.58
+        entry.knowledgeLevel = min(
+            entry.effectiveKnowledgeLevel(at: date) + 1,
+            LearnerWordProgress.maximumKnowledgeLevel
         )
         entry.knownConfirmationCount += 1
         entry.lastSeen = date
+        entry.lastReviewedAt = date
         entries[key] = entry
         save()
     }
 
     func reset() {
+        flushPersistence()
         entries.removeAll()
+        pendingEncounterSaves = 0
+        lastSavedAt = Date.distantPast
         defaults.removeObject(forKey: storageKey)
     }
 
@@ -243,17 +415,14 @@ final class LearnerProfileStore {
         for imported in archive.words {
             let key = Self.normalizedKey(for: imported.word)
             let existing = entries[key]
-            let strongerProgress: LearnerWordProgress
-            if let existing,
-               existing.effectiveFamiliarity(at: date)
-                >= imported.effectiveFamiliarity(at: date) {
-                strongerProgress = existing
-            } else {
-                strongerProgress = imported
-            }
+            let preferredProgress = Self.progressWithNewestReview(
+                existing,
+                imported,
+                at: date
+            )
             entries[key] = LearnerWordProgress(
                 word: key,
-                familiarity: strongerProgress.familiarity,
+                knowledgeLevel: preferredProgress.knowledgeLevel,
                 encounterCount: max(
                     existing?.encounterCount ?? 0,
                     imported.encounterCount
@@ -266,9 +435,14 @@ final class LearnerProfileStore {
                     existing?.knownConfirmationCount ?? 0,
                     imported.knownConfirmationCount
                 ),
-                lastSeen: strongerProgress.lastSeen
+                lastSeen: max(
+                    existing?.lastSeen ?? imported.lastSeen,
+                    imported.lastSeen
+                ),
+                lastReviewedAt: preferredProgress.lastReviewedAt
             )
         }
+        pruneToStorageLimit()
         save()
         return LearnerProfileImportSummary(
             importedWordCount: archive.words.count,
@@ -278,19 +452,117 @@ final class LearnerProfileStore {
 
     static func normalizedKey(for word: String) -> String {
         word.precomposedStringWithCanonicalMapping
-            .lowercased(with: Locale(identifier: "da_DK"))
+            .lowercased(with: Self.danishLocale)
             .trimmingCharacters(
-                in: CharacterSet.whitespacesAndNewlines
-                    .union(.punctuationCharacters)
-                    .union(.symbols)
+                in: Self.keyTrimmingCharacters
             )
     }
 
+    func flushPersistence() {
+        persistenceQueue.sync {}
+    }
+
     private func save() {
-        guard let data = try? JSONEncoder().encode(entries) else {
+        let snapshot = entries
+        let defaults = self.defaults
+        let storageKey = self.storageKey
+        persistenceQueue.async {
+            guard let data = try? JSONEncoder().encode(snapshot) else {
+                return
+            }
+            defaults.set(data, forKey: storageKey)
+        }
+        pendingEncounterSaves = 0
+        lastSavedAt = Date()
+    }
+
+    private func saveEncountersIfNeeded(at date: Date) {
+        guard pendingEncounterSaves >= Self.encounterSaveBatchSize
+                || date.timeIntervalSince(lastSavedAt)
+                    >= Self.encounterSaveInterval else {
             return
         }
-        defaults.set(data, forKey: storageKey)
+        save()
+    }
+
+    private func makeRoomIfNeeded(for key: String) {
+        guard entries[key] == nil,
+              entries.count >= Self.maximumStoredWordCount else {
+            return
+        }
+        pruneToStorageLimit(
+            target: Self.maximumStoredWordCount - 1_000
+        )
+    }
+
+    private func pruneToStorageLimit(
+        target: Int = LearnerProfileStore.maximumStoredWordCount
+    ) {
+        guard entries.count > target else {
+            return
+        }
+        let removalCount = entries.count - target
+        let leastValuable = entries.values.sorted { left, right in
+            let leftScore = (
+                left.knowledgeLevel,
+                left.knownConfirmationCount,
+                left.moreEnglishCount,
+                left.lastSeen
+            )
+            let rightScore = (
+                right.knowledgeLevel,
+                right.knownConfirmationCount,
+                right.moreEnglishCount,
+                right.lastSeen
+            )
+            if leftScore.0 != rightScore.0 {
+                return leftScore.0 < rightScore.0
+            }
+            if leftScore.1 != rightScore.1 {
+                return leftScore.1 < rightScore.1
+            }
+            if leftScore.2 != rightScore.2 {
+                return leftScore.2 < rightScore.2
+            }
+            return leftScore.3 < rightScore.3
+        }.prefix(removalCount)
+        for progress in leastValuable {
+            entries.removeValue(forKey: progress.word)
+        }
+    }
+
+    private static func isValid(_ word: LearnerWordProgress) -> Bool {
+        let key = normalizedKey(for: word.word)
+        return !key.isEmpty
+            && key.count <= 100
+            && (0...LearnerWordProgress.maximumKnowledgeLevel).contains(
+                word.knowledgeLevel
+            )
+            && word.encounterCount >= 0
+            && word.moreEnglishCount >= 0
+            && word.knownConfirmationCount >= 0
+    }
+
+    private static func progressWithNewestReview(
+        _ existing: LearnerWordProgress?,
+        _ imported: LearnerWordProgress,
+        at date: Date
+    ) -> LearnerWordProgress {
+        guard let existing else {
+            return imported
+        }
+        switch (existing.lastReviewedAt, imported.lastReviewedAt) {
+        case let (existingDate?, importedDate?) where existingDate != importedDate:
+            return existingDate > importedDate ? existing : imported
+        case (nil, _?):
+            return imported
+        case (_?, nil):
+            return existing
+        default:
+            let existingLevel = existing.effectiveKnowledgeLevel(at: date)
+            let importedLevel = imported.effectiveKnowledgeLevel(at: date)
+            return existingLevel <= importedLevel ? existing : imported
+        }
     }
 
     private func validate(_ archive: LearnerProfileArchive) throws {
@@ -315,11 +587,7 @@ final class LearnerProfileStore {
                   key.count <= 100 else {
                 throw LearnerProfileArchiveError.invalidWord(word.word)
             }
-            guard word.familiarity.isFinite,
-                  (0...1).contains(word.familiarity),
-                  word.encounterCount >= 0,
-                  word.moreEnglishCount >= 0,
-                  word.knownConfirmationCount >= 0 else {
+            guard Self.isValid(word) else {
                 throw LearnerProfileArchiveError.invalidProgress(word.word)
             }
         }

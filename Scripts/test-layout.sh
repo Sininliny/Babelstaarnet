@@ -61,6 +61,15 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/BoundedCacheChecks.swift" \
+    -o "$output_dir/BoundedCacheChecks"
+
+"$output_dir/BoundedCacheChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Services/DictionaryService.swift" \
     "$project_dir/Tests/BabelstaarnetTests/DictionaryServiceChecks.swift" \
     -framework CoreServices \

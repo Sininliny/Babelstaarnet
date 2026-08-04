@@ -27,7 +27,8 @@ actor ArgosTranslationService {
 
     func isReady(
         source: String = "da",
-        target: String = "en"
+        target: String = "en",
+        keepWarm: Bool = true
     ) async -> Bool {
         do {
             _ = try request(
@@ -35,6 +36,9 @@ actor ArgosTranslationService {
                 source: source,
                 target: target
             )
+            if !keepWarm {
+                resetServer()
+            }
             return true
         } catch {
             resetServer()
@@ -49,9 +53,12 @@ actor ArgosTranslationService {
         _ = try? request(texts: [], source: source, target: target)
     }
 
-    func isWordBridgeReady() async -> Bool {
+    func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
         do {
             _ = try requestDefinitions(words: [])
+            if !keepWarm {
+                resetServer()
+            }
             return true
         } catch {
             resetServer()
@@ -96,6 +103,10 @@ actor ArgosTranslationService {
                 target: target
             )
         }
+    }
+
+    func shutdown() {
+        resetServer()
     }
 
     private func request(

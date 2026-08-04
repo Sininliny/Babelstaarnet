@@ -12,7 +12,7 @@ struct SettingsView: View {
                 )
 
                 Text(
-                    "Familiar words stay Danish. New words receive only the English needed to understand the sentence."
+                    "Familiar words stay Danish. New words receive only the English needed to understand the sentence. Knew raises a word from 0 to 5; Don’t know lowers it. Hovering never changes the level, and stronger knowledge lasts longer before support returns."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

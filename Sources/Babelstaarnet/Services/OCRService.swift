@@ -128,15 +128,18 @@ actor OCRService {
     }
 
     private static func danishRegions(from regions: [TextRegion]) -> [TextRegion] {
-        regions.filter { region in
-            let recognizer = NLLanguageRecognizer()
+        let recognizer = NLLanguageRecognizer()
+        let distinctDanishLetters = CharacterSet(
+            charactersIn: "æøåÆØÅ"
+        )
+        return regions.filter { region in
+            recognizer.reset()
             recognizer.processString(region.sourceText)
             let probabilities = recognizer.languageHypotheses(withMaximum: 3)
             return recognizer.dominantLanguage == .danish
                 || (probabilities[.danish] ?? 0) >= 0.2
-                || region.sourceText.range(
-                    of: "[æøåÆØÅ]",
-                    options: .regularExpression
+                || region.sourceText.rangeOfCharacter(
+                    from: distinctDanishLetters
                 ) != nil
         }
     }

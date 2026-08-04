@@ -76,8 +76,10 @@ final class AppModel: ObservableObject {
         onSpeakDanish: { [weak self] word in
             self?.speechService.speak(word, language: "da-DK")
         },
-        onLearnerProfileChanged: { [weak self] in
-            self?.refreshLearnerProfileSummary()
+        onLearnerProfileChanged: { [weak self] masteryChanged in
+            self?.refreshLearnerProfileSummary(
+                recalculateFamiliar: masteryChanged
+            )
         }
     )
     private lazy var hotKeyService = HotKeyService { [weak self] in
@@ -89,14 +91,19 @@ final class AppModel: ObservableObject {
     private var translatedRegions: [TextRegion] = []
     private var hasStarted = false
     private var activationObserver: NSObjectProtocol?
+    private var terminationObserver: NSObjectProtocol?
     private var scanGeneration = UUID()
     private var pendingGeneration: UUID?
     private var estimatedTextHeight: CGFloat?
     private var lastCapturePoint: CGPoint?
     private var lastCaptureDate: Date?
-    private var translationCache: [String: String] = [:]
-    private var beginnerExplanationCache: [String: String] = [:]
-    private var wordBridgeTranslationCache: [String: String] = [:]
+    private let translationCache = BoundedCache<String, String>(capacity: 4_096)
+    private let beginnerExplanationCache = BoundedCache<String, String>(
+        capacity: 2_048
+    )
+    private let wordBridgeTranslationCache = BoundedCache<String, String>(
+        capacity: 4_096
+    )
 
     init() {
         let defaults = UserDefaults.standard
@@ -149,16 +156,29 @@ final class AppModel: ObservableObject {
                 self?.refreshScreenPermission()
             }
         }
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.learnerProfileStore.flushPersistence()
+            }
+        }
         Task {
             await checkEngineReadiness()
         }
     }
 
     func checkEngineReadiness() async {
+        let keepTranslationWarm = bridgeConfiguration.hasVisibleBridge
+        let keepWordBridgeWarm = bridgeConfiguration.showsWordBridge
         async let tesseractCheck = ocrService.isOpenSourceEngineReady()
-        async let argosCheck = argosTranslationService.isReady()
+        async let argosCheck = argosTranslationService.isReady(
+            keepWarm: keepTranslationWarm
+        )
         async let wordBridgeCheck = wordBridgeTranslationService
-            .isWordBridgeReady()
+            .isWordBridgeReady(keepWarm: keepWordBridgeWarm)
         let (tesseractReady, argosReady, wordBridgeReady) = await (
             tesseractCheck,
             argosCheck,
@@ -310,12 +330,14 @@ final class AppModel: ObservableObject {
     func setWordBridgeEnabled(_ enabled: Bool) {
         bridgeConfiguration.showsWordBridge = enabled
         saveBridgeConfiguration()
+        releaseUnusedTranslationWorkers()
         refreshOverlayPreferences()
     }
 
     func setSentenceBridgeEnabled(_ enabled: Bool) {
         bridgeConfiguration.showsSentenceBridge = enabled
         saveBridgeConfiguration()
+        releaseUnusedTranslationWorkers()
         refreshOverlayPreferences()
     }
 
@@ -440,6 +462,11 @@ final class AppModel: ObservableObject {
         lastCapturePoint = nil
         lastCaptureDate = nil
         phase = .idle
+        learnerProfileStore.flushPersistence()
+        Task {
+            await argosTranslationService.shutdown()
+            await wordBridgeTranslationService.shutdown()
+        }
     }
 
     func translatePendingRegions(using session: TranslationSession) async {
@@ -567,6 +594,15 @@ final class AppModel: ObservableObject {
                 return
             }
 
+            if !bridgeConfiguration.hasVisibleBridge {
+                apply(
+                    translations: [:],
+                    to: allRegions,
+                    generation: generation
+                )
+                return
+            }
+
             pendingRegions = allRegions
             pendingGeneration = generation
             phase = .translating
@@ -607,12 +643,12 @@ final class AppModel: ObservableObject {
                         )
                     }
                 )
-                let explanations = await beginnerExplanations(
-                    for: sourceTranslations
-                )
-                let wordBridges = await adaptiveWordBridges(
-                    from: explanations
-                )
+                let explanations = bridgeConfiguration.showsWordBridge
+                    ? await beginnerExplanations(for: sourceTranslations)
+                    : [:]
+                let wordBridges = bridgeConfiguration.showsWordBridge
+                    ? await adaptiveWordBridges(from: explanations)
+                    : [:]
                 translationEngineName = "Argos Translate"
                 apply(
                     translations: map,
@@ -703,12 +739,12 @@ final class AppModel: ObservableObject {
                 ($0.key, bySourceText[$0.text.lowercased()] ?? $0.text)
             }
         )
-        let explanations = await beginnerExplanations(
-            for: bySourceText
-        )
-        let wordBridges = await adaptiveWordBridges(
-            from: explanations
-        )
+        let explanations = bridgeConfiguration.showsWordBridge
+            ? await beginnerExplanations(for: bySourceText)
+            : [:]
+        let wordBridges = bridgeConfiguration.showsWordBridge
+            ? await adaptiveWordBridges(from: explanations)
+            : [:]
         apply(
             translations: responseMap,
             explanations: explanations,
@@ -851,11 +887,16 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+        let currentTranslations = Dictionary(
+            uniqueKeysWithValues: needed.compactMap { word in
+                wordBridgeTranslationCache[word].map { (word, $0) }
+            }
+        )
 
         return danishExplanations.mapValues { explanation in
             adaptiveWordBridgeService.bridge(
                 danishSentence: explanation,
-                englishByDanishWord: wordBridgeTranslationCache,
+                englishByDanishWord: currentTranslations,
                 focusWord: "",
                 stateForWord: languageTransferState(for:)
             )
@@ -865,14 +906,10 @@ final class AppModel: ObservableObject {
     private func languageTransferState(
         for word: String
     ) -> LanguageTransferState {
-        let familiarity = learnerProfileStore.progress(
+        let level = learnerProfileStore.progress(
             for: word
-        ).effectiveFamiliarity()
-        switch familiarity {
-        case ..<0.25: return .unknown
-        case ..<0.65: return .learning
-        default: return .known
-        }
+        ).effectiveKnowledgeLevel()
+        return LanguageTransferState.forKnowledgeLevel(level)
     }
 
     private func showOverlay() {
@@ -1052,9 +1089,13 @@ final class AppModel: ObservableObject {
         )
     }
 
-    private func refreshLearnerProfileSummary() {
+    private func refreshLearnerProfileSummary(
+        recalculateFamiliar: Bool = true
+    ) {
         learnerTrackedWordCount = learnerProfileStore.trackedWordCount
-        learnerFamiliarWordCount = learnerProfileStore.familiarWordCount()
+        if recalculateFamiliar {
+            learnerFamiliarWordCount = learnerProfileStore.familiarWordCount()
+        }
     }
 
     private func saveHotKeyConfiguration() {
@@ -1069,6 +1110,19 @@ final class AppModel: ObservableObject {
             return
         }
         UserDefaults.standard.set(data, forKey: Keys.bridgeConfiguration)
+    }
+
+    private func releaseUnusedTranslationWorkers() {
+        let wordBridgeNeeded = bridgeConfiguration.showsWordBridge
+        let translationNeeded = bridgeConfiguration.hasVisibleBridge
+        Task {
+            if !wordBridgeNeeded {
+                await wordBridgeTranslationService.shutdown()
+            }
+            if !translationNeeded {
+                await argosTranslationService.shutdown()
+            }
+        }
     }
 
     private func applyHotKeyConfiguration() {

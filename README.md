@@ -25,8 +25,14 @@ This repository currently contains the first working MVP for Danish → English.
 - One Danish-first learning translator with no mode selection: familiar words
   stay Danish while English appears only where it is needed for understanding
 - A private adaptive learning profile that treats hovering as exposure only,
-  learns from explicit **Knew** and **Don’t know** feedback, gradually
-  reduces English support, and can be reset from Settings
+  gives every word a bounded knowledge level from 0 to 5, raises it by one for
+  **Knew**, lowers it by one for **Don’t know**, gradually reduces English
+  support, and can be reset from Settings. Retention is based only on explicit
+  review: higher levels last longer, while merely hovering never refreshes a
+  word’s knowledge clock. Level 0 uses English substitution, levels 1–3 show
+  Danish beside concise English, and levels 4–5 keep the word Danish. The
+  bubble names the stages New, Recognizing, Learning, Mostly known, Known, and
+  Mastered.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
   receive a brief outlined English bridge, and new meaning-bearing words use
@@ -63,6 +69,10 @@ This repository currently contains the first working MVP for Danish → English.
 - Adaptive power saving: OCR refreshes back off while the pointer is still,
   stop while a bubble is held, and suspend after five seconds without input
 - Persistent warmed Argos worker and translation cache for low hover latency
+- Bounded least-recently-used translation and explanation caches, batched
+  exposure persistence, cached display metadata, and bridge-aware processing
+  prevent long sessions from accumulating unbounded memory or doing work for
+  disabled bubbles
 - One independent overlay per display to preserve OCR coordinate alignment
 - First-launch dashboard with permission and engine readiness checks
 - Compact monochrome dashboard with one primary learning control

@@ -9,11 +9,22 @@ enum LanguageTransferState: Equatable, Sendable {
     case unknown
     case learning
     case known
+
+    static func forKnowledgeLevel(_ level: Int) -> Self {
+        switch level {
+        case ...0: .unknown
+        case 1...3: .learning
+        default: .known
+        }
+    }
 }
 
 struct AdaptiveSentenceBridgeService {
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
+    private static let danishLocale = Locale(identifier: "da_DK")
+    private static let wordTrimmingCharacters =
+        CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
     private static let wordExpression = try! NSRegularExpression(
         pattern: #"[\p{L}]+(?:['’-][\p{L}]+)*"#
     )
@@ -163,9 +174,9 @@ struct AdaptiveSentenceBridgeService {
     }
 
     private func normalized(_ word: String) -> String {
-        word.lowercased(with: Locale(identifier: "da_DK"))
+        word.lowercased(with: Self.danishLocale)
             .trimmingCharacters(
-                in: .whitespacesAndNewlines.union(.punctuationCharacters)
+                in: Self.wordTrimmingCharacters
             )
     }
 
