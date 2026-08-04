@@ -34,20 +34,29 @@ struct WordBubbleView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(LearnerDisplayText.clean(card.word.sourceText))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                    .primary.opacity(
-                        KnowledgeTone.opacity(for: card.wordKnowledgeLevel)
-                    )
-                )
+            EncouragedDanishWord(
+                text: LearnerDisplayText.clean(card.word.sourceText),
+                font: .system(
+                    size: 13,
+                    weight: .semibold,
+                    design: .rounded
+                ),
+                opacity: KnowledgeTone.opacity(
+                    for: card.wordKnowledgeLevel
+                ),
+                animationTrigger: card.showsControlsInWordBridge
+                    ? state.knownAnimationID
+                    : 0
+            )
                 .fixedSize(horizontal: false, vertical: true)
 
             SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.wordBridgeText),
                 englishTokenIndexes:
                     card.wordBridgeEnglishTokenIndexes,
-                knowledgeLevels: card.wordBridgeKnowledgeLevels
+                knowledgeLevels: card.wordBridgeKnowledgeLevels,
+                focusTokenIndexes: [],
+                knownAnimationTrigger: 0
             )
 
             if let englishSupport = card.englishSupport {
@@ -109,7 +118,11 @@ struct SentenceBridgeBubbleView: View {
             SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.learningText),
                 englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
-                knowledgeLevels: card.sentenceBridgeKnowledgeLevels
+                knowledgeLevels: card.sentenceBridgeKnowledgeLevels,
+                focusTokenIndexes: card.sentenceFocusTokenIndexes,
+                knownAnimationTrigger: card.showsControlsInSentenceBridge
+                    ? state.knownAnimationID
+                    : 0
             )
 
             if card.showsEnglishSupportInSentenceBridge,
@@ -203,43 +216,204 @@ private struct SentenceBridgeText: View {
     let text: String
     let englishTokenIndexes: [Int]
     let knowledgeLevels: [Int: Int]
+    let focusTokenIndexes: [Int]
+    let knownAnimationTrigger: Int
 
     var body: some View {
-        let englishIndexes = Set(englishTokenIndexes)
         InlineTokenLayout(spacing: 3, lineSpacing: 3) {
-            ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
-                if englishIndexes.contains(index) {
-                    Text(token)
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(
-                                    .secondary.opacity(0.45),
-                                    lineWidth: 0.6
-                                )
-                        }
-                } else {
-                    Text(token)
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(
-                            .primary.opacity(
-                                KnowledgeTone.opacity(
-                                    for: knowledgeLevels[index] ?? 0
-                                )
+            ForEach(Array(displayUnits.enumerated()), id: \.offset) {
+                _, unit in
+                if let danish = unit.danish {
+                    VStack(spacing: 1) {
+                        EncouragedDanishWord(
+                            text: danish,
+                            font: .system(size: 12, design: .rounded),
+                            opacity: KnowledgeTone.opacity(
+                                for: knowledgeLevels[unit.sourceIndex] ?? 0
+                            ),
+                            animationTrigger: focusTokenIndexes.contains(
+                                unit.sourceIndex
                             )
+                                ? knownAnimationTrigger
+                                : 0
                         )
-                        .padding(.vertical, 1)
+
+                        if let english = unit.english {
+                            Text(english)
+                                .font(
+                                    .system(
+                                        size: 9,
+                                        weight: .medium,
+                                        design: .rounded
+                                    )
+                                )
+                                .foregroundStyle(
+                                    .primary.opacity(
+                                        EnglishGlossTone.opacity(
+                                            for: knowledgeLevels[
+                                                unit.sourceIndex
+                                            ] ?? 0
+                                        )
+                                    )
+                                )
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(.primary.opacity(0.035))
+                                }
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(
+                                            .secondary.opacity(0.38),
+                                            lineWidth: 0.55
+                                        )
+                                }
+                        }
+                    }
+                    .fixedSize(horizontal: true, vertical: true)
+                } else if let english = unit.english {
+                    Text(english)
+                        .font(.system(size: 9, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.9))
                 }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var tokens: [String] {
-        text.split(whereSeparator: \Character.isWhitespace).map(String.init)
+    private var displayUnits: [BridgeDisplayUnit] {
+        InterlinearBridgePresentation.units(
+            text: text,
+            englishTokenIndexes: englishTokenIndexes
+        )
+    }
+}
+
+struct BridgeDisplayUnit: Equatable {
+    let sourceIndex: Int
+    let danish: String?
+    let english: String?
+}
+
+enum InterlinearBridgePresentation {
+    static func units(
+        text: String,
+        englishTokenIndexes: [Int]
+    ) -> [BridgeDisplayUnit] {
+        let tokens = text
+            .split(whereSeparator: \Character.isWhitespace)
+            .map(String.init)
+        let englishIndexes = Set(englishTokenIndexes)
+        var result: [BridgeDisplayUnit] = []
+        var index = 0
+        while index < tokens.count {
+            if englishIndexes.contains(index) {
+                var english: [String] = []
+                let start = index
+                while index < tokens.count,
+                      englishIndexes.contains(index) {
+                    english.append(tokens[index])
+                    index += 1
+                }
+                result.append(
+                    BridgeDisplayUnit(
+                        sourceIndex: start,
+                        danish: nil,
+                        english: english.joined(separator: " ")
+                    )
+                )
+                continue
+            }
+
+            let sourceIndex = index
+            var danish = tokens[index]
+            index += 1
+            var glossTokens: [String] = []
+            while index < tokens.count,
+                  englishIndexes.contains(index) {
+                glossTokens.append(tokens[index])
+                index += 1
+            }
+            var english = glossTokens.joined(separator: " ")
+            if !english.isEmpty {
+                let split = splitTrailingPunctuation(from: english)
+                english = split.text
+                danish += split.punctuation
+            }
+            result.append(
+                BridgeDisplayUnit(
+                    sourceIndex: sourceIndex,
+                    danish: danish,
+                    english: english.isEmpty ? nil : english
+                )
+            )
+        }
+        return result
+    }
+
+    private static func splitTrailingPunctuation(
+        from value: String
+    ) -> (text: String, punctuation: String) {
+        var boundary = value.endIndex
+        while boundary > value.startIndex {
+            let candidate = value.index(before: boundary)
+            let character = value[candidate]
+            guard character.unicodeScalars.allSatisfy(
+                CharacterSet.punctuationCharacters.contains
+            ) else {
+                break
+            }
+            boundary = candidate
+        }
+        return (
+            String(value[..<boundary]),
+            String(value[boundary...])
+        )
+    }
+}
+
+private struct KnownWordAnimationValues {
+    var scale: CGFloat = 1
+    var lift: CGFloat = 0
+    var glow: Double = 0
+}
+
+private struct EncouragedDanishWord: View {
+    let text: String
+    let font: Font
+    let opacity: Double
+    let animationTrigger: Int
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(.primary.opacity(opacity))
+            .keyframeAnimator(
+                initialValue: KnownWordAnimationValues(),
+                trigger: animationTrigger
+            ) { content, value in
+                content
+                    .scaleEffect(value.scale)
+                    .offset(y: value.lift)
+                    .shadow(
+                        color: Color.accentColor.opacity(value.glow),
+                        radius: 7
+                    )
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    CubicKeyframe(1.08, duration: 0.16)
+                    CubicKeyframe(1, duration: 0.34)
+                }
+                KeyframeTrack(\.lift) {
+                    CubicKeyframe(-2.5, duration: 0.16)
+                    CubicKeyframe(0, duration: 0.34)
+                }
+                KeyframeTrack(\.glow) {
+                    CubicKeyframe(0.28, duration: 0.14)
+                    CubicKeyframe(0, duration: 0.36)
+                }
+            }
     }
 }
 
@@ -251,6 +425,16 @@ enum KnowledgeTone {
         case 2: 0.90
         case 3: 0.85
         case 4: 0.80
+        default: 0.74
+        }
+    }
+}
+
+private enum EnglishGlossTone {
+    static func opacity(for level: Int) -> Double {
+        switch min(max(level, 0), 2) {
+        case 0: 0.94
+        case 1: 0.84
         default: 0.74
         }
     }

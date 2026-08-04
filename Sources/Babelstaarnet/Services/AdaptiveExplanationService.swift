@@ -13,7 +13,10 @@ struct AdaptiveExplanationService {
         expandedEnglish: String,
         expandEnglish: Bool
     ) -> AdaptiveExplanation {
-        let bridge = brief(bridgeText, wordLimit: 20)
+        // A sentence bridge contains at most 20 Danish words and three short
+        // English glosses. Keep the complete Danish context instead of
+        // truncating it because gloss tokens increased the raw word count.
+        let bridge = brief(bridgeText, wordLimit: 36)
         let meaning = englishMeaning.trimmingCharacters(
             in: .whitespacesAndNewlines
         )

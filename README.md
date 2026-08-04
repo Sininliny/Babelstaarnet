@@ -30,21 +30,22 @@ This repository currently contains the first working MVP for Danish → English.
   different contexts gradually reduce support through the learning levels,
   while repeated hovering on the same text contributes no knowledge. Passive
   learning stops before mastery, and a later explicit confirmation can make a
-  known word stable. Level 0 uses English substitution, levels 1–2 show Danish
-  beside concise English, level 3 quietly tests comprehension in Danish, and
-  levels 4–5 keep the word Danish. Internal levels are intentionally absent
-  from the reading bubbles. Feedback briefly confirms **Marked known** or
-  **English restored** directly in the active bubble. Danish words use a
-  restrained gray progression so different confidence levels are perceptible
-  without adding labels or progress numbers.
+  known word stable. Danish always remains visible: levels 0–2 attach a concise
+  English gloss beneath selected Danish words, level 3 quietly tests
+  comprehension without a gloss, and levels 4–5 remain Danish-only. Internal
+  levels are intentionally absent from the reading bubbles. Feedback briefly
+  confirms **Marked known** or **English restored** directly in the active
+  bubble. Marking a word known also gives that Danish word a short lift and
+  glow. Danish words use a restrained gray progression so different confidence
+  levels are perceptible without adding labels or progress numbers.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
-  receive a brief outlined English bridge, and new meaning-bearing words use
-  concise English support.
+  receive a small interlinear English gloss, and no automatic bridge adds more
+  than three English meaning anchors.
 - Two coordinated learning bubbles: a compact adaptive word explanation stays
   above the hovered word while a wider sentence bridge stays below it. The word
-  bridge preserves a concise Danish explanation and replaces only concepts the
-  learner does not yet know with outlined English. Each bridge can be enabled
+  bridge preserves a concise Danish explanation and attaches English only
+  beneath concepts the learner does not yet know. Each bridge can be enabled
   independently in the menu-bar popover or Settings, and all content wraps
   instead of being shortened. Both use one frozen
   OCR snapshot, so background rescans cannot change them while the pointer is

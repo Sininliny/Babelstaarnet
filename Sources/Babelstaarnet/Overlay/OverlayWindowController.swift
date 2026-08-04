@@ -360,6 +360,11 @@ final class OverlayWindowController {
                 englishTokenIndexes: bridge?.englishTokenIndexes ?? [],
                 knowledgeLevelForWord: knowledgeLevelForWord
             ),
+            sentenceFocusTokenIndexes: tokenIndexes(
+                of: word.sourceText,
+                in: explanation.primaryText,
+                excluding: bridge?.englishTokenIndexes ?? []
+            ),
             showsControlsInWordBridge:
                 bridgeConfiguration.showsWordBridge,
             showsControlsInSentenceBridge:
@@ -396,6 +401,30 @@ final class OverlayWindowController {
                     return (index, knowledgeLevelForWord(word))
                 }
         )
+    }
+
+    private func tokenIndexes(
+        of word: String,
+        in text: String,
+        excluding excludedIndexes: [Int]
+    ) -> [Int] {
+        let target = LearnerProfileStore.normalizedKey(for: word)
+        let excluded = Set(excludedIndexes)
+        guard !target.isEmpty else {
+            return []
+        }
+        return text
+            .split(whereSeparator: \Character.isWhitespace)
+            .enumerated()
+            .compactMap { index, token in
+                guard !excluded.contains(index),
+                      LearnerProfileStore.normalizedKey(
+                        for: String(token)
+                      ) == target else {
+                    return nil
+                }
+                return index
+            }
     }
 
     private func adaptiveWordBridge(
@@ -581,9 +610,9 @@ final class OverlayWindowController {
             expandedEnglishWords.remove(evictionCandidate)
         }
         expandedEnglishWords.insert(key)
-        bubbleState.showFeedback(.englishRestored)
         onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
+        bubbleState.showFeedback(.englishRestored)
     }
 
     private func markCurrentWordKnown() {
@@ -594,9 +623,9 @@ final class OverlayWindowController {
         expandedEnglishWords.remove(
             LearnerProfileStore.normalizedKey(for: currentWord.sourceText)
         )
-        bubbleState.showFeedback(.markedKnown)
         onLearnerProfileChanged(true)
         refreshCurrentCard(preservePosition: true)
+        bubbleState.showFeedback(.markedKnown)
     }
 
     private func refreshCurrentCard(preservePosition: Bool) {

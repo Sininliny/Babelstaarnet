@@ -56,7 +56,7 @@ struct AdaptiveSentenceBridgeService {
         focusOccurrence: Int = 0,
         stateForWord: (String) -> LanguageTransferState,
         wordLimit: Int = 20,
-        replacementLimit: Int = .max
+        replacementLimit: Int = 3
     ) -> AdaptiveSentenceBridge {
         let compact = danishSentence
             .replacingOccurrences(
@@ -76,40 +76,47 @@ struct AdaptiveSentenceBridgeService {
             wordLimit: wordLimit
         )
         let normalizedFocus = normalized(focusWord)
-        let candidates = wordsNeedingEnglish(
-            in: contextual,
-            wordLimit: wordLimit,
-            stateForWord: stateForWord
-        ).filter { englishByDanishWord[$0] != nil }
-
-        var selected = Array(candidates.prefix(max(0, replacementLimit)))
-        if candidates.contains(normalizedFocus),
-           !selected.contains(normalizedFocus) {
-            if !selected.isEmpty {
-                selected.removeLast()
-            }
-            selected.append(normalizedFocus)
+        let matches = wordMatches(in: contextual)
+        let eligibleIndexes = matches.indices.filter { index in
+            let key = normalized(matches[index].word)
+            let state = stateForWord(key)
+            return (state == .unknown || state == .learning)
+                && englishByDanishWord[key] != nil
         }
-        let replaceable = Set(selected)
+        let budget = max(0, replacementLimit)
+        var selectedIndexes = Array(eligibleIndexes.prefix(budget))
+        let focusIndexes = eligibleIndexes.filter {
+            normalized(matches[$0].word) == normalizedFocus
+        }
+        if budget > 0,
+           !focusIndexes.isEmpty {
+            let focusIndex = focusIndexes[
+                min(max(0, focusOccurrence), focusIndexes.count - 1)
+            ]
+            if !selectedIndexes.contains(focusIndex) {
+                if !selectedIndexes.isEmpty {
+                    selectedIndexes.removeLast()
+                }
+                selectedIndexes.append(focusIndex)
+            }
+        }
+        let selected = Set(selectedIndexes)
 
         let mutable = NSMutableString(string: contextual)
-        for match in wordMatches(in: contextual).reversed() {
+        for index in matches.indices.reversed() {
+            guard selected.contains(index) else {
+                continue
+            }
+            let match = matches[index]
             let key = normalized(match.word)
-            guard replaceable.contains(key),
-                  let rawEnglish = englishByDanishWord[key],
+            guard let rawEnglish = englishByDanishWord[key],
                   let english = conciseEnglish(rawEnglish),
                   normalized(english) != key else {
                 continue
             }
-            let presentedEnglish = preservingInitialCase(
-                english,
-                from: match.word
-            )
             let replacement: String
             switch stateForWord(key) {
-            case .unknown:
-                replacement = markedEnglish(presentedEnglish)
-            case .learning:
+            case .unknown, .learning:
                 replacement = "\(match.word) \(markedEnglish(english))"
             case .testing, .known:
                 continue
@@ -186,17 +193,6 @@ struct AdaptiveSentenceBridgeService {
             .prefix(4)
             .joined(separator: " ")
         return concise.isEmpty ? nil : concise
-    }
-
-    private func preservingInitialCase(
-        _ english: String,
-        from danish: String
-    ) -> String {
-        guard danish.first?.isUppercase == true,
-              let first = english.first else {
-            return english
-        }
-        return first.uppercased() + english.dropFirst()
     }
 
     private func markedEnglish(_ value: String) -> String {

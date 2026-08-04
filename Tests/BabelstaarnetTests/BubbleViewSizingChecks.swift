@@ -121,16 +121,28 @@ enum BubbleViewSizingChecks {
             ) == wordOnly
         )
 
+        let initialAnimationID = state.knownAnimationID
         state.showFeedback(.markedKnown)
         precondition(state.feedbackConfirmation == .markedKnown)
+        precondition(state.knownAnimationID == initialAnimationID + 1)
         state.showFeedback(.englishRestored)
         precondition(state.feedbackConfirmation == .englishRestored)
+        precondition(state.knownAnimationID == initialAnimationID + 1)
         state.clearFeedback()
         precondition(state.feedbackConfirmation == nil)
 
         let opacities = (0...5).map(KnowledgeTone.opacity(for:))
         precondition(opacities == opacities.sorted(by: >))
         precondition(opacities[0] - opacities[5] < 0.30)
+
+        let interlinear = InterlinearBridgePresentation.units(
+            text: "Hun tøvede hesitated, før hun svarede.",
+            englishTokenIndexes: [2]
+        )
+        precondition(interlinear[1].danish == "tøvede,")
+        precondition(interlinear[1].english == "hesitated")
+        precondition(interlinear.map(\.danish).compactMap { $0 }
+            == ["Hun", "tøvede,", "før", "hun", "svarede."])
     }
 
     private static func measuredWordHeight(

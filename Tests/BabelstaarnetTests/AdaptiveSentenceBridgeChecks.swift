@@ -18,8 +18,10 @@ enum AdaptiveSentenceBridgeChecks {
             focusWord: "tøvede",
             stateForWord: { $0 == "tøvede" ? .unknown : .known }
         )
-        precondition(unknown.text == "Hun hesitated, før hun svarede.")
-        precondition(unknown.englishTokenIndexes == [1])
+        precondition(
+            unknown.text == "Hun tøvede hesitated, før hun svarede."
+        )
+        precondition(unknown.englishTokenIndexes == [2])
 
         let learning = service.bridge(
             danishSentence: sentence,
@@ -56,8 +58,8 @@ enum AdaptiveSentenceBridgeChecks {
             focusWord: "i",
             stateForWord: { $0 == "i" ? .unknown : .known }
         )
-        precondition(unknownGrammar.text == "Jeg er in huset.")
-        precondition(unknownGrammar.englishTokenIndexes == [2])
+        precondition(unknownGrammar.text == "Jeg er i in huset.")
+        precondition(unknownGrammar.englishTokenIndexes == [3])
 
         let capitalized = service.bridge(
             danishSentence: "Tøvede hun?",
@@ -65,8 +67,8 @@ enum AdaptiveSentenceBridgeChecks {
             focusWord: "Tøvede",
             stateForWord: { _ in .unknown }
         )
-        precondition(capitalized.text == "Hesitated hun?")
-        precondition(capitalized.englishTokenIndexes == [0])
+        precondition(capitalized.text == "Tøvede hesitated hun?")
+        precondition(capitalized.englishTokenIndexes == [1])
 
         let repeated = service.bridge(
             danishSentence: "Ukendt ukendt andet tredje.",
@@ -79,7 +81,11 @@ enum AdaptiveSentenceBridgeChecks {
             stateForWord: { _ in .unknown },
             replacementLimit: 2
         )
-        precondition(repeated.text == "Unknown unknown second tredje.")
+        precondition(
+            repeated.text
+                == "Ukendt unknown ukendt andet second tredje."
+        )
+        precondition(repeated.englishTokenIndexes.count == 2)
 
         let manyUnknown = service.bridge(
             danishSentence: "Alpha beta gamma delta epsilon zeta eta theta.",
@@ -96,10 +102,11 @@ enum AdaptiveSentenceBridgeChecks {
             focusWord: "theta",
             stateForWord: { _ in .unknown }
         )
-        precondition(
-            manyUnknown.text == "One two three four five six seven eight."
-        )
-        precondition(manyUnknown.englishTokenIndexes == Array(0..<8))
+        precondition(manyUnknown.text.contains("Alpha one"))
+        precondition(manyUnknown.text.contains("beta two"))
+        precondition(manyUnknown.text.contains("theta eight"))
+        precondition(!manyUnknown.text.contains("gamma three"))
+        precondition(manyUnknown.englishTokenIndexes.count == 3)
 
         let letters = Array("abcdefghijklmnopqrstuvwxyz")
         let longWords = (0..<30).map {
@@ -115,7 +122,10 @@ enum AdaptiveSentenceBridgeChecks {
         )
         precondition(focused.text.contains("focus"))
         precondition(!focused.text.contains("ordaa "))
-        precondition(focused.text.split(separator: " ").count <= 10)
+        precondition(
+            focused.text.split(separator: " ").count
+                - focused.englishTokenIndexes.count <= 10
+        )
 
         let concise = service.bridge(
             danishSentence: "Begrebet virker.",
@@ -125,9 +135,9 @@ enum AdaptiveSentenceBridgeChecks {
             focusWord: "Begrebet",
             stateForWord: { _ in .unknown }
         )
-        precondition(concise.text.hasPrefix("The very long translated"))
+        precondition(concise.text.hasPrefix("Begrebet the very long translated"))
         precondition(!concise.text.contains("meaning"))
-        precondition(concise.englishTokenIndexes == [0, 1, 2, 3])
+        precondition(concise.englishTokenIndexes == [1, 2, 3, 4])
 
         let collision = service.bridge(
             danishSentence: "Et land blev kaldt land.",
@@ -135,8 +145,8 @@ enum AdaptiveSentenceBridgeChecks {
             focusWord: "kaldt",
             stateForWord: { $0 == "kaldt" ? .unknown : .known }
         )
-        precondition(collision.text == "Et land blev called land.")
-        precondition(collision.englishTokenIndexes == [3])
+        precondition(collision.text == "Et land blev kaldt called land.")
+        precondition(collision.englishTokenIndexes == [4])
 
         print("Adaptive sentence bridge checks passed")
     }

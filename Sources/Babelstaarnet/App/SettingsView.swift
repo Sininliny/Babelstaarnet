@@ -12,7 +12,7 @@ struct SettingsView: View {
                 )
 
                 Text(
-                    "Familiar words stay Danish. New words receive only the English needed for understanding. Knew removes help for the focused word in one action; Don’t know immediately restores it. Spaced encounters quietly reduce support, while repeated hovering does not train the profile."
+                    "Danish always stays visible and carries the sentence structure. New concepts receive small English glosses underneath. Knew removes help for the focused word in one action; Don’t know immediately restores it. Spaced encounters quietly reduce support, while repeated hovering does not train the profile."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

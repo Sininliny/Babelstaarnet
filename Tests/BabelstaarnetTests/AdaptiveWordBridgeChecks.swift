@@ -23,7 +23,7 @@ enum AdaptiveWordBridgeChecks {
         precondition(bridge.text.contains("viden"))
         precondition(!bridge.text.contains("knowledge"))
         precondition(bridge.text.contains("skill"))
-        precondition(!bridge.text.contains("færdighed"))
+        precondition(bridge.text.contains("færdighed"))
         precondition(
             bridge.englishTokenIndexes.allSatisfy {
                 bridge.text.split(separator: " ").indices.contains($0)
@@ -54,8 +54,11 @@ enum AdaptiveWordBridgeChecks {
             focusWord: "",
             stateForWord: { _ in .unknown }
         )
-        precondition(housingBridge.text == "Housing, der er made til students.")
-        precondition(housingBridge.englishTokenIndexes == [0, 3, 5])
+        precondition(
+            housingBridge.text
+                == "Boliger housing, der er lavet made til studerende students."
+        )
+        precondition(housingBridge.englishTokenIndexes == [1, 5, 8])
 
         print("Adaptive word bridge checks passed")
     }

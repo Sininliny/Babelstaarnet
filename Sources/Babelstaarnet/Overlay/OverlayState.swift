@@ -11,6 +11,7 @@ final class OverlayState: ObservableObject {
     @Published var hoverCard: HoverCard?
     @Published var isPinned = false
     @Published var feedbackConfirmation: BridgeFeedbackConfirmation?
+    @Published private(set) var knownAnimationID = 0
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
     private var feedbackClearTask: Task<Void, Never>?
@@ -18,6 +19,9 @@ final class OverlayState: ObservableObject {
     func showFeedback(_ confirmation: BridgeFeedbackConfirmation) {
         feedbackClearTask?.cancel()
         feedbackConfirmation = confirmation
+        if confirmation == .markedKnown {
+            knownAnimationID &+= 1
+        }
         feedbackClearTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             guard !Task.isCancelled else {
