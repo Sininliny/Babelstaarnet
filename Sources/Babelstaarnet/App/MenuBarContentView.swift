@@ -85,9 +85,7 @@ struct MenuBarContentView: View {
 
     private var header: some View {
         HStack(spacing: 9) {
-            Image(
-                systemName: statusIcon
-            )
+            Image(nsImage: statusIcon)
                 .font(.system(size: 15, weight: .medium))
                 .frame(width: 26, height: 26)
                 .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 7))
@@ -151,11 +149,10 @@ struct MenuBarContentView: View {
         .buttonStyle(.plain)
     }
 
-    private var statusIcon: String {
-        if !model.learningModeActive {
-            return "eye.slash"
-        }
-        return model.detectionSuspendedForIdle ? "eye" : "eye.fill"
+    private var statusIcon: NSImage {
+        model.learningModeActive
+            ? BabelstaarnetIcon.activeMenuBarImage
+            : BabelstaarnetIcon.inactiveMenuBarImage
     }
 
     private var statusText: String {

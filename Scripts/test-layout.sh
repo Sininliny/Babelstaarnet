@@ -28,6 +28,16 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/App/BabelstaarnetIcon.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/BabelstaarnetIconChecks.swift" \
+    -framework AppKit \
+    -o "$output_dir/BabelstaarnetIconChecks"
+
+"$output_dir/BabelstaarnetIconChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
     "$project_dir/Sources/Babelstaarnet/Overlay/OverlayState.swift" \
     "$project_dir/Sources/Babelstaarnet/Overlay/OverlayRootView.swift" \
