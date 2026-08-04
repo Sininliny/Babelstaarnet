@@ -24,15 +24,16 @@ This repository currently contains the first working MVP for Danish → English.
   [Argos Translate](https://github.com/argosopentech/argos-translate)
 - One Danish-first learning translator with no mode selection: familiar words
   stay Danish while English appears only where it is needed for understanding
-- A private adaptive learning profile that treats hovering as exposure only,
-  gives every word a bounded knowledge level from 0 to 5, raises it by one for
-  **Knew**, lowers it by one for **Don’t know**, gradually reduces English
-  support, and can be reset from Settings. Retention is based only on explicit
-  review: higher levels last longer, while merely hovering never refreshes a
-  word’s knowledge clock. Level 0 uses English substitution, levels 1–3 show
-  Danish beside concise English, and levels 4–5 keep the word Danish. The
-  bubble names the stages New, Recognizing, Learning, Mostly known, Known, and
-  Mastered.
+- A private adaptive learning profile with a hidden knowledge level from 0 to
+  5. One **Knew** action removes unnecessary English for the focused word; one
+  **Don’t know** action immediately restores full help. Spaced encounters in
+  different contexts gradually reduce support through the learning levels,
+  while repeated hovering on the same text contributes no knowledge. Passive
+  learning stops before mastery, and a later explicit confirmation can make a
+  known word stable. Level 0 uses English substitution, levels 1–2 show Danish
+  beside concise English, level 3 quietly tests comprehension in Danish, and
+  levels 4–5 keep the word Danish. Internal levels are intentionally absent
+  from the reading bubbles.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
   receive a brief outlined English bridge, and new meaning-bearing words use

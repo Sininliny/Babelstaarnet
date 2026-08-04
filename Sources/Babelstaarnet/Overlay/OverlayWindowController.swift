@@ -251,7 +251,10 @@ final class OverlayWindowController {
         temporarilyHeldForIdle = false
 
         if targetChanged {
-            if learnerProfile.recordEncounter(for: match.word.sourceText) {
+            if learnerProfile.recordEncounter(
+                for: match.word.sourceText,
+                context: match.region.sourceText
+            ) {
                 onLearnerProfileChanged(false)
             }
         }
@@ -296,8 +299,6 @@ final class OverlayWindowController {
         let key = LearnerProfileStore.normalizedKey(for: word.sourceText)
         let expanded = expandedEnglishWords.contains(key)
         let now = Date()
-        let progress = learnerProfile.progress(for: word.sourceText, at: now)
-        let effectiveKnowledgeLevel = progress.effectiveKnowledgeLevel(at: now)
         var transferStateCache: [String: LanguageTransferState] = [:]
         let stateForWord: (String) -> LanguageTransferState = {
             [learnerProfile] candidate in
@@ -350,12 +351,6 @@ final class OverlayWindowController {
                     && bridgeConfiguration.showsSentenceBridge,
             showsEnglishSupportInSentenceBridge:
                 !bridgeConfiguration.showsWordBridge,
-            knowledgeLevel: effectiveKnowledgeLevel,
-            maximumKnowledgeLevel:
-                LearnerWordProgress.maximumKnowledgeLevel,
-            knowledgeStageTitle: LearnerWordProgress.knowledgeStageTitle(
-                for: effectiveKnowledgeLevel
-            ),
             knownShortcutLabel: hotKeyConfiguration.known.displayText,
             dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
             pinShortcutLabel: hotKeyConfiguration.togglePin.displayText

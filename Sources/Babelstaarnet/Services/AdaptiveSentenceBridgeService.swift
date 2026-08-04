@@ -8,12 +8,14 @@ struct AdaptiveSentenceBridge: Equatable, Sendable {
 enum LanguageTransferState: Equatable, Sendable {
     case unknown
     case learning
+    case testing
     case known
 
     static func forKnowledgeLevel(_ level: Int) -> Self {
         switch level {
         case ...0: .unknown
-        case 1...3: .learning
+        case 1...2: .learning
+        case 3: .testing
         default: .known
         }
     }
@@ -29,16 +31,6 @@ struct AdaptiveSentenceBridgeService {
         pattern: #"[\p{L}]+(?:['’-][\p{L}]+)*"#
     )
 
-    /// These short words preserve the Danish grammatical frame. Their direct
-    /// translation is still available in the bubble header when unfamiliar.
-    private static let grammarScaffold: Set<String> = [
-        "ad", "af", "at", "da", "de", "den", "der", "det", "du",
-        "eller", "en", "end", "er", "et", "for", "fordi", "fra", "han",
-        "har", "hun", "hvad", "hvem", "hvor", "hvis", "i", "ikke", "jeg",
-        "kan", "med", "men", "mod", "når", "og", "om", "på", "sig",
-        "sin", "sit", "skal", "som", "til", "var", "ved", "vi", "vil"
-    ]
-
     func wordsNeedingEnglish(
         in danishText: String,
         wordLimit: Int = 20,
@@ -47,9 +39,9 @@ struct AdaptiveSentenceBridgeService {
         var seen = Set<String>()
         return wordMatches(in: danishText).compactMap { match in
             let word = normalized(match.word)
-            guard word.count > 1,
-                  !Self.grammarScaffold.contains(word),
-                  stateForWord(word) != .known,
+            let state = stateForWord(word)
+            guard !word.isEmpty,
+                  state == .unknown || state == .learning,
                   seen.insert(word).inserted else {
                 return nil
             }
@@ -119,7 +111,7 @@ struct AdaptiveSentenceBridgeService {
                 replacement = markedEnglish(presentedEnglish)
             case .learning:
                 replacement = "\(match.word) \(markedEnglish(english))"
-            case .known:
+            case .testing, .known:
                 continue
             }
             mutable.replaceCharacters(in: match.range, with: replacement)

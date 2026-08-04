@@ -27,8 +27,6 @@ struct WordBubbleView: View {
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                knowledgeLevel(card)
-
                 Spacer(minLength: 0)
 
                 Image(systemName: "speaker.wave.2")
@@ -99,10 +97,6 @@ struct SentenceBridgeBubbleView: View {
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                if card.showsControlsInSentenceBridge {
-                    knowledgeLevel(card)
-                }
-
                 Spacer(minLength: 0)
             }
 
@@ -139,15 +133,6 @@ struct SentenceBridgeBubbleView: View {
         .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 
-}
-
-private func knowledgeLevel(_ card: HoverCard) -> some View {
-    Text(
-        "\(card.knowledgeStageTitle) "
-            + "\(card.knowledgeLevel)/\(card.maximumKnowledgeLevel)"
-    )
-        .font(.system(size: 9, weight: .regular, design: .rounded))
-        .foregroundStyle(.tertiary)
 }
 
 private struct BridgeFeedbackControls: View {

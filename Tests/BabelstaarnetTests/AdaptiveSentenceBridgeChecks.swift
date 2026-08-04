@@ -5,7 +5,7 @@ enum AdaptiveSentenceBridgeChecks {
     static func main() {
         precondition(LanguageTransferState.forKnowledgeLevel(0) == .unknown)
         precondition(LanguageTransferState.forKnowledgeLevel(1) == .learning)
-        precondition(LanguageTransferState.forKnowledgeLevel(3) == .learning)
+        precondition(LanguageTransferState.forKnowledgeLevel(3) == .testing)
         precondition(LanguageTransferState.forKnowledgeLevel(4) == .known)
         precondition(LanguageTransferState.forKnowledgeLevel(5) == .known)
 
@@ -39,6 +39,25 @@ enum AdaptiveSentenceBridgeChecks {
         )
         precondition(known.text == sentence)
         precondition(known.englishTokenIndexes.isEmpty)
+
+        let testing = service.bridge(
+            danishSentence: sentence,
+            englishByDanishWord: ["tøvede": "hesitated"],
+            focusWord: "tøvede",
+            stateForWord: { $0 == "tøvede" ? .testing : .known }
+        )
+        precondition(testing.text == sentence)
+        precondition(testing.englishTokenIndexes.isEmpty)
+
+        // Structural words use a profile prior, never an absolute exclusion.
+        let unknownGrammar = service.bridge(
+            danishSentence: "Jeg er i huset.",
+            englishByDanishWord: ["i": "in"],
+            focusWord: "i",
+            stateForWord: { $0 == "i" ? .unknown : .known }
+        )
+        precondition(unknownGrammar.text == "Jeg er in huset.")
+        precondition(unknownGrammar.englishTokenIndexes == [2])
 
         let capitalized = service.bridge(
             danishSentence: "Tøvede hun?",

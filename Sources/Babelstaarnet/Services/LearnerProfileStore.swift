@@ -52,6 +52,91 @@ enum LearnerProfileArchiveError: LocalizedError, Equatable {
     }
 }
 
+enum AdaptiveKnowledgePolicy {
+    static let knownLevel = 4
+    static let masteredLevel = 5
+    static let passiveLearningLimit = 3
+    static let spacedEncounterInterval: TimeInterval = 20 * 60 * 60
+    static let repeatedContextInterval: TimeInterval = 7 * 24 * 60 * 60
+
+    static func levelAfterKnownFeedback(
+        currentLevel: Int,
+        lastReviewedAt: Date?,
+        at date: Date
+    ) -> Int {
+        let current = min(
+            max(currentLevel, 0),
+            LearnerWordProgress.maximumKnowledgeLevel
+        )
+        guard current >= knownLevel else {
+            return knownLevel
+        }
+        guard current < masteredLevel else {
+            return masteredLevel
+        }
+        guard let lastReviewedAt else {
+            return masteredLevel
+        }
+        return date.timeIntervalSince(lastReviewedAt)
+            >= spacedEncounterInterval
+            ? masteredLevel
+            : knownLevel
+    }
+
+    static func levelAfterUnknownFeedback() -> Int {
+        0
+    }
+
+    static func passiveLevel(forSpacedEncounterCount count: Int) -> Int {
+        switch max(0, count) {
+        case 0...1: 0
+        case 2...3: 1
+        case 4...6: 2
+        default: passiveLearningLimit
+        }
+    }
+
+    static func shouldCreditEncounter(
+        lastCreditedAt: Date?,
+        lastContextSignature: String?,
+        contextSignature: String?,
+        at date: Date
+    ) -> Bool {
+        guard let lastCreditedAt else {
+            return true
+        }
+        let elapsed = date.timeIntervalSince(lastCreditedAt)
+        guard elapsed >= spacedEncounterInterval else {
+            return false
+        }
+        guard let lastContextSignature,
+              let contextSignature,
+              lastContextSignature == contextSignature else {
+            return true
+        }
+        return elapsed >= repeatedContextInterval
+    }
+}
+
+enum DanishVocabularyPrior {
+    /// These high-frequency structural words preserve the Danish frame by
+    /// default. Explicit learner feedback always overrides this prior.
+    private static let structuralWords: Set<String> = [
+        "ad", "af", "at", "da", "de", "den", "der", "det", "du",
+        "eller", "en", "end", "er", "et", "for", "fordi", "fra",
+        "han", "har", "hun", "hvad", "hvem", "hvor", "hvis", "i",
+        "ikke", "jeg", "kan", "med", "men", "mod", "når", "og",
+        "om", "på", "sig", "sin", "sit", "skal", "som", "til",
+        "var", "ved", "vi", "vil"
+    ]
+
+    static func initialKnowledgeLevel(for normalizedWord: String) -> Int {
+        structuralWords.contains(normalizedWord)
+            ? AdaptiveKnowledgePolicy.knownLevel
+            : 0
+    }
+}
+
 enum LearnerFamiliarity: String, Codable, Sendable {
     case new
     case learning
@@ -80,8 +165,11 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
     var encounterCount: Int
     var moreEnglishCount: Int
     var knownConfirmationCount: Int
+    var spacedEncounterCount: Int
     var lastSeen: Date
     var lastReviewedAt: Date?
+    var lastSpacedEncounterAt: Date?
+    var lastContextSignature: String?
 
     init(
         word: String,
@@ -89,16 +177,22 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
         encounterCount: Int,
         moreEnglishCount: Int,
         knownConfirmationCount: Int,
+        spacedEncounterCount: Int = 0,
         lastSeen: Date,
-        lastReviewedAt: Date? = nil
+        lastReviewedAt: Date? = nil,
+        lastSpacedEncounterAt: Date? = nil,
+        lastContextSignature: String? = nil
     ) {
         self.word = word
         self.knowledgeLevel = knowledgeLevel
         self.encounterCount = encounterCount
         self.moreEnglishCount = moreEnglishCount
         self.knownConfirmationCount = knownConfirmationCount
+        self.spacedEncounterCount = spacedEncounterCount
         self.lastSeen = lastSeen
         self.lastReviewedAt = lastReviewedAt
+        self.lastSpacedEncounterAt = lastSpacedEncounterAt
+        self.lastContextSignature = lastContextSignature
     }
 
     /// Kept as a normalized compatibility view for older profile archives.
@@ -144,23 +238,6 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
         }
     }
 
-    func knowledgeStageTitle(at date: Date = Date()) -> String {
-        Self.knowledgeStageTitle(
-            for: effectiveKnowledgeLevel(at: date)
-        )
-    }
-
-    static func knowledgeStageTitle(for level: Int) -> String {
-        switch level {
-        case 0: "New"
-        case 1: "Recognizing"
-        case 2: "Learning"
-        case 3: "Mostly known"
-        case 4: "Known"
-        default: "Mastered"
-        }
-    }
-
     private static func retentionInterval(for level: Int) -> TimeInterval {
         let day: TimeInterval = 24 * 60 * 60
         switch level {
@@ -179,8 +256,11 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
         case encounterCount
         case moreEnglishCount
         case knownConfirmationCount
+        case spacedEncounterCount
         case lastSeen
         case lastReviewedAt
+        case lastSpacedEncounterAt
+        case lastContextSignature
     }
 
     init(from decoder: Decoder) throws {
@@ -215,6 +295,10 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
             Int.self,
             forKey: .knownConfirmationCount
         )
+        spacedEncounterCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .spacedEncounterCount
+        ) ?? 0
         lastSeen = try container.decode(Date.self, forKey: .lastSeen)
         lastReviewedAt = try container.decodeIfPresent(
             Date.self,
@@ -224,6 +308,14 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
            (knownConfirmationCount > 0 || moreEnglishCount > 0) {
             lastReviewedAt = lastSeen
         }
+        lastSpacedEncounterAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .lastSpacedEncounterAt
+        )
+        lastContextSignature = try container.decodeIfPresent(
+            String.self,
+            forKey: .lastContextSignature
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -237,10 +329,22 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
             knownConfirmationCount,
             forKey: .knownConfirmationCount
         )
+        try container.encode(
+            spacedEncounterCount,
+            forKey: .spacedEncounterCount
+        )
         try container.encode(lastSeen, forKey: .lastSeen)
         try container.encodeIfPresent(
             lastReviewedAt,
             forKey: .lastReviewedAt
+        )
+        try container.encodeIfPresent(
+            lastSpacedEncounterAt,
+            forKey: .lastSpacedEncounterAt
+        )
+        try container.encodeIfPresent(
+            lastContextSignature,
+            forKey: .lastContextSignature
         )
     }
 }
@@ -306,7 +410,9 @@ final class LearnerProfileStore {
         let key = Self.normalizedKey(for: word)
         return entries[key] ?? LearnerWordProgress(
             word: key,
-            knowledgeLevel: 0,
+            knowledgeLevel: DanishVocabularyPrior.initialKnowledgeLevel(
+                for: key
+            ),
             encounterCount: 0,
             moreEnglishCount: 0,
             knownConfirmationCount: 0,
@@ -314,10 +420,12 @@ final class LearnerProfileStore {
         )
     }
 
-    /// A hover is an exposure only. It must not silently increase mastery.
+    /// Encounters are weak learning evidence. Only spaced encounters can
+    /// reduce support, and they never silently establish mastery.
     @discardableResult
     func recordEncounter(
         for word: String,
+        context: String? = nil,
         at date: Date = Date()
     ) -> Bool {
         let key = Self.normalizedKey(for: word)
@@ -327,12 +435,33 @@ final class LearnerProfileStore {
         let isNewWord = entries[key] == nil
         makeRoomIfNeeded(for: key)
         var entry = progress(for: key, at: date)
+        let previousLevel = entry.knowledgeLevel
         entry.encounterCount += 1
         entry.lastSeen = date
+        let contextSignature = Self.contextSignature(for: context)
+        if AdaptiveKnowledgePolicy.shouldCreditEncounter(
+            lastCreditedAt: entry.lastSpacedEncounterAt,
+            lastContextSignature: entry.lastContextSignature,
+            contextSignature: contextSignature,
+            at: date
+        ) {
+            entry.spacedEncounterCount += 1
+            entry.lastSpacedEncounterAt = date
+            entry.lastContextSignature = contextSignature
+            let passiveLevel = AdaptiveKnowledgePolicy.passiveLevel(
+                forSpacedEncounterCount: entry.spacedEncounterCount
+            )
+            if entry.knowledgeLevel < AdaptiveKnowledgePolicy.knownLevel {
+                entry.knowledgeLevel = max(
+                    entry.effectiveKnowledgeLevel(at: date),
+                    passiveLevel
+                )
+            }
+        }
         entries[key] = entry
         pendingEncounterSaves += 1
         saveEncountersIfNeeded(at: date)
-        return isNewWord
+        return isNewWord || entry.knowledgeLevel != previousLevel
     }
 
     func recordUnknown(
@@ -345,13 +474,14 @@ final class LearnerProfileStore {
         }
         makeRoomIfNeeded(for: key)
         var entry = progress(for: key, at: date)
-        entry.knowledgeLevel = max(
-            entry.effectiveKnowledgeLevel(at: date) - 1,
-            0
-        )
+        entry.knowledgeLevel =
+            AdaptiveKnowledgePolicy.levelAfterUnknownFeedback()
         entry.moreEnglishCount += 1
+        entry.spacedEncounterCount = 0
         entry.lastSeen = date
         entry.lastReviewedAt = date
+        entry.lastSpacedEncounterAt = nil
+        entry.lastContextSignature = nil
         entries[key] = entry
         save()
     }
@@ -366,9 +496,10 @@ final class LearnerProfileStore {
         }
         makeRoomIfNeeded(for: key)
         var entry = progress(for: key, at: date)
-        entry.knowledgeLevel = min(
-            entry.effectiveKnowledgeLevel(at: date) + 1,
-            LearnerWordProgress.maximumKnowledgeLevel
+        entry.knowledgeLevel = AdaptiveKnowledgePolicy.levelAfterKnownFeedback(
+            currentLevel: entry.effectiveKnowledgeLevel(at: date),
+            lastReviewedAt: entry.lastReviewedAt,
+            at: date
         )
         entry.knownConfirmationCount += 1
         entry.lastSeen = date
@@ -420,6 +551,10 @@ final class LearnerProfileStore {
                 imported,
                 at: date
             )
+            let newestSpacedProgress = Self.progressWithNewestEncounter(
+                existing,
+                imported
+            )
             entries[key] = LearnerWordProgress(
                 word: key,
                 knowledgeLevel: preferredProgress.knowledgeLevel,
@@ -435,11 +570,19 @@ final class LearnerProfileStore {
                     existing?.knownConfirmationCount ?? 0,
                     imported.knownConfirmationCount
                 ),
+                spacedEncounterCount: max(
+                    existing?.spacedEncounterCount ?? 0,
+                    imported.spacedEncounterCount
+                ),
                 lastSeen: max(
                     existing?.lastSeen ?? imported.lastSeen,
                     imported.lastSeen
                 ),
-                lastReviewedAt: preferredProgress.lastReviewedAt
+                lastReviewedAt: preferredProgress.lastReviewedAt,
+                lastSpacedEncounterAt:
+                    newestSpacedProgress.lastSpacedEncounterAt,
+                lastContextSignature:
+                    newestSpacedProgress.lastContextSignature
             )
         }
         pruneToStorageLimit()
@@ -456,6 +599,30 @@ final class LearnerProfileStore {
             .trimmingCharacters(
                 in: Self.keyTrimmingCharacters
             )
+    }
+
+    static func contextSignature(for context: String?) -> String? {
+        guard let context else {
+            return nil
+        }
+        let compact = context
+            .precomposedStringWithCanonicalMapping
+            .lowercased(with: danishLocale)
+            .replacingOccurrences(
+                of: #"\s+"#,
+                with: " ",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else {
+            return nil
+        }
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in compact.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return String(hash, radix: 16)
     }
 
     func flushPersistence() {
@@ -541,6 +708,9 @@ final class LearnerProfileStore {
             && word.encounterCount >= 0
             && word.moreEnglishCount >= 0
             && word.knownConfirmationCount >= 0
+            && word.spacedEncounterCount >= 0
+            && word.spacedEncounterCount <= word.encounterCount
+            && (word.lastContextSignature?.count ?? 0) <= 64
     }
 
     private static func progressWithNewestReview(
@@ -562,6 +732,26 @@ final class LearnerProfileStore {
             let existingLevel = existing.effectiveKnowledgeLevel(at: date)
             let importedLevel = imported.effectiveKnowledgeLevel(at: date)
             return existingLevel <= importedLevel ? existing : imported
+        }
+    }
+
+    private static func progressWithNewestEncounter(
+        _ existing: LearnerWordProgress?,
+        _ imported: LearnerWordProgress
+    ) -> LearnerWordProgress {
+        guard let existing else {
+            return imported
+        }
+        switch (
+            existing.lastSpacedEncounterAt,
+            imported.lastSpacedEncounterAt
+        ) {
+        case let (existingDate?, importedDate?):
+            return existingDate >= importedDate ? existing : imported
+        case (nil, _?):
+            return imported
+        default:
+            return existing
         }
     }
 

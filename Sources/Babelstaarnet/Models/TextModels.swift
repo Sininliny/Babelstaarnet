@@ -93,9 +93,6 @@ struct HoverCard: Equatable, Sendable {
     let showsControlsInWordBridge: Bool
     let showsControlsInSentenceBridge: Bool
     let showsEnglishSupportInSentenceBridge: Bool
-    let knowledgeLevel: Int
-    let maximumKnowledgeLevel: Int
-    let knowledgeStageTitle: String
     let knownShortcutLabel: String
     let dontKnowShortcutLabel: String
     let pinShortcutLabel: String
@@ -111,9 +108,6 @@ struct HoverCard: Equatable, Sendable {
         showsControlsInWordBridge: Bool = false,
         showsControlsInSentenceBridge: Bool = false,
         showsEnglishSupportInSentenceBridge: Bool = false,
-        knowledgeLevel: Int = 0,
-        maximumKnowledgeLevel: Int = 5,
-        knowledgeStageTitle: String = "New",
         knownShortcutLabel: String = "1",
         dontKnowShortcutLabel: String = "2",
         pinShortcutLabel: String = "3"
@@ -129,9 +123,6 @@ struct HoverCard: Equatable, Sendable {
         self.showsControlsInSentenceBridge = showsControlsInSentenceBridge
         self.showsEnglishSupportInSentenceBridge =
             showsEnglishSupportInSentenceBridge
-        self.knowledgeLevel = knowledgeLevel
-        self.maximumKnowledgeLevel = maximumKnowledgeLevel
-        self.knowledgeStageTitle = knowledgeStageTitle
         self.knownShortcutLabel = knownShortcutLabel
         self.dontKnowShortcutLabel = dontKnowShortcutLabel
         self.pinShortcutLabel = pinShortcutLabel
