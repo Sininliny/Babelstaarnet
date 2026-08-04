@@ -16,6 +16,8 @@ This repository currently contains the first working MVP for Danish → English.
   and look ahead in the direction of pointer movement
 - Danish OCR with [Tesseract](https://github.com/tesseract-ocr/tesseract)
   and the open `dan` model
+- A focused Apple Vision fast path for clear text under the pointer; small,
+  uncertain, or missed targets retain the complete Tesseract fallback
 - Contrast-adaptive OCR passes for dark, light, and colored text
 - Adaptive small-text OCR for dense PDFs and forms: table rules are removed,
   tiny glyphs are enlarged within a bounded pixel budget, and cell text is
@@ -71,6 +73,9 @@ This repository currently contains the first working MVP for Danish → English.
 - Distinct active and inactive menu-bar icons
 - Movement-driven refresh with a low-frequency stationary fallback for scrolling
   and screen changes
+- Latest-pointer scheduling cancels obsolete OCR processes, translates the
+  focused source line needed by the current bubble, and reuses exact unchanged
+  captures without allowing an older result to replace the current bubble
 - Adaptive power saving: OCR refreshes back off while the pointer is still,
   stop while a bubble is held, and suspend after five seconds without input
 - Persistent warmed Argos worker and translation cache for low hover latency
@@ -184,10 +189,10 @@ logically active, the current hover data stays available, and no new screenshot
 or OCR request is made.
 
 `make test-runtime` renders a Retina-scale cursor crop containing dark, light,
-and colored Danish text, reads it with the installed Tesseract engine, and
-checks repeated translations through the persistent Argos worker and verifies
-the adaptive word-explanation resources. The runtime checks enforce a
-sub-two-second OCR budget and a sub-one-second warmed translation budget.
+and colored Danish text. It verifies the focused Vision response, the complete
+Tesseract fallback, unchanged-capture reuse, cancellation, repeated translation
+through the persistent Argos worker, and the adaptive word-explanation
+resources.
 
 When the Apple translation fallback is used, the first translation may prompt
 macOS to download its Danish → English language pack. It then works offline.
@@ -195,11 +200,14 @@ macOS to download its Danish → English language pack. It then works offline.
 ## Architecture
 
 ```text
-cursor movement → adaptive local crop → contrast-adaptive Tesseract
+cursor movement → adaptive local crop → focused Vision OCR
+                                             │ uncertain / small text
+                                             ▼
+                                  contrast-adaptive Tesseract
                                              │
-                                    word bounds + size estimate
+                                  focused source-line bounds
                                              │
-                         cached persistent Argos translation
+                              cached warmed Argos translation
                                              │
                          adaptive Danish + English sentence bridge
                                              │
@@ -215,9 +223,11 @@ The capture, OCR, translation, learner profile, dictionary, speech, overlay
 layout, and app state are separate. The capture planner uses cursor speed and
 the most recently observed text height to choose a local region, then retries
 with a larger crop only when words touch its boundary or no text is found.
-Tesseract emits TSV word geometry from normal and inverted high-contrast
-passes. Only uncached unique Danish words are sent to the warmed local Argos
-worker. The app keeps hit-test data per display and renders one small,
+Clear pointer targets use a bounded Vision fast path. Tesseract retains TSV
+word geometry from normal, inverted, chroma, and conditional small-text passes
+for targets that need more analysis. Only uncached unique Danish words from the
+focused source line are sent to the warmed local Argos worker. The app keeps
+hit-test data per display and renders one small,
 nonactivating interactive bubble only when the cursor enters an OCR word box.
 Apple adapters are fallbacks, not network services.
 

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import OSLog
 import Translation
 import UniformTypeIdentifiers
 
@@ -71,6 +72,11 @@ final class AppModel: ObservableObject {
     private let systemIdleMonitor = SystemIdleMonitor()
     private let engineInstallerService = EngineInstallerService()
     private let speechService = SpeechService()
+    private let latencyClock = ContinuousClock()
+    private let latencyLogger = Logger(
+        subsystem: "dev.sinin.babelstaarnet",
+        category: "PipelineLatency"
+    )
     private lazy var overlayController = OverlayWindowController(
         learnerProfile: learnerProfileStore,
         onSpeakDanish: { [weak self] word in
@@ -88,6 +94,8 @@ final class AppModel: ObservableObject {
         }
     }
     private var liveTask: Task<Void, Never>?
+    private var scanTask: Task<Void, Never>?
+    private var activeScanOrigin: CGPoint?
     private var translatedRegions: [TextRegion] = []
     private var hasStarted = false
     private var activationObserver: NSObjectProtocol?
@@ -97,6 +105,7 @@ final class AppModel: ObservableObject {
     private var estimatedTextHeight: CGFloat?
     private var lastCapturePoint: CGPoint?
     private var lastCaptureDate: Date?
+    private var lastCompletedScanDate: Date?
     private let translationCache = BoundedCache<String, String>(capacity: 4_096)
     private let beginnerExplanationCache = BoundedCache<String, String>(
         capacity: 2_048
@@ -446,7 +455,9 @@ final class AppModel: ObservableObject {
         scanGeneration = UUID()
         lastCapturePoint = nil
         lastCaptureDate = nil
-        await scanScreen(generation: scanGeneration)
+        lastCompletedScanDate = nil
+        requestScan(at: NSEvent.mouseLocation)
+        updateLiveMode()
     }
 
     func deactivateLearningMode() {
@@ -457,10 +468,14 @@ final class AppModel: ObservableObject {
         pendingRegions = []
         overlayController.hide()
         speechService.stop()
+        scanTask?.cancel()
+        scanTask = nil
+        activeScanOrigin = nil
         liveTask?.cancel()
         liveTask = nil
         lastCapturePoint = nil
         lastCaptureDate = nil
+        lastCompletedScanDate = nil
         phase = .idle
         learnerProfileStore.flushPersistence()
         Task {
@@ -501,7 +516,39 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func scanScreen(generation: UUID) async {
+    private func requestScan(at cursor: CGPoint) {
+        scanTask?.cancel()
+        let generation = UUID()
+        scanGeneration = generation
+        activeScanOrigin = cursor
+        phase = translatedRegions.isEmpty
+            ? .idle
+            : .showing(regionCount: wordCount(in: translatedRegions))
+
+        scanTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            await self.scanScreen(
+                generation: generation,
+                cursor: cursor
+            )
+            guard generation == self.scanGeneration else {
+                return
+            }
+            self.scanTask = nil
+            if self.phase == .translating,
+               self.pendingGeneration == generation {
+                return
+            }
+            self.activeScanOrigin = nil
+        }
+    }
+
+    private func scanScreen(
+        generation: UUID,
+        cursor: CGPoint
+    ) async {
         guard !phase.isWorking,
               learningModeActive,
               generation == scanGeneration else {
@@ -516,25 +563,29 @@ final class AppModel: ObservableObject {
         }
 
         do {
-            let cursor = NSEvent.mouseLocation
+            let scanStartedAt = latencyClock.now
             let now = Date()
             let velocity = cursorVelocity(at: cursor, now: now)
             lastCapturePoint = cursor
             lastCaptureDate = now
 
             phase = .capturing
+            let captureStartedAt = latencyClock.now
             var capture = try await captureService.captureRegion(
                 around: cursor,
                 estimatedTextHeight: estimatedTextHeight,
                 velocity: velocity
             )
+            logLatency("capture", since: captureStartedAt)
             guard learningModeActive, generation == scanGeneration else {
                 return
             }
             phase = .recognizing
 
+            let recognitionStartedAt = latencyClock.now
             var result = try await ocrService.recognizeDanishText(
-                in: capture
+                in: capture,
+                focusPoint: cursor
             )
             ocrEngineName = result.engine
 
@@ -549,7 +600,8 @@ final class AppModel: ObservableObject {
                     expansion: 1.65
                 )
                 let expandedResult = try await ocrService.recognizeDanishText(
-                    in: expandedCapture
+                    in: expandedCapture,
+                    focusPoint: cursor
                 )
                 if expandedResult.regions.flatMap(\.words).count
                     >= result.regions.flatMap(\.words).count {
@@ -558,6 +610,7 @@ final class AppModel: ObservableObject {
                     ocrEngineName = expandedResult.engine
                 }
             }
+            logLatency("ocr", since: recognitionStartedAt)
             var allRegions = result.regions
 
             guard learningModeActive, generation == scanGeneration else {
@@ -567,12 +620,17 @@ final class AppModel: ObservableObject {
                 from: allRegions,
                 previous: estimatedTextHeight
             )
+            allRegions = FocusedRegionSelectionPolicy.foregroundRegions(
+                from: allRegions,
+                at: cursor
+            )
             allRegions = HoverHitTesting.stabilizeIdentifiers(
                 in: allRegions,
                 against: translatedRegions
             )
             guard !allRegions.isEmpty else {
                 translatedRegions = []
+                lastCompletedScanDate = Date()
                 overlayController.show(
                     regions: [],
                     autoSpeak: autoSpeak,
@@ -608,6 +666,7 @@ final class AppModel: ObservableObject {
             phase = .translating
 
             do {
+                let translationStartedAt = latencyClock.now
                 let missingTexts = uniqueTexts.filter {
                     translationCache[$0.lowercased()] == nil
                 }
@@ -615,6 +674,10 @@ final class AppModel: ObservableObject {
                     let translations = try await translationsWithLocalRecovery(
                         missingTexts
                     )
+                    guard !Task.isCancelled,
+                          generation == scanGeneration else {
+                        return
+                    }
                     for (source, translation) in zip(
                         missingTexts,
                         translations
@@ -646,9 +709,19 @@ final class AppModel: ObservableObject {
                 let explanations = bridgeConfiguration.showsWordBridge
                     ? await beginnerExplanations(for: sourceTranslations)
                     : [:]
+                guard !Task.isCancelled,
+                      generation == scanGeneration else {
+                    return
+                }
                 let wordBridges = bridgeConfiguration.showsWordBridge
                     ? await adaptiveWordBridges(from: explanations)
                     : [:]
+                guard !Task.isCancelled,
+                      generation == scanGeneration else {
+                    return
+                }
+                logLatency("bridges", since: translationStartedAt)
+                logLatency("total", since: scanStartedAt)
                 translationEngineName = "Argos Translate"
                 apply(
                     translations: map,
@@ -664,6 +737,8 @@ final class AppModel: ObservableObject {
                 translationEngineName = "Apple Translation fallback"
                 translationConfiguration.invalidate()
             }
+        } catch is CancellationError {
+            return
         } catch {
             guard generation == scanGeneration else {
                 return
@@ -801,6 +876,8 @@ final class AppModel: ObservableObject {
 
         pendingRegions = []
         pendingGeneration = nil
+        activeScanOrigin = nil
+        lastCompletedScanDate = Date()
         showOverlay()
         phase = .showing(regionCount: wordCount(in: translatedRegions))
         if liveMode, liveTask == nil {
@@ -836,6 +913,9 @@ final class AppModel: ObservableObject {
             }
             let explanations = try await wordBridgeTranslationService
                 .explainEnglishWordsInDanish(englishWords)
+            guard !Task.isCancelled else {
+                return result
+            }
             for (source, explanation) in zip(missing, explanations) {
                 let cleaned = beginnerDanishService.clean(
                     explanation: explanation
@@ -878,6 +958,9 @@ final class AppModel: ObservableObject {
             .sorted()
         if !missing.isEmpty,
            let translated = try? await translationsWithLocalRecovery(missing) {
+            guard !Task.isCancelled else {
+                return [:]
+            }
             for (danish, english) in zip(missing, translated) {
                 if !translationQualityService.needsRetry(
                     source: danish,
@@ -933,6 +1016,7 @@ final class AppModel: ObservableObject {
         _ sourceTexts: [String]
     ) async throws -> [String] {
         let primary = try await argosTranslationService.translate(sourceTexts)
+        try Task.checkCancellation()
         let retryIndexes = sourceTexts.indices.filter {
             translationQualityService.needsRetry(
                 source: sourceTexts[$0],
@@ -949,6 +1033,7 @@ final class AppModel: ObservableObject {
         let retryTranslations = try? await argosTranslationService.translate(
             retrySources
         )
+        try Task.checkCancellation()
         var retryByIndex: [Int: String] = [:]
         if let retryTranslations {
             for (index, translation) in zip(
@@ -979,6 +1064,9 @@ final class AppModel: ObservableObject {
 
         liveTask = Task { [weak self] in
             while !Task.isCancelled {
+                guard self?.learningModeActive == true else {
+                    return
+                }
                 let idleDuration = self?.systemIdleMonitor
                     .idleDuration() ?? 0
                 let shouldSuspend = PowerSavingPolicy.shouldSuspend(
@@ -1008,6 +1096,17 @@ final class AppModel: ObservableObject {
                     return
                 }
                 let cursor = NSEvent.mouseLocation
+                if self.phase.isWorking,
+                   let origin = self.activeScanOrigin {
+                    if ScanSchedulingPolicy.shouldReplaceActiveScan(
+                        origin: origin,
+                        current: cursor,
+                        estimatedTextHeight: self.estimatedTextHeight
+                    ) {
+                        self.requestScan(at: cursor)
+                    }
+                    continue
+                }
                 guard self.shouldScan(
                     at: cursor,
                     now: Date(),
@@ -1015,9 +1114,7 @@ final class AppModel: ObservableObject {
                 ) else {
                     continue
                 }
-                await self.scanScreen(
-                    generation: self.scanGeneration
-                )
+                self.requestScan(at: cursor)
             }
         }
     }
@@ -1040,6 +1137,16 @@ final class AppModel: ObservableObject {
             return false
         }
         guard !overlayController.isHoldingInteraction else {
+            return false
+        }
+        if let lastCompletedScanDate,
+           ScanSchedulingPolicy.canReuseRecognizedWord(
+               at: cursor,
+               in: translatedRegions,
+               resultAge: now.timeIntervalSince(lastCompletedScanDate),
+               refreshInterval: PowerSavingPolicy
+                   .stationaryRefreshInterval(idleDuration: idleDuration)
+           ) {
             return false
         }
         guard let lastCapturePoint, let lastCaptureDate else {
@@ -1079,6 +1186,18 @@ final class AppModel: ObservableObject {
 
     private func wordCount(in regions: [TextRegion]) -> Int {
         regions.reduce(0) { $0 + $1.words.count }
+    }
+
+    private func logLatency(
+        _ stage: String,
+        since start: ContinuousClock.Instant
+    ) {
+        let duration = start.duration(to: latencyClock.now).components
+        let milliseconds = Double(duration.seconds) * 1_000
+            + Double(duration.attoseconds) / 1_000_000_000_000_000
+        latencyLogger.debug(
+            "\(stage, privacy: .public)=\(milliseconds, privacy: .public)ms"
+        )
     }
 
     private func clearPermissionRequestState() {

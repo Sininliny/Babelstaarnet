@@ -21,6 +21,46 @@ enum TesseractError: LocalizedError {
     }
 }
 
+private final class TesseractProcessController: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+
+    func register(_ process: Process) {
+        lock.lock()
+        self.process = process
+        let shouldTerminate = cancelled
+        lock.unlock()
+        if shouldTerminate, process.isRunning {
+            process.terminate()
+        }
+    }
+
+    func clear(_ process: Process) {
+        lock.lock()
+        if self.process === process {
+            self.process = nil
+        }
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let process = self.process
+        lock.unlock()
+        if process?.isRunning == true {
+            process?.terminate()
+        }
+    }
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+}
+
 struct TesseractOCRService {
     var isAvailable: Bool {
         executableURL != nil
@@ -61,7 +101,8 @@ struct TesseractOCRService {
             throw TesseractError.unavailable
         }
 
-        return try await Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
             let bitmap = NSBitmapImageRep(cgImage: capture.image)
             guard let png = bitmap.representation(using: .png, properties: [:]) else {
                 throw TesseractError.imageEncodingFailed
@@ -89,7 +130,7 @@ struct TesseractOCRService {
                 guard let invertedPNG else {
                     return nil
                 }
-                return try? Self.runTesseract(
+                return try? await Self.runTesseract(
                     executableURL: executableURL,
                     png: invertedPNG,
                     automaticInversion: false,
@@ -102,7 +143,7 @@ struct TesseractOCRService {
                 guard let chromaPNG else {
                     return nil
                 }
-                return try? Self.runTesseract(
+                return try? await Self.runTesseract(
                     executableURL: executableURL,
                     png: chromaPNG,
                     automaticInversion: false,
@@ -111,6 +152,7 @@ struct TesseractOCRService {
             }()
 
             let passResults = try await (normalTSV, invertedTSV, chromaTSV)
+            try Task.checkCancellation()
             let normalRegions = Self.parse(
                 tsv: passResults.0,
                 imageSize: imageSize,
@@ -146,7 +188,7 @@ struct TesseractOCRService {
                       from: capture.image,
                       regions: mergedRegions
                   ),
-                  let smallTSV = try? Self.runTesseract(
+                  let smallTSV = try? await Self.runTesseract(
                       executableURL: executableURL,
                       png: smallImage.png,
                       automaticInversion: false,
@@ -163,8 +205,23 @@ struct TesseractOCRService {
                 displayID: capture.displayID,
                 minimumConfidence: 22
             )
+            try Task.checkCancellation()
             return Self.merge(mergedRegions, with: smallRegions)
-        }.value
+        }
+        return try await withTaskCancellationHandler {
+            do {
+                let value = try await worker.value
+                try Task.checkCancellation()
+                return value
+            } catch {
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+                throw error
+            }
+        } onCancel: {
+            worker.cancel()
+        }
     }
 
     private static func runTesseract(
@@ -173,7 +230,44 @@ struct TesseractOCRService {
         automaticInversion: Bool,
         pageSegmentationMode: Int,
         dpi: Int = 144
+    ) async throws -> String {
+        let controller = TesseractProcessController()
+        let worker = Task.detached(priority: .userInitiated) {
+            try runTesseractSynchronously(
+                executableURL: executableURL,
+                png: png,
+                automaticInversion: automaticInversion,
+                pageSegmentationMode: pageSegmentationMode,
+                dpi: dpi,
+                controller: controller
+            )
+        }
+        return try await withTaskCancellationHandler {
+            do {
+                let value = try await worker.value
+                try Task.checkCancellation()
+                return value
+            } catch {
+                if Task.isCancelled || controller.isCancelled {
+                    throw CancellationError()
+                }
+                throw error
+            }
+        } onCancel: {
+            controller.cancel()
+            worker.cancel()
+        }
+    }
+
+    private static func runTesseractSynchronously(
+        executableURL: URL,
+        png: Data,
+        automaticInversion: Bool,
+        pageSegmentationMode: Int,
+        dpi: Int,
+        controller: TesseractProcessController
     ) throws -> String {
+        try Task.checkCancellation()
         let process = Process()
         process.executableURL = executableURL
         process.arguments = [
@@ -198,10 +292,16 @@ struct TesseractOCRService {
         try process.run()
         input.fileHandleForWriting.write(png)
         try input.fileHandleForWriting.close()
+        controller.register(process)
+        defer { controller.clear(process) }
 
         let outputData = output.fileHandleForReading.readDataToEndOfFile()
         let errorData = errors.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+
+        if controller.isCancelled || Task.isCancelled {
+            throw CancellationError()
+        }
 
         guard process.terminationStatus == 0 else {
             let message = String(data: errorData, encoding: .utf8) ?? "unknown error"

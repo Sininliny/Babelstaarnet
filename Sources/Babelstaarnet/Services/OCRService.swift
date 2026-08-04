@@ -11,49 +11,131 @@ enum OCRError: LocalizedError {
 }
 
 actor OCRService {
+    private struct CacheKey: Hashable {
+        let displayID: CGDirectDisplayID
+        let frameX: Int
+        let frameY: Int
+        let frameWidth: Int
+        let frameHeight: Int
+        let imageWidth: Int
+        let imageHeight: Int
+        let imageHash: Int
+        let focusX: Int
+        let focusY: Int
+    }
+
+    private struct CachedResult {
+        let regions: [TextRegion]
+        let engine: String
+    }
+
+    private struct VisionResult: Sendable {
+        let regions: [TextRegion]
+        let confidenceByRegionID: [UUID: Float]
+    }
+
     private let tesseract = TesseractOCRService()
+    private let resultCache = BoundedCache<CacheKey, CachedResult>(
+        capacity: 12
+    )
 
     func isOpenSourceEngineReady() async -> Bool {
         await tesseract.isDanishReady()
     }
 
     func recognizeDanishText(
-        in capture: CapturedDisplay
+        in capture: CapturedDisplay,
+        focusPoint: CGPoint? = nil
     ) async throws -> (regions: [TextRegion], engine: String) {
+        let cacheKey = Self.cacheKey(
+            for: capture,
+            focusPoint: focusPoint
+        )
+        if let cacheKey,
+           let cached = resultCache[cacheKey] {
+            return (cached.regions, cached.engine)
+        }
+
+        if focusPoint != nil,
+           let vision = try? await Self.recognizeWithVision(
+               in: capture,
+               recognitionLevel: .fast
+           ) {
+            try Task.checkCancellation()
+            let regions = Self.danishRegions(from: vision.regions)
+            if OCRRoutingPolicy.canUseFastVision(
+                regions: regions,
+                confidenceByRegionID: vision.confidenceByRegionID,
+                focusPoint: focusPoint
+            ) {
+                let result = CachedResult(
+                    regions: regions,
+                    engine: "Apple Vision fast OCR"
+                )
+                if let cacheKey {
+                    resultCache[cacheKey] = result
+                }
+                return (result.regions, result.engine)
+            }
+        }
+
+        try Task.checkCancellation()
         if tesseract.isAvailable,
            let regions = try? await tesseract.recognize(in: capture),
            !regions.isEmpty {
-            return (Self.danishRegions(from: regions), "Tesseract OCR")
+            try Task.checkCancellation()
+            let result = CachedResult(
+                regions: Self.danishRegions(from: regions),
+                engine: "Tesseract OCR"
+            )
+            if let cacheKey {
+                resultCache[cacheKey] = result
+            }
+            return (result.regions, result.engine)
         }
 
-        return (
-            Self.danishRegions(from: try await recognizeWithVision(in: capture)),
-            "Apple Vision fallback"
+        try Task.checkCancellation()
+        let vision = try await Self.recognizeWithVision(
+            in: capture,
+            recognitionLevel: .accurate
         )
+        let result = CachedResult(
+            regions: Self.danishRegions(from: vision.regions),
+            engine: "Apple Vision fallback"
+        )
+        if let cacheKey {
+            resultCache[cacheKey] = result
+        }
+        return (result.regions, result.engine)
     }
 
-    private func recognizeWithVision(
-        in capture: CapturedDisplay
-    ) async throws -> [TextRegion] {
+    private nonisolated static func recognizeWithVision(
+        in capture: CapturedDisplay,
+        recognitionLevel: VNRequestTextRecognitionLevel
+    ) async throws -> VisionResult {
         let image = capture.image
         let captureFrame = capture.frame
         let screenFrame = capture.screenFrame
 
-        return try await Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
             let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
+            request.recognitionLevel = recognitionLevel
             request.recognitionLanguages = ["da-DK", "da"]
-            request.usesLanguageCorrection = true
+            request.usesLanguageCorrection = recognitionLevel == .accurate
             request.minimumTextHeight = 0.004
 
             let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
             try handler.perform([request])
+            try Task.checkCancellation()
 
             guard let observations = request.results else {
                 throw OCRError.requestFailed
             }
 
-            return observations.compactMap { observation in
+            var confidenceByRegionID: [UUID: Float] = [:]
+            let regions: [TextRegion] = observations.compactMap {
+                observation -> TextRegion? in
                 guard let candidate = observation.topCandidates(1).first else {
                     return nil
                 }
@@ -72,15 +154,58 @@ actor OCRService {
                     screenFrame: screenFrame,
                     displayID: capture.displayID
                 )
-                return TextRegion(
+                let region = TextRegion(
                     sourceText: source,
                     frame: lineFrame,
                     screenFrame: screenFrame,
                     displayID: capture.displayID,
                     words: words
                 )
+                confidenceByRegionID[region.id] = candidate.confidence
+                return region
             }
-        }.value
+            return VisionResult(
+                regions: regions,
+                confidenceByRegionID: confidenceByRegionID
+            )
+        }
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
+
+    private nonisolated static func cacheKey(
+        for capture: CapturedDisplay,
+        focusPoint: CGPoint?
+    ) -> CacheKey? {
+        guard let data = capture.image.dataProvider?.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return nil
+        }
+        var hasher = Hasher()
+        hasher.combine(bytes: UnsafeRawBufferPointer(
+            start: bytes,
+            count: CFDataGetLength(data)
+        ))
+        let focusScale: CGFloat = 8
+        return CacheKey(
+            displayID: capture.displayID,
+            frameX: Int((capture.frame.minX * 2).rounded()),
+            frameY: Int((capture.frame.minY * 2).rounded()),
+            frameWidth: Int((capture.frame.width * 2).rounded()),
+            frameHeight: Int((capture.frame.height * 2).rounded()),
+            imageWidth: capture.image.width,
+            imageHeight: capture.image.height,
+            imageHash: hasher.finalize(),
+            focusX: focusPoint.map {
+                Int(($0.x / focusScale).rounded())
+            } ?? .min,
+            focusY: focusPoint.map {
+                Int(($0.y / focusScale).rounded())
+            } ?? .min
+        )
     }
 
     static func globalRect(_ normalizedRect: CGRect, displayFrame: CGRect) -> CGRect {

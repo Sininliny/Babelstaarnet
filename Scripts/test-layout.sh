@@ -139,6 +139,37 @@ swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Overlay/HoverHitTesting.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/ScanSchedulingPolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/ScanSchedulingPolicyChecks.swift" \
+    -o "$output_dir/ScanSchedulingPolicyChecks"
+
+"$output_dir/ScanSchedulingPolicyChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/OCRRoutingPolicyChecks.swift" \
+    -o "$output_dir/OCRRoutingPolicyChecks"
+
+"$output_dir/OCRRoutingPolicyChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/FocusedRegionSelectionPolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/FocusedRegionSelectionChecks.swift" \
+    -o "$output_dir/FocusedRegionSelectionChecks"
+
+"$output_dir/FocusedRegionSelectionChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/AdaptiveCapturePlanner.swift" \
     "$project_dir/Tests/BabelstaarnetTests/AdaptiveCapturePlannerChecks.swift" \
     -o "$output_dir/AdaptiveCapturePlannerChecks"
