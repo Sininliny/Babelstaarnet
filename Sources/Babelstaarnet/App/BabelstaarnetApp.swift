@@ -5,12 +5,6 @@ struct BabelstaarnetApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        Window("Babelstårnet", id: "main") {
-            MainWindowView(model: model)
-        }
-        .defaultSize(width: 500, height: 400)
-        .windowResizability(.contentSize)
-
         MenuBarExtra {
             MenuBarContentView(model: model)
         } label: {

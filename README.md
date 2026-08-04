@@ -132,8 +132,7 @@ without making Danish optional.
   prevent long sessions from accumulating unbounded memory or doing work for
   disabled bubbles
 - One independent overlay per display to preserve OCR coordinate alignment
-- First-launch dashboard with permission and engine readiness checks
-- Compact monochrome dashboard with one primary learning control
+- Menu-bar setup with permission and engine readiness checks
 - In-app installation and rechecking for the open-source engines
 - Zero-setup Apple Vision and Translation fallbacks when Tesseract or Argos is
   not installed

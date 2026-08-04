@@ -3,7 +3,6 @@ import SwiftUI
 
 struct MenuBarContentView: View {
     @ObservedObject var model: AppModel
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -59,11 +58,6 @@ struct MenuBarContentView: View {
             Divider()
 
             HStack {
-                Button("Open") {
-                    openWindow(id: "main")
-                }
-                .buttonStyle(.plain)
-
                 SettingsLink {
                     Text("Settings")
                 }
