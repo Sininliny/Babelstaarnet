@@ -36,7 +36,9 @@ The learning design follows four rules:
 1. **Danish never disappears.** The source word and Danish sentence structure
    remain the visual foundation.
 2. **English is scaffolding, not the product.** Babelstårnet adds at most a few
-   concise English meaning anchors instead of translating everything.
+   concise English meaning anchors instead of translating everything. A new
+   focused word receives its direct English meaning immediately; the Danish
+   sentence is never replaced.
 3. **Help follows the learner.** Unknown words receive support; learning words
    are tested with less support; known words remain Danish-only.
 4. **Feedback is exceptional, not homework.** Hovering is passive. The learner

@@ -160,6 +160,26 @@ swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/OCRLanguagePolicyChecks.swift" \
+    -o "$output_dir/OCRLanguagePolicyChecks"
+
+"$output_dir/OCRLanguagePolicyChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/OCRTextQualityPolicyChecks.swift" \
+    -o "$output_dir/OCRTextQualityPolicyChecks"
+
+"$output_dir/OCRTextQualityPolicyChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/FocusedRegionSelectionPolicy.swift" \
     "$project_dir/Tests/BabelstaarnetTests/FocusedRegionSelectionChecks.swift" \
     -o "$output_dir/FocusedRegionSelectionChecks"

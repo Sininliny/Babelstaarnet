@@ -54,11 +54,11 @@ struct FixtureGenerator {
             .foregroundColor: NSColor.white
         ]
         let coloredTextAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 38, weight: .semibold),
+            .font: NSFont.systemFont(ofSize: 27, weight: .semibold),
             .foregroundColor: NSColor(
-                calibratedRed: 0.12,
-                green: 0.31,
-                blue: 0.82,
+                calibratedRed: 0,
+                green: 0.47,
+                blue: 0.78,
                 alpha: 1
             )
         ]
@@ -87,8 +87,12 @@ struct FixtureGenerator {
             at: NSPoint(x: 86, y: 522),
             withAttributes: buttonTextAttributes
         )
-        "Farvet dansk tekst".draw(
-            at: NSPoint(x: 64, y: 426),
+        "IKEA Family medlemspris".draw(
+            at: NSPoint(x: 64, y: 454),
+            withAttributes: coloredTextAttributes
+        )
+        "15% rabat, spar 195.-".draw(
+            at: NSPoint(x: 64, y: 422),
             withAttributes: coloredTextAttributes
         )
 

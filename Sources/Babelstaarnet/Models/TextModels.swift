@@ -85,6 +85,7 @@ struct TextRegion: Identifiable, Hashable, Sendable {
 struct HoverCard: Equatable, Sendable {
     let word: WordRegion
     let wordKnowledgeLevel: Int
+    let wordEnglishMeaning: String?
     let wordBridgeText: String
     let wordBridgeEnglishTokenIndexes: [Int]
     let wordBridgeKnowledgeLevels: [Int: Int]
@@ -104,6 +105,7 @@ struct HoverCard: Equatable, Sendable {
     init(
         word: WordRegion,
         wordKnowledgeLevel: Int = 0,
+        wordEnglishMeaning: String? = nil,
         wordBridgeText: String = "",
         wordBridgeEnglishTokenIndexes: [Int] = [],
         wordBridgeKnowledgeLevels: [Int: Int] = [:],
@@ -122,6 +124,7 @@ struct HoverCard: Equatable, Sendable {
     ) {
         self.word = word
         self.wordKnowledgeLevel = wordKnowledgeLevel
+        self.wordEnglishMeaning = wordEnglishMeaning
         self.wordBridgeText = wordBridgeText
         self.wordBridgeEnglishTokenIndexes = wordBridgeEnglishTokenIndexes
         self.wordBridgeKnowledgeLevels = wordBridgeKnowledgeLevels

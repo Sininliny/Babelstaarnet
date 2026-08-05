@@ -6,6 +6,38 @@ struct AdaptiveExplanation: Equatable, Sendable {
     let englishIsExpanded: Bool
 }
 
+enum PassiveWordMeaningPolicy {
+    static func directEnglishMeaning(
+        sourceWord: String,
+        englishTranslation: String,
+        knowledgeLevel: Int
+    ) -> String? {
+        guard (0...2).contains(knowledgeLevel) else {
+            return nil
+        }
+
+        let compact = englishTranslation.replacingOccurrences(
+            of: #"\s+"#,
+            with: " ",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty,
+              normalized(compact) != normalized(sourceWord) else {
+            return nil
+        }
+
+        let words = compact.split(whereSeparator: \Character.isWhitespace)
+        return words.prefix(6).joined(separator: " ")
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.lowercased(with: Locale(identifier: "da_DK"))
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines.union(.punctuationCharacters)
+            )
+    }
+}
+
 struct AdaptiveExplanationService {
     func explanation(
         bridgeText: String,

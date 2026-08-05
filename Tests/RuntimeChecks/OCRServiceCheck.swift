@@ -66,7 +66,7 @@ struct OCRServiceCheck {
         precondition(source.contains("lærer dansk"))
         precondition(source.contains("Hvid tekst på rød baggrund virker også"))
         precondition(source.contains("DANSKKURSER HOS A2B"))
-        precondition(source.contains("Farvet dansk tekst"))
+        precondition(source.contains("IKEA Family medlemspris"))
         precondition(source.contains("Månedlig leje"))
         precondition(source.contains("varmt vand"))
         precondition(source.contains("indflytningsmåned"))
@@ -85,6 +85,30 @@ struct OCRServiceCheck {
         precondition(
             cacheElapsed < 0.05,
             "Unchanged OCR cache exceeded 50 ms: \(cacheElapsed)"
+        )
+
+        let blueFocusPoint = CGPoint(x: -1_180, y: 478)
+        let blueStartedAt = CFAbsoluteTimeGetCurrent()
+        let blueResult = try await service.recognizeDanishText(
+            in: capture,
+            focusPoint: blueFocusPoint
+        )
+        let blueElapsed = CFAbsoluteTimeGetCurrent() - blueStartedAt
+        let blueSource = blueResult.regions
+            .map(\.sourceText)
+            .joined(separator: " ")
+        precondition(blueSource.contains("rabat"))
+        precondition(
+            blueResult.regions.flatMap(\.words).contains {
+                $0.sourceText.localizedCaseInsensitiveContains("rabat")
+                    && $0.frame
+                        .insetBy(dx: -4, dy: -5)
+                        .contains(blueFocusPoint)
+            }
+        )
+        precondition(
+            blueElapsed < 2.3,
+            "Blue focused OCR exceeded 2.3 seconds: \(blueElapsed)"
         )
 
         let cancellationService = OCRService()
@@ -109,6 +133,8 @@ struct OCRServiceCheck {
         print(
             "Swift OCR service check passed: focused \(fastResult.engine) in "
                 + "\(fastElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
+                + "blue text via \(blueResult.engine) in "
+                + "\(blueElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
                 + "full \(words.count) words via \(result.engine) in "
                 + "\(elapsed.formatted(.number.precision(.fractionLength(3)))) s; "
                 + "unchanged cache in "
