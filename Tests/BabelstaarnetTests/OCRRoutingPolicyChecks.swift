@@ -62,14 +62,28 @@ enum OCRRoutingPolicyChecks {
             displayID: 1,
             words: [tinyWord]
         )
+        let tinyFocus = CGPoint(x: 125, y: 103)
         precondition(
             !OCRRoutingPolicy.canUseFastVision(
                 regions: [tinyRegion],
                 confidenceByRegionID: [tinyRegion.id: 0.9],
-                focusPoint: focus
+                focusPoint: tinyFocus
             )
         )
-
+        precondition(
+            OCRRoutingPolicy.canUseAccurateFocusedVision(
+                regions: [tinyRegion],
+                confidenceByRegionID: [tinyRegion.id: 0.8],
+                focusPoint: tinyFocus
+            )
+        )
+        precondition(
+            !OCRRoutingPolicy.canUseAccurateFocusedVision(
+                regions: [tinyRegion],
+                confidenceByRegionID: [tinyRegion.id: 0.2],
+                focusPoint: tinyFocus
+            )
+        )
         print("Confidence-routed OCR checks passed")
     }
 }

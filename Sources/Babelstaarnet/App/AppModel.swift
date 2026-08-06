@@ -95,6 +95,8 @@ final class AppModel: ObservableObject {
     }
     private var liveTask: Task<Void, Never>?
     private var scanTask: Task<Void, Never>?
+    private var activationWarmUpTask: Task<Void, Never>?
+    private var translationShutdownTask: Task<Void, Never>?
     private var activeScanOrigin: CGPoint?
     private var translatedRegions: [TextRegion] = []
     private var hasStarted = false
@@ -176,6 +178,9 @@ final class AppModel: ObservableObject {
         }
         Task {
             await checkEngineReadiness()
+        }
+        Task {
+            await captureService.warmUp()
         }
     }
 
@@ -452,6 +457,9 @@ final class AppModel: ObservableObject {
 
         learningModeActive = true
         detectionSuspendedForIdle = false
+        translationShutdownTask?.cancel()
+        translationShutdownTask = nil
+        warmResourcesForActivation()
         scanGeneration = UUID()
         lastCapturePoint = nil
         lastCaptureDate = nil
@@ -478,10 +486,7 @@ final class AppModel: ObservableObject {
         lastCompletedScanDate = nil
         phase = .idle
         learnerProfileStore.flushPersistence()
-        Task {
-            await argosTranslationService.shutdown()
-            await wordBridgeTranslationService.shutdown()
-        }
+        scheduleTranslationWorkerShutdown()
     }
 
     func translatePendingRegions(using session: TranslationSession) async {
@@ -706,8 +711,15 @@ final class AppModel: ObservableObject {
                         )
                     }
                 )
+                let focusedSourceKeys = FocusedRegionSelectionPolicy
+                    .focusedSourceKeys(in: allRegions, at: cursor)
+                let focusedTranslations = focusedSourceKeys.isEmpty
+                    ? sourceTranslations
+                    : sourceTranslations.filter {
+                        focusedSourceKeys.contains($0.key)
+                    }
                 let explanations = bridgeConfiguration.showsWordBridge
-                    ? await beginnerExplanations(for: sourceTranslations)
+                    ? await beginnerExplanations(for: focusedTranslations)
                     : [:]
                 guard !Task.isCancelled,
                       generation == scanGeneration else {
@@ -1241,6 +1253,57 @@ final class AppModel: ObservableObject {
             if !translationNeeded {
                 await argosTranslationService.shutdown()
             }
+        }
+    }
+
+    private func warmResourcesForActivation() {
+        activationWarmUpTask?.cancel()
+        let needsTranslation = bridgeConfiguration.hasVisibleBridge
+        let needsWordBridge = bridgeConfiguration.showsWordBridge
+        activationWarmUpTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            async let captureWarmUp: Void = captureService.warmUp()
+            async let translationWarmUp: Void = {
+                guard needsTranslation else {
+                    return
+                }
+                await self.argosTranslationService.warmUp()
+            }()
+            async let wordBridgeWarmUp: Void = {
+                guard needsWordBridge else {
+                    return
+                }
+                await self.wordBridgeTranslationService.warmUp(
+                    source: "en",
+                    target: "da"
+                )
+            }()
+            _ = await (
+                captureWarmUp,
+                translationWarmUp,
+                wordBridgeWarmUp
+            )
+        }
+    }
+
+    private func scheduleTranslationWorkerShutdown() {
+        activationWarmUpTask?.cancel()
+        activationWarmUpTask = nil
+        translationShutdownTask?.cancel()
+        translationShutdownTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(20))
+            } catch {
+                return
+            }
+            guard let self, !learningModeActive else {
+                return
+            }
+            await argosTranslationService.shutdown()
+            await wordBridgeTranslationService.shutdown()
+            translationShutdownTask = nil
         }
     }
 

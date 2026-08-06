@@ -63,7 +63,7 @@ struct FixtureGenerator {
             )
         ]
         let tinyTextAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 14, weight: .regular),
+            .font: NSFont.systemFont(ofSize: 11, weight: .regular),
             .foregroundColor: NSColor.black
         ]
 

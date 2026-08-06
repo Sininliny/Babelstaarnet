@@ -23,12 +23,24 @@ enum FocusedRegionSelectionChecks {
             at: CGPoint(x: 110, y: 313)
         )
         precondition(focused == [first])
+        precondition(
+            FocusedRegionSelectionPolicy.focusedSourceKeys(
+                in: [first, second],
+                at: CGPoint(x: 110, y: 313)
+            ) == ["dansk"]
+        )
 
         let unfocused = FocusedRegionSelectionPolicy.foregroundRegions(
             from: [first, second],
             at: CGPoint(x: 500, y: 500)
         )
         precondition(unfocused == [first, second])
+        precondition(
+            FocusedRegionSelectionPolicy.focusedSourceKeys(
+                in: [first, second],
+                at: CGPoint(x: 500, y: 500)
+            ).isEmpty
+        )
 
         print("Focused foreground region checks passed")
     }

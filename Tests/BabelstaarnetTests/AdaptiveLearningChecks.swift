@@ -299,7 +299,7 @@ enum AdaptiveLearningChecks {
         }
 
         let service = AdaptiveExplanationService()
-        for level in 0...2 {
+        for level in 0...3 {
             precondition(
                 PassiveWordMeaningPolicy.directEnglishMeaning(
                     sourceWord: "studieboliger",
@@ -308,7 +308,7 @@ enum AdaptiveLearningChecks {
                 ) == "student accommodation"
             )
         }
-        for level in 3...5 {
+        for level in 4...5 {
             precondition(
                 PassiveWordMeaningPolicy.directEnglishMeaning(
                     sourceWord: "studieboliger",
@@ -330,7 +330,15 @@ enum AdaptiveLearningChecks {
                 englishTranslation:
                     "an expression that is used in a particular situation",
                 knowledgeLevel: 0
-            ) == "an expression that is used in"
+            ) == "an expression that is used in a particular situation"
+        )
+        precondition(
+            PassiveWordMeaningPolicy.directEnglishMeaning(
+                sourceWord: "udtryk",
+                englishTranslation:
+                    "a word or phrase that conveys an idea or emotion and is used in speech or writing",
+                knowledgeLevel: 0
+            ) == "a word or phrase that conveys an idea or emotion"
         )
 
         let danishOnly = service.explanation(

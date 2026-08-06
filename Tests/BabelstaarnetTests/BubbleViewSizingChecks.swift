@@ -88,6 +88,19 @@ enum BubbleViewSizingChecks {
             state: state,
             hostingView: sentenceHostingView
         )
+        let testingSentenceOnlyCard = HoverCard(
+            word: word,
+            wordKnowledgeLevel: 3,
+            wordEnglishMeaning: "student accommodation",
+            learningText: "Mange studieboliger står tomme.",
+            showsControlsInSentenceBridge: true,
+            showsEnglishSupportInSentenceBridge: true
+        )
+        let testingSentenceOnlyHeight = measuredSentenceHeight(
+            testingSentenceOnlyCard,
+            state: state,
+            hostingView: sentenceHostingView
+        )
 
         precondition(wordHeight >= 42)
         precondition(wordHeight < 140)
@@ -101,6 +114,8 @@ enum BubbleViewSizingChecks {
         precondition(supportedHeight < 180)
         precondition(sentenceOnlyHeight > compactHeight)
         precondition(sentenceOnlyHeight < 200)
+        precondition(testingSentenceOnlyHeight > compactHeight)
+        precondition(testingSentenceOnlyHeight < 200)
         print(
             "Two-bubble content sizing checks passed "
                 + "(word \(translatedWordHeight), sentence \(compactHeight), "
