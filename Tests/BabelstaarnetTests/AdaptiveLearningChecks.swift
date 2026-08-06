@@ -299,6 +299,40 @@ enum AdaptiveLearningChecks {
         }
 
         let service = AdaptiveExplanationService()
+        for level in 0...2 {
+            precondition(
+                PassiveWordMeaningPolicy.directEnglishMeaning(
+                    sourceWord: "studieboliger",
+                    englishTranslation: "student accommodation",
+                    knowledgeLevel: level
+                ) == "student accommodation"
+            )
+        }
+        for level in 3...5 {
+            precondition(
+                PassiveWordMeaningPolicy.directEnglishMeaning(
+                    sourceWord: "studieboliger",
+                    englishTranslation: "student accommodation",
+                    knowledgeLevel: level
+                ) == nil
+            )
+        }
+        precondition(
+            PassiveWordMeaningPolicy.directEnglishMeaning(
+                sourceWord: "IKEA",
+                englishTranslation: "IKEA",
+                knowledgeLevel: 0
+            ) == nil
+        )
+        precondition(
+            PassiveWordMeaningPolicy.directEnglishMeaning(
+                sourceWord: "udtryk",
+                englishTranslation:
+                    "an expression that is used in a particular situation",
+                knowledgeLevel: 0
+            ) == "an expression that is used in"
+        )
+
         let danishOnly = service.explanation(
             bridgeText: "Hun er ikke sikker endnu.",
             englishMeaning: "hesitates",

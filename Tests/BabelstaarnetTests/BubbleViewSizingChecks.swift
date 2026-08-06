@@ -22,6 +22,7 @@ enum BubbleViewSizingChecks {
 
         let compact = HoverCard(
             word: word,
+            wordEnglishMeaning: "student accommodation",
             wordBridgeText: "En bolig til students.",
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
@@ -40,6 +41,7 @@ enum BubbleViewSizingChecks {
 
         let supported = HoverCard(
             word: word,
+            wordEnglishMeaning: "student accommodation",
             wordBridgeText: "En bolig til students.",
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
@@ -58,6 +60,7 @@ enum BubbleViewSizingChecks {
         )
         let wordOnlyCard = HoverCard(
             word: word,
+            wordEnglishMeaning: "student accommodation",
             wordBridgeText: "En bolig til students.",
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
@@ -87,7 +90,7 @@ enum BubbleViewSizingChecks {
         )
 
         precondition(wordHeight >= 42)
-        precondition(wordHeight < 100)
+        precondition(wordHeight < 140)
         precondition(translatedWordHeight > wordHeight)
         precondition(translatedWordHeight < 170)
         precondition(wordOnlyHeight > translatedWordHeight)

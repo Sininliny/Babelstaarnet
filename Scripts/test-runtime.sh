@@ -34,7 +34,9 @@ swiftc \
     -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
     "$project_dir/Tests/RuntimeChecks/OCRServiceCheck.swift" \

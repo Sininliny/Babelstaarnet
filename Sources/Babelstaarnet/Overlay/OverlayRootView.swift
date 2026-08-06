@@ -50,6 +50,31 @@ struct WordBubbleView: View {
             )
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let wordEnglishMeaning = card.wordEnglishMeaning {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("EN")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+
+                    Text(LearnerDisplayText.clean(wordEnglishMeaning))
+                        .font(
+                            .system(
+                                size: 12,
+                                weight: .semibold,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(
+                            .primary.opacity(
+                                EnglishGlossTone.opacity(
+                                    for: card.wordKnowledgeLevel
+                                )
+                            )
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.wordBridgeText),
                 englishTokenIndexes:
@@ -61,7 +86,7 @@ struct WordBubbleView: View {
 
             if let englishSupport = card.englishSupport {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("EN")
+                    Text(card.wordEnglishMeaning == nil ? "EN" : "More")
                         .font(.system(size: 9, weight: .bold, design: .rounded))
                         .foregroundStyle(.tertiary)
 

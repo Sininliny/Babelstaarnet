@@ -328,6 +328,13 @@ final class OverlayWindowController {
             for: word,
             stateForWord: stateForWord
         )
+        let wordKnowledgeLevel = knowledgeLevelForWord(word.sourceText)
+        let wordEnglishMeaning = PassiveWordMeaningPolicy
+            .directEnglishMeaning(
+                sourceWord: word.sourceText,
+                englishTranslation: word.translatedText,
+                knowledgeLevel: wordKnowledgeLevel
+            )
         let explanation = adaptiveExplanationService.explanation(
             bridgeText: bridge?.text ?? fallbackBridge(for: word),
             englishMeaning: word.translatedText,
@@ -342,7 +349,8 @@ final class OverlayWindowController {
 
         return HoverCard(
             word: word,
-            wordKnowledgeLevel: knowledgeLevelForWord(word.sourceText),
+            wordKnowledgeLevel: wordKnowledgeLevel,
+            wordEnglishMeaning: wordEnglishMeaning,
             wordBridgeText: wordBridge.text,
             wordBridgeEnglishTokenIndexes:
                 wordBridge.englishTokenIndexes,

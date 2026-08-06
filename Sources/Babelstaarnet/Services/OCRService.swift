@@ -62,7 +62,13 @@ actor OCRService {
                recognitionLevel: .fast
            ) {
             try Task.checkCancellation()
-            let regions = Self.danishRegions(from: vision.regions)
+            let plausible = OCRTextQualityPolicy.plausibleRegions(
+                from: vision.regions
+            )
+            let regions = OCRLanguagePolicy.danishCandidates(
+                from: plausible,
+                focusPoint: focusPoint
+            )
             if OCRRoutingPolicy.canUseFastVision(
                 regions: regions,
                 confidenceByRegionID: vision.confidenceByRegionID,
@@ -81,11 +87,28 @@ actor OCRService {
 
         try Task.checkCancellation()
         if tesseract.isAvailable,
-           let regions = try? await tesseract.recognize(in: capture),
-           !regions.isEmpty {
+           let rawRegions = try? await tesseract.recognize(in: capture),
+           !rawRegions.isEmpty {
             try Task.checkCancellation()
+            let plausible = OCRTextQualityPolicy.plausibleRegions(
+                from: rawRegions
+            )
+            let regions = OCRLanguagePolicy.danishCandidates(
+                from: plausible,
+                focusPoint: focusPoint
+            )
+            guard Self.hasUsableResult(
+                regions,
+                focusPoint: focusPoint
+            ) else {
+                return try await accurateVisionResult(
+                    in: capture,
+                    focusPoint: focusPoint,
+                    cacheKey: cacheKey
+                )
+            }
             let result = CachedResult(
-                regions: Self.danishRegions(from: regions),
+                regions: regions,
                 engine: "Tesseract OCR"
             )
             if let cacheKey {
@@ -94,19 +117,56 @@ actor OCRService {
             return (result.regions, result.engine)
         }
 
+        return try await accurateVisionResult(
+            in: capture,
+            focusPoint: focusPoint,
+            cacheKey: cacheKey
+        )
+    }
+
+    private func accurateVisionResult(
+        in capture: CapturedDisplay,
+        focusPoint: CGPoint?,
+        cacheKey: CacheKey?
+    ) async throws -> (regions: [TextRegion], engine: String) {
         try Task.checkCancellation()
         let vision = try await Self.recognizeWithVision(
             in: capture,
             recognitionLevel: .accurate
         )
+        let plausible = OCRTextQualityPolicy.plausibleRegions(
+            from: vision.regions
+        )
         let result = CachedResult(
-            regions: Self.danishRegions(from: vision.regions),
+            regions: OCRLanguagePolicy.danishCandidates(
+                from: plausible,
+                focusPoint: focusPoint
+            ),
             engine: "Apple Vision fallback"
         )
         if let cacheKey {
             resultCache[cacheKey] = result
         }
         return (result.regions, result.engine)
+    }
+
+    private nonisolated static func hasUsableResult(
+        _ regions: [TextRegion],
+        focusPoint: CGPoint?
+    ) -> Bool {
+        guard !regions.isEmpty else {
+            return false
+        }
+        guard let focusPoint else {
+            return true
+        }
+        return regions.contains { region in
+            region.words.contains { word in
+                word.frame
+                    .insetBy(dx: -4, dy: -5)
+                    .contains(focusPoint)
+            }
+        }
     }
 
     private nonisolated static func recognizeWithVision(
@@ -252,20 +312,4 @@ actor OCRService {
         return regions
     }
 
-    private static func danishRegions(from regions: [TextRegion]) -> [TextRegion] {
-        let recognizer = NLLanguageRecognizer()
-        let distinctDanishLetters = CharacterSet(
-            charactersIn: "æøåÆØÅ"
-        )
-        return regions.filter { region in
-            recognizer.reset()
-            recognizer.processString(region.sourceText)
-            let probabilities = recognizer.languageHypotheses(withMaximum: 3)
-            return recognizer.dominantLanguage == .danish
-                || (probabilities[.danish] ?? 0) >= 0.2
-                || region.sourceText.rangeOfCharacter(
-                    from: distinctDanishLetters
-                ) != nil
-        }
-    }
 }
