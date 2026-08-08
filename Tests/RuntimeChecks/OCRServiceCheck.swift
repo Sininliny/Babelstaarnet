@@ -67,9 +67,18 @@ struct OCRServiceCheck {
         precondition(source.contains("Hvid tekst på rød baggrund virker også"))
         precondition(source.contains("DANSKKURSER HOS A2B"))
         precondition(source.contains("IKEA Family medlemspris"))
-        precondition(source.contains("Månedlig leje"))
-        precondition(source.contains("varmt vand"))
-        precondition(source.contains("indflytningsmåned"))
+        precondition(
+            source.contains("Månedlig leje"),
+            "OCR missed 10-point rent text: \(source)"
+        )
+        precondition(
+            source.contains("varmt vand"),
+            "OCR missed 10-point heating text: \(source)"
+        )
+        precondition(
+            source.contains("indflytningsmåned"),
+            "OCR missed 10-point move-in text: \(source)"
+        )
         precondition(!source.localizedCaseInsensitiveContains("Finder"))
         precondition(!source.localizedCaseInsensitiveContains("Applications"))
         precondition(!words.isEmpty)
@@ -77,6 +86,31 @@ struct OCRServiceCheck {
         precondition(words.allSatisfy { captureFrame.contains($0.frame) })
         precondition(words.allSatisfy { $0.screenFrame == screenFrame })
         precondition(elapsed < 2.2, "Full OCR exceeded 2.2 seconds: \(elapsed)")
+
+        guard let tinyWord = words.first(where: {
+            $0.sourceText.localizedCaseInsensitiveContains("møblering")
+        }) else {
+            preconditionFailure("Tiny-text fixture word was not recognized.")
+        }
+        let tinyService = OCRService()
+        let tinyStartedAt = CFAbsoluteTimeGetCurrent()
+        let tinyResult = try await tinyService.recognizeDanishText(
+            in: capture,
+            focusPoint: CGPoint(x: tinyWord.frame.midX, y: tinyWord.frame.midY)
+        )
+        let tinyElapsed = CFAbsoluteTimeGetCurrent() - tinyStartedAt
+        let tinySource = tinyResult.regions
+            .map(\.sourceText)
+            .joined(separator: " ")
+        precondition(tinySource.localizedCaseInsensitiveContains("møblering"))
+        precondition(
+            tinyResult.engine == "Apple Vision accurate OCR"
+                || tinyResult.engine == "Tesseract OCR"
+        )
+        precondition(
+            tinyElapsed < 1.8,
+            "Focused tiny-text OCR via \(tinyResult.engine) exceeded 1.8 seconds: \(tinyElapsed); \(tinySource)"
+        )
 
         let cacheStartedAt = CFAbsoluteTimeGetCurrent()
         let cached = try await service.recognizeDanishText(in: capture)
@@ -137,6 +171,8 @@ struct OCRServiceCheck {
                 + "\(blueElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
                 + "full \(words.count) words via \(result.engine) in "
                 + "\(elapsed.formatted(.number.precision(.fractionLength(3)))) s; "
+                + "tiny text via \(tinyResult.engine) in "
+                + "\(tinyElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
                 + "unchanged cache in "
                 + "\(cacheElapsed.formatted(.number.precision(.fractionLength(3)))) s"
         )

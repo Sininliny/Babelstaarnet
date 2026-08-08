@@ -27,6 +27,26 @@ enum FocusedRegionSelectionPolicy {
         return [match.0]
     }
 
+    static func focusedSourceKeys(
+        in regions: [TextRegion],
+        at focusPoint: CGPoint
+    ) -> Set<String> {
+        Set(
+            regions
+                .flatMap(\.words)
+                .filter {
+                    $0.frame
+                        .insetBy(dx: -4, dy: -5)
+                        .contains(focusPoint)
+                }
+                .map {
+                    $0.sourceText.lowercased(
+                        with: Locale(identifier: "da_DK")
+                    )
+                }
+        )
+    }
+
     private static func distance(
         from lhs: CGPoint,
         to rhs: CGPoint

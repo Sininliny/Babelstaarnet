@@ -151,6 +151,21 @@ struct SentenceBridgeBubbleView: View {
             )
 
             if card.showsEnglishSupportInSentenceBridge,
+               card.wordKnowledgeLevel == 3,
+               let wordEnglishMeaning = card.wordEnglishMeaning {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("EN")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+
+                    Text(LearnerDisplayText.clean(wordEnglishMeaning))
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary.opacity(0.72))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if card.showsEnglishSupportInSentenceBridge,
                let englishSupport = card.englishSupport {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("EN")
@@ -457,10 +472,11 @@ enum KnowledgeTone {
 
 private enum EnglishGlossTone {
     static func opacity(for level: Int) -> Double {
-        switch min(max(level, 0), 2) {
+        switch min(max(level, 0), 3) {
         case 0: 0.94
         case 1: 0.84
-        default: 0.74
+        case 2: 0.74
+        default: 0.60
         }
     }
 }

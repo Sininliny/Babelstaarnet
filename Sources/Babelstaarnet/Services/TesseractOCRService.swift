@@ -96,7 +96,10 @@ struct TesseractOCRService {
         }.value
     }
 
-    func recognize(in capture: CapturedDisplay) async throws -> [TextRegion] {
+    func recognize(
+        in capture: CapturedDisplay,
+        prefersSmallText: Bool = false
+    ) async throws -> [TextRegion] {
         guard let executableURL else {
             throw TesseractError.unavailable
         }
@@ -151,7 +154,31 @@ struct TesseractOCRService {
                 )
             }()
 
-            let passResults = try await (normalTSV, invertedTSV, chromaTSV)
+            let eagerSmallImage = prefersSmallText
+                ? Self.smallTextPNG(
+                    from: capture.image,
+                    regions: []
+                )
+                : nil
+            async let eagerSmallTSV: String? = {
+                guard let eagerSmallImage else {
+                    return nil
+                }
+                return try? await Self.runTesseract(
+                    executableURL: executableURL,
+                    png: eagerSmallImage.png,
+                    automaticInversion: false,
+                    pageSegmentationMode: 11,
+                    dpi: 288
+                )
+            }()
+
+            let passResults = try await (
+                normalTSV,
+                invertedTSV,
+                chromaTSV,
+                eagerSmallTSV
+            )
             try Task.checkCancellation()
             let normalRegions = Self.parse(
                 tsv: passResults.0,
@@ -183,6 +210,19 @@ struct TesseractOCRService {
                 Self.merge(normalRegions, with: invertedRegions),
                 with: contrastRegions
             )
+            if let eagerSmallImage,
+               let eagerSmallTSV = passResults.3 {
+                let eagerSmallRegions = Self.parse(
+                    tsv: eagerSmallTSV,
+                    imageSize: eagerSmallImage.size,
+                    captureFrame: capture.frame,
+                    screenFrame: capture.screenFrame,
+                    displayID: capture.displayID,
+                    minimumConfidence: 22
+                )
+                try Task.checkCancellation()
+                return Self.merge(mergedRegions, with: eagerSmallRegions)
+            }
             guard Self.needsSmallTextPass(mergedRegions),
                   let smallImage = Self.smallTextPNG(
                       from: capture.image,
@@ -480,9 +520,12 @@ struct TesseractOCRService {
                 alpha: alpha
             )
             let luminance = (77 * red + 150 * green + 29 * blue) >> 8
-            let enhanced = Int(
-                (Double(luminance - 128) * 1.35 + 128)
-                    .rounded()
+            // Tiny antialiased glyph edges are often lighter than mid-gray.
+            // Strengthening foreground darkness preserves those strokes;
+            // contrast around 128 would instead wash them into the background.
+            let darkness = 255 - luminance
+            let enhanced = 255 - Int(
+                min(Double(darkness) * 1.65, 255).rounded()
             )
             grayscale[pixelIndex] = UInt8(
                 min(max(enhanced, 0), 255)
@@ -515,13 +558,13 @@ struct TesseractOCRService {
             ]
         let requestedScale: CGFloat
         if lowerHeight < 7 {
-            requestedScale = 2.35
+            requestedScale = 3
         } else if lowerHeight < 10 {
-            requestedScale = 2
+            requestedScale = 2.7
         } else {
-            requestedScale = 1.7
+            requestedScale = 2.4
         }
-        let dimensionLimit = 3_200 / CGFloat(max(width, height))
+        let dimensionLimit = 4_000 / CGFloat(max(width, height))
         let scale = max(1, min(requestedScale, dimensionLimit))
         let targetWidth = Int(
             (CGFloat(width) * scale).rounded()

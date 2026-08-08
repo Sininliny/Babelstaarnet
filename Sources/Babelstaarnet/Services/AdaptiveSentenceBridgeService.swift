@@ -21,6 +21,34 @@ enum LanguageTransferState: Equatable, Sendable {
     }
 }
 
+enum AdaptiveMeaningCoveragePolicy {
+    /// Add only the English needed to keep the Danish sentence usable. Easy
+    /// text stays nearly Danish-only; unfamiliar text receives more anchors
+    /// without ever becoming a parallel English sentence.
+    static func englishAnchorLimit(
+        totalWordCount: Int,
+        wordsNeedingSupport: Int
+    ) -> Int {
+        let total = max(1, totalWordCount)
+        let unfamiliar = max(0, wordsNeedingSupport)
+        guard unfamiliar > 0 else {
+            return 0
+        }
+        if unfamiliar <= 2 {
+            return unfamiliar
+        }
+
+        let unfamiliarShare = Double(unfamiliar) / Double(total)
+        if unfamiliarShare <= 0.25 {
+            return 2
+        }
+        if unfamiliarShare <= 0.50 {
+            return min(3, unfamiliar)
+        }
+        return min(5, unfamiliar)
+    }
+}
+
 struct AdaptiveSentenceBridgeService {
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
@@ -56,7 +84,7 @@ struct AdaptiveSentenceBridgeService {
         focusOccurrence: Int = 0,
         stateForWord: (String) -> LanguageTransferState,
         wordLimit: Int = 20,
-        replacementLimit: Int = 3
+        replacementLimit: Int? = nil
     ) -> AdaptiveSentenceBridge {
         let compact = danishSentence
             .replacingOccurrences(
@@ -80,25 +108,52 @@ struct AdaptiveSentenceBridgeService {
         let eligibleIndexes = matches.indices.filter { index in
             let key = normalized(matches[index].word)
             let state = stateForWord(key)
-            return (state == .unknown || state == .learning)
-                && englishByDanishWord[key] != nil
+            guard state == .unknown || state == .learning,
+                  let rawEnglish = englishByDanishWord[key],
+                  let english = conciseEnglish(rawEnglish) else {
+                return false
+            }
+            return normalized(english) != key
         }
-        let budget = max(0, replacementLimit)
-        var selectedIndexes = Array(eligibleIndexes.prefix(budget))
+        var seenConcepts = Set<String>()
+        let conceptIndexes = eligibleIndexes.filter { index in
+            seenConcepts.insert(normalized(matches[index].word)).inserted
+        }
         let focusIndexes = eligibleIndexes.filter {
             normalized(matches[$0].word) == normalizedFocus
         }
-        if budget > 0,
-           !focusIndexes.isEmpty {
-            let focusIndex = focusIndexes[
+        let focusIndex = focusIndexes.isEmpty
+            ? nil
+            : focusIndexes[
                 min(max(0, focusOccurrence), focusIndexes.count - 1)
             ]
-            if !selectedIndexes.contains(focusIndex) {
-                if !selectedIndexes.isEmpty {
-                    selectedIndexes.removeLast()
+        let budget = replacementLimit.map { max(0, $0) }
+            ?? AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
+                totalWordCount: matches.count,
+                wordsNeedingSupport: seenConcepts.count
+            )
+        var selectedIndexes = focusIndex.map { budget > 0 ? [$0] : [] } ?? []
+        let remaining = conceptIndexes
+            .filter { index in
+                guard let focusIndex else {
+                    return true
                 }
-                selectedIndexes.append(focusIndex)
+                return normalized(matches[index].word)
+                    != normalized(matches[focusIndex].word)
             }
+            .sorted { left, right in
+                let leftPriority = supportPriority(
+                    for: stateForWord(normalized(matches[left].word))
+                )
+                let rightPriority = supportPriority(
+                    for: stateForWord(normalized(matches[right].word))
+                )
+                return leftPriority == rightPriority
+                    ? left < right
+                    : leftPriority < rightPriority
+            }
+        for index in remaining where selectedIndexes.count < budget {
+            selectedIndexes.append(index)
         }
         let selected = Set(selectedIndexes)
 
@@ -193,6 +248,14 @@ struct AdaptiveSentenceBridgeService {
             .prefix(4)
             .joined(separator: " ")
         return concise.isEmpty ? nil : concise
+    }
+
+    private func supportPriority(for state: LanguageTransferState) -> Int {
+        switch state {
+        case .unknown: 0
+        case .learning: 1
+        case .testing, .known: 2
+        }
     }
 
     private func markedEnglish(_ value: String) -> String {

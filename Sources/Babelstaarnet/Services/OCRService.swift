@@ -56,6 +56,11 @@ actor OCRService {
             return (cached.regions, cached.engine)
         }
 
+        // A focused scan is latency-sensitive and may contain glyphs the fast
+        // recognizer omits entirely. Give accurate Vision one bounded retry
+        // before starting external OCR; if that fails, eagerly enlarge text in
+        // the Tesseract fallback.
+        let prefersSmallTextRecovery = focusPoint != nil
         if focusPoint != nil,
            let vision = try? await Self.recognizeWithVision(
                in: capture,
@@ -85,9 +90,41 @@ actor OCRService {
             }
         }
 
+        if prefersSmallTextRecovery,
+           let vision = try? await Self.recognizeWithVision(
+               in: capture,
+               recognitionLevel: .accurate
+           ) {
+            try Task.checkCancellation()
+            let plausible = OCRTextQualityPolicy.plausibleRegions(
+                from: vision.regions
+            )
+            let regions = OCRLanguagePolicy.danishCandidates(
+                from: plausible,
+                focusPoint: focusPoint
+            )
+            if OCRRoutingPolicy.canUseAccurateFocusedVision(
+                regions: regions,
+                confidenceByRegionID: vision.confidenceByRegionID,
+                focusPoint: focusPoint
+            ) {
+                let result = CachedResult(
+                    regions: regions,
+                    engine: "Apple Vision accurate OCR"
+                )
+                if let cacheKey {
+                    resultCache[cacheKey] = result
+                }
+                return (result.regions, result.engine)
+            }
+        }
+
         try Task.checkCancellation()
         if tesseract.isAvailable,
-           let rawRegions = try? await tesseract.recognize(in: capture),
+           let rawRegions = try? await tesseract.recognize(
+               in: capture,
+               prefersSmallText: prefersSmallTextRecovery
+           ),
            !rawRegions.isEmpty {
             try Task.checkCancellation()
             let plausible = OCRTextQualityPolicy.plausibleRegions(
@@ -183,7 +220,9 @@ actor OCRService {
             request.recognitionLevel = recognitionLevel
             request.recognitionLanguages = ["da-DK", "da"]
             request.usesLanguageCorrection = recognitionLevel == .accurate
-            request.minimumTextHeight = 0.004
+            request.minimumTextHeight = recognitionLevel == .accurate
+                ? 0.002
+                : 0.004
 
             let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
             try handler.perform([request])

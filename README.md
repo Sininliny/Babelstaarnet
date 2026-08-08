@@ -36,9 +36,9 @@ The learning design follows four rules:
 1. **Danish never disappears.** The source word and Danish sentence structure
    remain the visual foundation.
 2. **English is scaffolding, not the product.** Babelstårnet adds at most a few
-   concise English meaning anchors instead of translating everything. A new
-   focused word receives its direct English meaning immediately; the Danish
-   sentence is never replaced.
+   concise English meaning anchors instead of translating everything. A new or
+   passively tested focused word receives its direct English meaning
+   immediately; the Danish sentence is never replaced.
 3. **Help follows the learner.** Unknown words receive support; learning words
    are tested with less support; known words remain Danish-only.
 4. **Feedback is exceptional, not homework.** Hovering is passive. The learner
@@ -49,9 +49,9 @@ The two independent bridges serve different reading problems:
 
 - **Word bridge**, above the pointer, explains the focused word in concise
   Danish and adds English only for concepts the learner does not yet know.
-- **Sentence bridge**, below the pointer, preserves Danish order and grammar
-  while attaching no more than three English anchors for whole-sentence
-  comprehension.
+- **Sentence bridge**, below the pointer, preserves Danish order and grammar.
+  It uses one or two English anchors when the sentence is mostly familiar and
+  can grow to five when the text is genuinely difficult.
 
 Both bubbles use one frozen OCR snapshot, so the support does not keep changing
 after the pointer stops. `1` means **Knew**, `2` means **Don’t know**, and `3`
@@ -66,12 +66,14 @@ without making Danish optional.
   and look ahead in the direction of pointer movement
 - Danish OCR with [Tesseract](https://github.com/tesseract-ocr/tesseract)
   and the open `dan` model
-- A focused Apple Vision fast path for clear text under the pointer; small,
-  uncertain, or missed targets retain the complete Tesseract fallback
+- A focused Apple Vision fast path for clear text under the pointer, followed
+  by a bounded accurate-Vision retry for tiny or uncertain targets; the
+  complete Tesseract fallback remains available
 - Contrast-adaptive OCR passes for dark, light, and colored text
 - Adaptive small-text OCR for dense PDFs and forms: table rules are removed,
-  tiny glyphs are enlarged within a bounded pixel budget, and cell text is
-  recognized with sparse layout analysis
+  antialiased strokes are strengthened, tiny glyphs are enlarged to a reliable
+  target size within a bounded pixel budget, and cell text is recognized with
+  sparse layout analysis
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
 - One Danish-first learning translator with no mode selection: familiar words
@@ -85,15 +87,18 @@ without making Danish optional.
   known word stable. Danish always remains visible: levels 0–2 attach a concise
   English gloss beneath selected Danish words, level 3 quietly tests
   comprehension without a gloss, and levels 4–5 remain Danish-only. Internal
-  levels are intentionally absent from the reading bubbles. Feedback briefly
-  confirms **Marked known** or **English restored** directly in the active
-  bubble. Marking a word known also gives that Danish word a short lift and
-  glow. Danish words use a restrained gray progression so different confidence
-  levels are perceptible without adding labels or progress numbers.
+  levels are intentionally absent from the reading bubbles. A testing-level
+  word keeps a faint direct meaning in the focused Word bridge so passive
+  learning never becomes a barrier to translation. Sentence-only mode carries
+  the same focused safety meaning instead of silently removing it. Feedback
+  briefly confirms **Marked known** or **English restored** directly in the
+  active bubble. Marking a word known also gives that Danish word a short lift
+  and glow. Danish words use a restrained gray progression so different
+  confidence levels are perceptible without adding labels or progress numbers.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
-  receive a small interlinear English gloss, and no automatic bridge adds more
-  than three English meaning anchors.
+  receive a small interlinear English gloss. The support budget adapts from one
+  to five anchors according to how much of the sentence is unfamiliar.
 - Two coordinated learning bubbles: a compact adaptive word explanation stays
   above the hovered word while a wider sentence bridge stays below it. The word
   bridge preserves a concise Danish explanation and attaches English only
@@ -128,7 +133,9 @@ without making Danish optional.
   captures without allowing an older result to replace the current bubble
 - Adaptive power saving: OCR refreshes back off while the pointer is still,
   stop while a bubble is held, and suspend after five seconds without input
-- Persistent warmed Argos worker and translation cache for low hover latency
+- Capture metadata and required Argos workers warm in parallel before the first
+  scan. A short bounded grace period avoids a cold restart after an accidental
+  toggle, while unused workers still shut down automatically
 - Bounded least-recently-used translation and explanation caches, batched
   exposure persistence, cached display metadata, and bridge-aware processing
   prevent long sessions from accumulating unbounded memory or doing work for

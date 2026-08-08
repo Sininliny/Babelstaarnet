@@ -12,7 +12,9 @@ enum PassiveWordMeaningPolicy {
         englishTranslation: String,
         knowledgeLevel: Int
     ) -> String? {
-        guard (0...2).contains(knowledgeLevel) else {
+        // A focused hover is a request for meaning, even while the learner is
+        // being quietly tested. Only a known state removes this safety net.
+        guard (0...3).contains(knowledgeLevel) else {
             return nil
         }
 
@@ -27,7 +29,24 @@ enum PassiveWordMeaningPolicy {
         }
 
         let words = compact.split(whereSeparator: \Character.isWhitespace)
-        return words.prefix(6).joined(separator: " ")
+        guard words.count > 12 else {
+            return compact
+        }
+
+        // Prefer a complete, useful phrase over a chopped dictionary fragment.
+        // Bubble text deliberately uses no ellipsis.
+        var selected = Array(words.prefix(12))
+        let danglingEndings: Set<String> = [
+            "a", "am", "an", "and", "are", "as", "at", "be", "been",
+            "being", "by", "for", "from", "in", "is", "of", "or", "that",
+            "the", "to", "was", "were", "with"
+        ]
+        while selected.count > 6,
+              let last = selected.last,
+              danglingEndings.contains(normalized(String(last))) {
+            selected.removeLast()
+        }
+        return selected.joined(separator: " ")
     }
 
     private static func normalized(_ value: String) -> String {

@@ -36,6 +36,14 @@ actor ScreenCaptureService {
         CGRequestScreenCaptureAccess()
     }
 
+    func warmUp() async {
+        guard CGPreflightScreenCaptureAccess() else {
+            return
+        }
+        _ = await screenGeometries()
+        _ = try? await shareableContent()
+    }
+
     func captureRegion(
         around cursor: CGPoint,
         estimatedTextHeight: CGFloat?,
@@ -105,7 +113,7 @@ actor ScreenCaptureService {
 
     private func shareableContent() async throws -> SCShareableContent {
         if let cachedContent,
-           Date().timeIntervalSince(contentCachedAt) < 60 {
+           Date().timeIntervalSince(contentCachedAt) < 5 * 60 {
             return cachedContent
         }
         let content = try await SCShareableContent.excludingDesktopWindows(
