@@ -10,14 +10,17 @@ enum OCRTextQualityPolicyChecks {
             "LGBT+",
             "A2B",
             "e-Boks",
-            "iPhone"
+            "iPhone",
+            "qigong",
+            "Qeqertarsuaq"
         ] {
             precondition(OCRTextQualityPolicy.isPlausibleWord(valid))
         }
 
         for corrupted in [
             "mJdlBrnStypibelHllnprædode",
-            "kaDOJ"
+            "kaDOJ",
+            "lorsfinqsgruppen"
         ] {
             precondition(!OCRTextQualityPolicy.isPlausibleWord(corrupted))
         }

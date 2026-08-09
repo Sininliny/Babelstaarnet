@@ -27,6 +27,26 @@ enum OCRTextQualityPolicy {
             return true
         }
 
+        // Long lowercase Danish words are often compounds, so length alone is
+        // not suspicious. A lowercase q that is not followed by u is a much
+        // stronger sign of a g/q OCR substitution in that setting. Keep short
+        // loanwords and capitalized names eligible for recognition.
+        let allLowercase = letters.allSatisfy {
+            CharacterSet.lowercaseLetters.contains($0)
+        }
+        if allLowercase, letters.count >= 10 {
+            let characters = Array(
+                value.lowercased(with: Locale(identifier: "da_DK"))
+                    .filter(\Character.isLetter)
+            )
+            for index in characters.indices where characters[index] == "q" {
+                let next = characters.index(after: index)
+                if next == characters.endIndex || characters[next] != "u" {
+                    return false
+                }
+            }
+        }
+
         var hasSeenLowercase = false
         var uppercaseAfterLowercase = 0
         for scalar in letters {

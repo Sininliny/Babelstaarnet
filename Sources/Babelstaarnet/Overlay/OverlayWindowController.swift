@@ -63,6 +63,9 @@ final class OverlayWindowController {
         bubbleState.onDontKnow = { [weak self] in
             self?.markCurrentWordUnknown()
         }
+        bubbleState.onTogglePin = { [weak self] in
+            self?.toggleBubblePin()
+        }
     }
 
     func show(
@@ -455,26 +458,12 @@ final class OverlayWindowController {
             )
         }
 
-        let meaning = word.translatedText.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        guard !meaning.isEmpty,
-              LearnerProfileStore.normalizedKey(for: meaning)
-                != LearnerProfileStore.normalizedKey(
-                    for: word.sourceText
-                ) else {
-            return AdaptiveSentenceBridge(
-                text: "Ingen lokal ordforklaring fundet.",
-                englishTokenIndexes: []
-            )
-        }
-        let text = "Betyder \(meaning)."
-        let tokenCount = text.split(
-            whereSeparator: \Character.isWhitespace
-        ).count
+        // The direct EN row already supplies the safe focused meaning. When no
+        // useful Danish explanation exists, an additional "Betyder …" line is
+        // repetitive and can accidentally bypass the knowledge-level policy.
         return AdaptiveSentenceBridge(
-            text: text,
-            englishTokenIndexes: Array(1..<tokenCount)
+            text: "",
+            englishTokenIndexes: []
         )
     }
 

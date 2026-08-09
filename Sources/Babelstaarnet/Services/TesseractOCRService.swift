@@ -126,9 +126,14 @@ struct TesseractOCRService {
                 pageSegmentationMode: primaryPageSegmentation
             )
 
-            let invertedPNG = Self.invertedHighContrastPNG(
-                from: capture.image
-            )
+            // Rasterize the capture once and reuse the pixels for every
+            // fallback variant. Focused small-text OCR previously rendered the
+            // same CGImage three times before starting its Tesseract passes.
+            let rasterizedImage = Self.rasterizedImage(from: capture.image)
+            let contrastImages = rasterizedImage.map {
+                Self.contrastImages(from: $0)
+            }
+            let invertedPNG = contrastImages?.inverted
             async let invertedTSV: String? = {
                 guard let invertedPNG else {
                     return nil
@@ -141,7 +146,7 @@ struct TesseractOCRService {
                 )
             }()
 
-            let chromaPNG = Self.lightTextOnColorPNG(from: capture.image)
+            let chromaPNG = contrastImages?.chroma
             async let chromaTSV: String? = {
                 guard let chromaPNG else {
                     return nil
@@ -155,10 +160,9 @@ struct TesseractOCRService {
             }()
 
             let eagerSmallImage = prefersSmallText
-                ? Self.smallTextPNG(
-                    from: capture.image,
-                    regions: []
-                )
+                ? rasterizedImage.flatMap {
+                    Self.smallTextPNG(from: $0, regions: [])
+                }
                 : nil
             async let eagerSmallTSV: String? = {
                 guard let eagerSmallImage else {
@@ -224,8 +228,9 @@ struct TesseractOCRService {
                 return Self.merge(mergedRegions, with: eagerSmallRegions)
             }
             guard Self.needsSmallTextPass(mergedRegions),
+                  let rasterizedImage,
                   let smallImage = Self.smallTextPNG(
-                      from: capture.image,
+                      from: rasterizedImage,
                       regions: mergedRegions
                   ),
                   let smallTSV = try? await Self.runTesseract(
@@ -355,95 +360,84 @@ struct TesseractOCRService {
         return tsv
     }
 
-    private static func invertedHighContrastPNG(
-        from image: CGImage
-    ) -> Data? {
-        contrastPNG(
-            from: image,
-            source: .luminance,
-            contrast: 1.65,
-            inverted: true
-        )
+    private struct RasterizedImage {
+        let width: Int
+        let height: Int
+        let rgba: [UInt8]
     }
 
-    /// Separates light glyphs from saturated backgrounds by retaining the
-    /// darkest RGB component. A red pixel therefore becomes dark while a
-    /// white glyph remains light; inversion produces the dark-on-light input
-    /// Tesseract handles most consistently. Automatic page segmentation keeps
-    /// text inside banner and button outlines, which uniform-block mode can
-    /// otherwise mistake for table structure.
-    private static func lightTextOnColorPNG(
-        from image: CGImage
-    ) -> Data? {
-        contrastPNG(
-            from: image,
-            source: .minimumRGB,
-            contrast: 1.85,
-            inverted: true
-        )
+    private struct ContrastImages {
+        let inverted: Data?
+        let chroma: Data?
     }
 
-    private enum ContrastSource {
-        case luminance
-        case minimumRGB
-    }
-
-    /// Uses a deterministic CPU bitmap conversion instead of relying on a
-    /// GPU-backed Core Image context. This also keeps the OCR passes available
-    /// when screen capture is running while the display or GPU is asleep.
-    private static func contrastPNG(
-        from image: CGImage,
-        source: ContrastSource,
-        contrast: Double,
-        inverted: Bool
-    ) -> Data? {
-        let width = image.width
-        let height = image.height
-        guard width > 0, height > 0 else {
-            return nil
-        }
-
-        guard let rgba = rgbaPixels(from: image) else {
-            return nil
-        }
-
-        var grayscale = [UInt8](
+    /// Produces both enhanced variants in one traversal of the shared capture
+    /// pixels. The chroma variant separates light glyphs from saturated
+    /// backgrounds by retaining the darkest RGB component before inversion.
+    private static func contrastImages(
+        from image: RasterizedImage
+    ) -> ContrastImages {
+        var inverted = [UInt8](
             repeating: 255,
-            count: width * height
+            count: image.width * image.height
         )
-        for pixelIndex in 0..<(width * height) {
+        var chroma = [UInt8](
+            repeating: 255,
+            count: image.width * image.height
+        )
+        for pixelIndex in 0..<(image.width * image.height) {
             let rgbaIndex = pixelIndex * 4
-            let alpha = Int(rgba[rgbaIndex + 3])
+            let alpha = Int(image.rgba[rgbaIndex + 3])
             let red = compositeOnWhite(
-                Int(rgba[rgbaIndex]),
+                Int(image.rgba[rgbaIndex]),
                 alpha: alpha
             )
             let green = compositeOnWhite(
-                Int(rgba[rgbaIndex + 1]),
+                Int(image.rgba[rgbaIndex + 1]),
                 alpha: alpha
             )
             let blue = compositeOnWhite(
-                Int(rgba[rgbaIndex + 2]),
+                Int(image.rgba[rgbaIndex + 2]),
                 alpha: alpha
             )
-            let component: Int
-            switch source {
-            case .luminance:
-                component = (77 * red + 150 * green + 29 * blue) >> 8
-            case .minimumRGB:
-                component = min(red, green, blue)
-            }
-            let enhanced = Int(
-                (Double(component - 128) * contrast + 128)
+            let luminance = (77 * red + 150 * green + 29 * blue) >> 8
+            let enhancedLuminance = Int(
+                (Double(luminance - 128) * 1.65 + 128)
                     .rounded()
             )
-            let clamped = min(max(enhanced, 0), 255)
-            grayscale[pixelIndex] = UInt8(
-                inverted ? 255 - clamped : clamped
+            inverted[pixelIndex] = UInt8(
+                255 - min(max(enhancedLuminance, 0), 255)
+            )
+
+            let minimumComponent = min(red, green, blue)
+            let enhancedChroma = Int(
+                (Double(minimumComponent - 128) * 1.85 + 128)
+                    .rounded()
+            )
+            chroma[pixelIndex] = UInt8(
+                255 - min(max(enhancedChroma, 0), 255)
             )
         }
 
-        return grayscale.withUnsafeMutableBytes { bytes in
+        let invertedPNG = png(
+            fromGrayscale: &inverted,
+            width: image.width,
+            height: image.height
+        )
+        let chromaPNG = png(
+            fromGrayscale: &chroma,
+            width: image.width,
+            height: image.height
+        )
+        return ContrastImages(inverted: invertedPNG, chroma: chromaPNG)
+    }
+
+    private static func png(
+        fromGrayscale pixels: inout [UInt8],
+        width: Int,
+        height: Int
+    ) -> Data? {
+        pixels.withUnsafeMutableBytes { bytes in
             guard let address = bytes.baseAddress,
                   let context = CGContext(
                       data: address,
@@ -488,15 +482,14 @@ struct TesseractOCRService {
     /// long table rules are removed, the remaining dark glyphs are enlarged,
     /// and sparse-text segmentation reads each cell independently.
     private static func smallTextPNG(
-        from image: CGImage,
+        from image: RasterizedImage,
         regions: [TextRegion]
     ) -> PreparedOCRImage? {
         let width = image.width
         let height = image.height
         guard width > 0,
               height > 0,
-              width * height <= 2_000_000,
-              let rgba = rgbaPixels(from: image) else {
+              width * height <= 2_000_000 else {
             return nil
         }
 
@@ -506,17 +499,17 @@ struct TesseractOCRService {
         )
         for pixelIndex in 0..<(width * height) {
             let rgbaIndex = pixelIndex * 4
-            let alpha = Int(rgba[rgbaIndex + 3])
+            let alpha = Int(image.rgba[rgbaIndex + 3])
             let red = compositeOnWhite(
-                Int(rgba[rgbaIndex]),
+                Int(image.rgba[rgbaIndex]),
                 alpha: alpha
             )
             let green = compositeOnWhite(
-                Int(rgba[rgbaIndex + 1]),
+                Int(image.rgba[rgbaIndex + 1]),
                 alpha: alpha
             )
             let blue = compositeOnWhite(
-                Int(rgba[rgbaIndex + 2]),
+                Int(image.rgba[rgbaIndex + 2]),
                 alpha: alpha
             )
             let luminance = (77 * red + 150 * green + 29 * blue) >> 8
@@ -587,11 +580,16 @@ struct TesseractOCRService {
         )
     }
 
-    private static func rgbaPixels(
+    /// Uses a deterministic CPU bitmap conversion instead of a GPU-backed Core
+    /// Image context, and keeps the result for all OCR preprocessing variants.
+    private static func rasterizedImage(
         from image: CGImage
-    ) -> [UInt8]? {
+    ) -> RasterizedImage? {
         let width = image.width
         let height = image.height
+        guard width > 0, height > 0 else {
+            return nil
+        }
         var rgba = [UInt8](
             repeating: 0,
             count: width * height * 4
@@ -617,7 +615,10 @@ struct TesseractOCRService {
             )
             return true
         }
-        return rendered ? rgba : nil
+        guard rendered else {
+            return nil
+        }
+        return RasterizedImage(width: width, height: height, rgba: rgba)
     }
 
     private static func removeLongHorizontalLines(

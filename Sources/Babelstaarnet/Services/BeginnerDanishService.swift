@@ -20,6 +20,13 @@ struct BeginnerDanishService {
         guard !compact.isEmpty else {
             return ""
         }
+        let semanticText = compact.lowercased(with: Self.danishLocale)
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines.union(.punctuationCharacters)
+            )
+        guard !Self.vacuousExplanations.contains(semanticText) else {
+            return ""
+        }
         let words = compact.split(whereSeparator: \Character.isWhitespace)
         let limited = words.prefix(24).joined(separator: " ")
             .trimmingCharacters(in: CharacterSet(charactersIn: ",;:-"))
@@ -111,5 +118,11 @@ struct BeginnerDanishService {
         "passer": "Er rigtig eller egnet til en person eller situation.",
         "tilmelde": "At skrive sig op som deltager.",
         "online": "Forbundet med eller tilgængelig gennem internettet."
+    ]
+
+    private static let vacuousExplanations: Set<String> = [
+        "betyder",
+        "det betyder",
+        "ordet betyder"
     ]
 }

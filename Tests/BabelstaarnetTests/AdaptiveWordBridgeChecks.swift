@@ -5,6 +5,12 @@ enum AdaptiveWordBridgeChecks {
     static func main() {
         let danishService = BeginnerDanishService()
         let bridgeService = AdaptiveSentenceBridgeService()
+        precondition(danishService.clean(explanation: "Betyder.").isEmpty)
+        precondition(danishService.clean(explanation: "Det betyder.").isEmpty)
+        precondition(
+            danishService.clean(explanation: "Betyder at lære noget")
+                == "Betyder at lære noget."
+        )
         guard let explanation = danishService.localExplanation(for: "lære") else {
             preconditionFailure("Expected a local Danish word explanation")
         }

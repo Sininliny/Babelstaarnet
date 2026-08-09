@@ -30,7 +30,17 @@ enum OverlayLayout {
         )
         let wordCandidates = preferredWordCandidates
             + [highStackWordCandidate]
-        let preferredSentenceCandidates = centers(
+        let alignedSentenceCandidates = [
+            CGPoint(
+                x: wordFrame.midX,
+                y: sourceFrame.minY - gap - sentenceSize.height / 2
+            ),
+            CGPoint(
+                x: wordFrame.midX,
+                y: sourceFrame.maxY + gap + sentenceSize.height / 2
+            )
+        ]
+        let preferredSentenceCandidates = alignedSentenceCandidates + centers(
             around: sourceFrame,
             size: sentenceSize,
             gap: gap,
