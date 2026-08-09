@@ -4,7 +4,14 @@ struct TranslationQualityService {
     func needsRetry(source: String, translation: String) -> Bool {
         let sourceKey = normalized(source)
         let translationKey = normalized(translation)
-        return translationKey.isEmpty || sourceKey == translationKey
+        if translationKey.isEmpty || sourceKey == translationKey {
+            return true
+        }
+        if let accepted = Self.acceptedTranslations[sourceKey],
+           !accepted.contains(translationKey) {
+            return true
+        }
+        return false
     }
 
     func bestTranslation(
@@ -79,6 +86,7 @@ struct TranslationQualityService {
         "data": "data",
         "database": "database",
         "databaser": "databases",
+        "for": "for",
         "netvaerk": "network",
         "orkestrering": "orchestration",
         "software": "software",
@@ -87,6 +95,13 @@ struct TranslationQualityService {
         "udvikling": "development",
         "web": "web",
         "webarkitektur": "web architecture"
+    ]
+
+    // Context-free translation occasionally turns the very common Danish
+    // preposition "for" into "no". These are the useful English readings a
+    // single-word bridge may safely present; anything else falls back locally.
+    private static let acceptedTranslations: [String: Set<String>] = [
+        "for": ["for", "too", "because", "ago"]
     ]
 
     private static let compoundSuffixes: [(String, String)] = [

@@ -49,6 +49,7 @@ struct OverlayLayoutChecks {
         precondition(wordBubble.minY > sentenceBubble.maxY)
         precondition(wordBubble.midY > source.midY)
         precondition(sentenceBubble.midY < source.midY)
+        precondition(abs(centers.word.x - centers.sentence.x) < 0.5)
     }
 
     static func pairedBubblesStackSafelyNearScreenEdge() {

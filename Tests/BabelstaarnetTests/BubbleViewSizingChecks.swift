@@ -33,6 +33,16 @@ enum BubbleViewSizingChecks {
             state: state,
             hostingView: wordHostingView
         )
+        let directMeaningOnly = HoverCard(
+            word: word,
+            wordEnglishMeaning: "student accommodation",
+            learningText: "Noget som hører til Earth."
+        )
+        let directMeaningOnlyHeight = measuredWordHeight(
+            directMeaningOnly,
+            state: state,
+            hostingView: wordHostingView
+        )
         let compactHeight = measuredSentenceHeight(
             compact,
             state: state,
@@ -104,6 +114,7 @@ enum BubbleViewSizingChecks {
 
         precondition(wordHeight >= 42)
         precondition(wordHeight < 140)
+        precondition(directMeaningOnlyHeight < wordHeight)
         precondition(translatedWordHeight > wordHeight)
         precondition(translatedWordHeight < 170)
         precondition(wordOnlyHeight > translatedWordHeight)

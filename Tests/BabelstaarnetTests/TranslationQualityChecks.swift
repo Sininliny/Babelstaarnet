@@ -35,6 +35,19 @@ enum TranslationQualityChecks {
                 translation: "morning"
             )
         )
+        precondition(
+            service.needsRetry(source: "for", translation: "no")
+        )
+        precondition(
+            service.bestTranslation(
+                source: "for",
+                primary: "no",
+                lowercaseRetry: "no"
+            ) == "for"
+        )
+        precondition(
+            service.bestTranslation(source: "for", primary: "too") == "too"
+        )
         print("Translation retry and compound fallback checks passed")
     }
 }

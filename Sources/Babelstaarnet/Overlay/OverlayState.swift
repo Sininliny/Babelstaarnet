@@ -14,6 +14,7 @@ final class OverlayState: ObservableObject {
     @Published private(set) var knownAnimationID = 0
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
+    var onTogglePin: () -> Void = {}
     private var feedbackClearTask: Task<Void, Never>?
 
     func showFeedback(_ confirmation: BridgeFeedbackConfirmation) {

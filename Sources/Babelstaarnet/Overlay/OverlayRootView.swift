@@ -75,14 +75,18 @@ struct WordBubbleView: View {
                 }
             }
 
-            SentenceBridgeText(
-                text: LearnerDisplayText.clean(card.wordBridgeText),
-                englishTokenIndexes:
-                    card.wordBridgeEnglishTokenIndexes,
-                knowledgeLevels: card.wordBridgeKnowledgeLevels,
-                focusTokenIndexes: [],
-                knownAnimationTrigger: 0
-            )
+            if !card.wordBridgeText.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty {
+                SentenceBridgeText(
+                    text: LearnerDisplayText.clean(card.wordBridgeText),
+                    englishTokenIndexes:
+                        card.wordBridgeEnglishTokenIndexes,
+                    knowledgeLevels: card.wordBridgeKnowledgeLevels,
+                    focusTokenIndexes: [],
+                    knownAnimationTrigger: 0
+                )
+            }
 
             if let englishSupport = card.englishSupport {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -223,21 +227,41 @@ private struct BridgeFeedbackControls: View {
                 }
             }
 
-            Text(
-                state.isPinned
-                    ? "\(card.pinShortcutLabel)  Unpin"
-                    : "\(card.pinShortcutLabel)  Pin"
-            )
+            Button {
+                state.onTogglePin()
+            } label: {
+                Text(
+                    state.isPinned
+                        ? "\(card.pinShortcutLabel)  Unpin"
+                        : "\(card.pinShortcutLabel)  Pin"
+                )
+            }
+            .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
 
             Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BridgeFeedbackButtonStyle())
         .font(.system(size: 10, weight: .regular, design: .rounded))
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(.secondary)
         .animation(
             .easeOut(duration: 0.12),
             value: state.feedbackConfirmation
         )
+    }
+}
+
+private struct BridgeFeedbackButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background {
+                Capsule()
+                    .fill(
+                        .primary.opacity(configuration.isPressed ? 0.10 : 0.045)
+                    )
+            }
+            .contentShape(Capsule())
     }
 }
 

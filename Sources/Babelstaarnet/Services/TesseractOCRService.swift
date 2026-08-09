@@ -147,7 +147,20 @@ struct TesseractOCRService {
             // light-on-dark; automatic layout finds that region as its own
             // block and can invert it alone, which uniform-block mode, being
             // all-or-nothing, cannot.
-            let separatedPNG = Self.separatedPNG(from: capture.image)
+            //
+            // The capture is rasterized once here and the pixels are shared
+            // with the small-text pass below, which otherwise converted the
+            // same CGImage a second time before any Tesseract process started.
+            let rasterized = OCRImagePreparation.rgbaPixels(
+                from: capture.image
+            )
+            let separatedPNG = rasterized.flatMap {
+                Self.separatedPNG(
+                    rgba: $0,
+                    width: capture.image.width,
+                    height: capture.image.height
+                )
+            }
             async let blockTSV: String? = {
                 guard let separatedPNG else {
                     return nil
@@ -173,10 +186,14 @@ struct TesseractOCRService {
             }()
 
             let eagerSmallImage = prefersSmallText
-                ? Self.smallTextPNG(
-                    from: capture.image,
-                    regions: []
-                )
+                ? rasterized.flatMap {
+                    Self.smallTextPNG(
+                        rgba: $0,
+                        width: capture.image.width,
+                        height: capture.image.height,
+                        regions: []
+                    )
+                }
                 : nil
             async let eagerSmallTSV: String? = {
                 guard let eagerSmallImage else {
@@ -237,8 +254,11 @@ struct TesseractOCRService {
                 ).map(\.region)
             }
             guard Self.needsSmallTextPass(mergedRegions),
+                  let rasterized,
                   let smallImage = Self.smallTextPNG(
-                      from: capture.image,
+                      rgba: rasterized,
+                      width: capture.image.width,
+                      height: capture.image.height,
                       regions: mergedRegions.map(\.region)
                   ),
                   let smallTSV = try? await Self.runTesseract(
@@ -369,9 +389,16 @@ struct TesseractOCRService {
     }
 
     /// The colour-adaptive rewrite of the crop, as dark text on a light page.
-    private static func separatedPNG(from image: CGImage) -> Data? {
-        guard let grayscale = OCRImagePreparation.separated(from: image),
-              let output = OCRImagePreparation.image(from: grayscale) else {
+    private static func separatedPNG(
+        rgba: [UInt8],
+        width: Int,
+        height: Int
+    ) -> Data? {
+        guard let grayscale = OCRImagePreparation.separated(
+            rgba: rgba,
+            width: width,
+            height: height
+        ), let output = OCRImagePreparation.image(from: grayscale) else {
             return nil
         }
         return pngData(from: output)
@@ -413,16 +440,18 @@ struct TesseractOCRService {
     /// background of a dark table as ink — after which rule removal erased
     /// entire rows instead of the rules inside them.
     private static func smallTextPNG(
-        from image: CGImage,
+        rgba: [UInt8],
+        width: Int,
+        height: Int,
         regions: [TextRegion]
     ) -> PreparedOCRImage? {
-        let width = image.width
-        let height = image.height
         guard width > 0,
               height > 0,
               width * height <= 2_000_000,
               var grayscale = OCRImagePreparation.separated(
-                  from: image
+                  rgba: rgba,
+                  width: width,
+                  height: height
               ) else {
             return nil
         }

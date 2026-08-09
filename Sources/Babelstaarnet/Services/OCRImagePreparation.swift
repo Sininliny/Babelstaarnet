@@ -51,7 +51,9 @@ enum OCRImagePreparation {
         )
     }
 
-    private static func separated(
+    /// Separates an already-rasterized crop, so a caller preparing the same
+    /// capture more than once pays for the bitmap conversion only once.
+    static func separated(
         rgba: [UInt8],
         width: Int,
         height: Int
