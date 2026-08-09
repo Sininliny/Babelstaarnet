@@ -29,11 +29,16 @@ swiftc \
     -o "$output_dir/FixtureGenerator"
 "$output_dir/FixtureGenerator" "$fixture"
 
+# Built optimized because this check asserts latency budgets, and the app
+# itself ships as a release build. An unoptimized binary would measure a
+# configuration no user runs.
 swiftc \
+    -O \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \

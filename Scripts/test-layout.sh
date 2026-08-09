@@ -179,6 +179,16 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/OCRImagePreparationChecks.swift" \
+    -framework AppKit \
+    -o "$output_dir/OCRImagePreparationChecks"
+
+"$output_dir/OCRImagePreparationChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/FocusedRegionSelectionPolicy.swift" \
     "$project_dir/Tests/BabelstaarnetTests/FocusedRegionSelectionChecks.swift" \

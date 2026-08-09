@@ -39,6 +39,59 @@ enum OCRTextQualityPolicyChecks {
             ) == [clean]
         )
 
+        // A colour failure usually garbles one word, not the line. Losing the
+        // line would take the word under the pointer with it, so the readable
+        // part has to survive.
+        let mostlyReadable = textRegion(
+            words: ["Månedlig", "leje", "kaDOJ", "møblering"],
+            y: 180,
+            screen: screen
+        )
+        let salvaged = OCRTextQualityPolicy.plausibleRegions(
+            from: [mostlyReadable]
+        )
+        precondition(salvaged.count == 1)
+        precondition(salvaged[0].id == mostlyReadable.id)
+        precondition(
+            salvaged[0].sourceText == "Månedlig leje møblering"
+        )
+        precondition(salvaged[0].words.count == 3)
+        precondition(
+            salvaged[0].words.allSatisfy {
+                mostlyReadable.frame.contains($0.frame)
+            }
+        )
+        precondition(
+            salvaged[0].frame.width <= mostlyReadable.frame.width
+        )
+
+        // Dropping a word at the end really does tighten the line frame, which
+        // is what keeps hover hit-testing off the discarded area.
+        let trailingNoise = textRegion(
+            words: ["Månedlig", "leje", "møblering", "kaDOJ"],
+            y: 260,
+            screen: screen
+        )
+        let trimmed = OCRTextQualityPolicy.plausibleRegions(
+            from: [trailingNoise]
+        )
+        precondition(trimmed.count == 1)
+        precondition(
+            trimmed[0].frame.maxX < trailingNoise.frame.maxX
+        )
+
+        // Half unreadable is not a garbled word, it is a garbled line.
+        let halfBroken = textRegion(
+            words: ["kaDOJ", "mJdlBrnStypibel", "leje", "vand"],
+            y: 220,
+            screen: screen
+        )
+        precondition(
+            OCRTextQualityPolicy.plausibleRegions(
+                from: [halfBroken]
+            ).isEmpty
+        )
+
         print("Corrupted OCR text quality checks passed")
     }
 

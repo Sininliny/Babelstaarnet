@@ -1,4 +1,4 @@
-.PHONY: build test test-runtime app release run install-engines clean
+.PHONY: build test test-runtime benchmark-ocr app release run install-engines clean
 
 build:
 	swift build
@@ -8,6 +8,9 @@ test:
 
 test-runtime:
 	./Scripts/test-runtime.sh
+
+benchmark-ocr:
+	./Scripts/benchmark-ocr.sh
 
 app:
 	./Scripts/build-app.sh
