@@ -21,28 +21,28 @@ enum OCRRoutingPolicyChecks {
         let focus = CGPoint(x: 125, y: 112)
 
         precondition(
-            OCRRoutingPolicy.canUseFastVision(
+            OCRRoutingPolicy.canUseAccurateFocusedVision(
                 regions: [region],
                 confidenceByRegionID: [region.id: 0.9],
                 focusPoint: focus
             )
         )
         precondition(
-            !OCRRoutingPolicy.canUseFastVision(
+            !OCRRoutingPolicy.canUseAccurateFocusedVision(
                 regions: [region],
-                confidenceByRegionID: [region.id: 0.3],
+                confidenceByRegionID: [region.id: 0.2],
                 focusPoint: focus
             )
         )
         precondition(
-            !OCRRoutingPolicy.canUseFastVision(
+            !OCRRoutingPolicy.canUseAccurateFocusedVision(
                 regions: [region],
                 confidenceByRegionID: [region.id: 0.9],
                 focusPoint: CGPoint(x: 400, y: 400)
             )
         )
         precondition(
-            !OCRRoutingPolicy.canUseFastVision(
+            !OCRRoutingPolicy.canUseAccurateFocusedVision(
                 regions: [region],
                 confidenceByRegionID: [region.id: 0.9],
                 focusPoint: nil
@@ -63,13 +63,8 @@ enum OCRRoutingPolicyChecks {
             words: [tinyWord]
         )
         let tinyFocus = CGPoint(x: 125, y: 103)
-        precondition(
-            !OCRRoutingPolicy.canUseFastVision(
-                regions: [tinyRegion],
-                confidenceByRegionID: [tinyRegion.id: 0.9],
-                focusPoint: tinyFocus
-            )
-        )
+        // Seven-point form text stays eligible; the gate exists to catch an
+        // empty or unconfident reading, not a small one.
         precondition(
             OCRRoutingPolicy.canUseAccurateFocusedVision(
                 regions: [tinyRegion],

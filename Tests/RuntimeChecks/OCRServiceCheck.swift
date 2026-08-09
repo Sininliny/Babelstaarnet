@@ -39,22 +39,48 @@ struct OCRServiceCheck {
             screenFrame: screenFrame
         )
         let service = OCRService()
+        // The app warms the recognizer at activation; the first accurate
+        // request in a process otherwise pays a one-time model load that has
+        // been observed to take tens of seconds.
+        await service.warmUp()
+
         let focusPoint = CGPoint(x: -1_190, y: 420)
-        let fastStartedAt = CFAbsoluteTimeGetCurrent()
-        let fastResult = try await service.recognizeDanishText(
+        let focusedStartedAt = CFAbsoluteTimeGetCurrent()
+        let focusedResult = try await service.recognizeDanishText(
             in: capture,
             focusPoint: focusPoint
         )
-        let fastElapsed = CFAbsoluteTimeGetCurrent() - fastStartedAt
-        let fastSource = fastResult.regions
+        let focusedElapsed = CFAbsoluteTimeGetCurrent() - focusedStartedAt
+        let focusedSource = focusedResult.regions
             .map(\.sourceText)
             .joined(separator: " ")
-        precondition(fastResult.engine == "Apple Vision fast OCR")
-        precondition(fastSource.contains("Godmorgen"))
         precondition(
-            fastElapsed < 0.5,
-            "Focused OCR exceeded 500 ms: \(fastElapsed)"
+            focusedResult.engine.hasPrefix("Apple Vision"),
+            "Focused OCR did not stay on the Vision path: "
+                + focusedResult.engine
         )
+        precondition(focusedSource.contains("Godmorgen"))
+        precondition(
+            focusedElapsed < 0.5,
+            "Focused OCR exceeded 500 ms: \(focusedElapsed)"
+        )
+
+        // Danish diacritics are the whole point of reading the source language.
+        // A dropped ring or slash is not a smaller error; it changes which word
+        // gets translated, so the focused pass has to preserve them exactly.
+        let diacriticFocus = CGPoint(x: -1_100, y: 552)
+        let diacriticResult = try await OCRService().recognizeDanishText(
+            in: capture,
+            focusPoint: diacriticFocus
+        )
+        let diacriticWords = diacriticResult.regions.flatMap(\.words)
+        for expected in ["på", "rød", "også"] {
+            precondition(
+                diacriticWords.contains { $0.sourceText == expected },
+                "Focused OCR lost the diacritic in “\(expected)”: "
+                    + diacriticWords.map(\.sourceText).joined(separator: " ")
+            )
+        }
 
         let startedAt = CFAbsoluteTimeGetCurrent()
         let result = try await service.recognizeDanishText(in: capture)
@@ -104,8 +130,9 @@ struct OCRServiceCheck {
             .joined(separator: " ")
         precondition(tinySource.localizedCaseInsensitiveContains("møblering"))
         precondition(
-            tinyResult.engine == "Apple Vision accurate OCR"
-                || tinyResult.engine == "Tesseract OCR"
+            tinyResult.engine.hasPrefix("Apple Vision")
+                || tinyResult.engine == "Tesseract OCR",
+            "Unexpected tiny-text engine: \(tinyResult.engine)"
         )
         precondition(
             tinyElapsed < 1.8,
@@ -165,8 +192,8 @@ struct OCRServiceCheck {
         )
 
         print(
-            "Swift OCR service check passed: focused \(fastResult.engine) in "
-                + "\(fastElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
+            "Swift OCR service check passed: focused \(focusedResult.engine) in "
+                + "\(focusedElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
                 + "blue text via \(blueResult.engine) in "
                 + "\(blueElapsed.formatted(.number.precision(.fractionLength(3)))) s; "
                 + "full \(words.count) words via \(result.engine) in "

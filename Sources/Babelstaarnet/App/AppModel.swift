@@ -1265,6 +1265,7 @@ final class AppModel: ObservableObject {
                 return
             }
             async let captureWarmUp: Void = captureService.warmUp()
+            async let recognitionWarmUp: Void = ocrService.warmUp()
             async let translationWarmUp: Void = {
                 guard needsTranslation else {
                     return
@@ -1282,6 +1283,7 @@ final class AppModel: ObservableObject {
             }()
             _ = await (
                 captureWarmUp,
+                recognitionWarmUp,
                 translationWarmUp,
                 wordBridgeWarmUp
             )

@@ -66,14 +66,27 @@ without making Danish optional.
   and look ahead in the direction of pointer movement
 - Danish OCR with [Tesseract](https://github.com/tesseract-ocr/tesseract)
   and the open `dan` model
-- A focused Apple Vision fast path for clear text under the pointer, followed
-  by a bounded accurate-Vision retry for tiny or uncertain targets; the
-  complete Tesseract fallback remains available
-- Contrast-adaptive OCR passes for dark, light, and colored text
-- Adaptive small-text OCR for dense PDFs and forms: table rules are removed,
-  antialiased strokes are strengthened, tiny glyphs are enlarged to a reliable
-  target size within a bounded pixel budget, and cell text is recognized with
-  sparse layout analysis
+- Accurate Apple Vision recognition for the word under the pointer, with the
+  complete Tesseract fallback still available. The faster recognition level is
+  deliberately not used for reading: measured against rendered Danish crops it
+  returned nothing below roughly 13 px text, below a 60-step luminance
+  difference, or on saturated text over a saturated background, and where it
+  did return text it dropped æ, ø, and å while reporting unchanged confidence.
+  A stripped diacritic changes which Danish word gets translated
+- Colour-adaptive recognition that derives its threshold from the crop instead
+  of assuming dark text on a light page. Each capture is projected onto its own
+  direction of greatest colour variance, split with Otsu's method, and oriented
+  dark-on-light, so dark mode, saturated banners, secondary labels a few
+  luminance steps from their panel, and red-on-green text all separate. This
+  runs as a second pass only when the original capture could not be read
+- Fine print is re-read from an enlarged crop when the line under the pointer is
+  small, which is what restores diacritics that dense forms and tables lose
+- Adaptive small-text OCR for dense PDFs and forms: table rules are removed
+  while filled areas are kept, antialiased strokes are strengthened, tiny glyphs
+  are enlarged to a reliable target size within a bounded pixel budget, and cell
+  text is recognized with sparse layout analysis
+- A corrupted word no longer discards the line it appeared in, so a colour
+  failure on one word cannot take the pointer's word with it
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
 - One Danish-first learning translator with no mode selection: familiar words
@@ -245,10 +258,17 @@ logically active, the current hover data stays available, and no new screenshot
 or OCR request is made.
 
 `make test-runtime` renders a Retina-scale cursor crop containing dark, light,
-and colored Danish text. It verifies the focused Vision response, the complete
-Tesseract fallback, unchanged-capture reuse, cancellation, repeated translation
-through the persistent Argos worker, and the adaptive word-explanation
-resources.
+and colored Danish text. It verifies the focused Vision response, that the
+focused reading preserves Danish diacritics, the complete Tesseract fallback,
+unchanged-capture reuse, cancellation, repeated translation through the
+persistent Argos worker, and the adaptive word-explanation resources.
+
+`make benchmark-ocr` scores recognition across twenty rendered reading
+situations that vary one property at a time: polarity, contrast, chroma,
+background, density, and typography. Each scenario reports whether the word
+under the pointer was located with usable bounds and how much of the
+surrounding sentence was recovered, and the run is compared against a recorded
+baseline so a colour or format regression is visible rather than inferred.
 
 When the Apple translation fallback is used, the first translation may prompt
 macOS to download its Danish → English language pack. It then works offline.
@@ -256,8 +276,11 @@ macOS to download its Danish → English language pack. It then works offline.
 ## Architecture
 
 ```text
-cursor movement → adaptive local crop → focused Vision OCR
-                                             │ uncertain / small text
+cursor movement → adaptive local crop → accurate Vision OCR
+                                             │ unreadable colours
+                                             ▼
+                                   colour-separated retry
+                                             │ still unreadable
                                              ▼
                                   contrast-adaptive Tesseract
                                              │
@@ -279,9 +302,12 @@ The capture, OCR, translation, learner profile, dictionary, speech, overlay
 layout, and app state are separate. The capture planner uses cursor speed and
 the most recently observed text height to choose a local region, then retries
 with a larger crop only when words touch its boundary or no text is found.
-Clear pointer targets use a bounded Vision fast path. Tesseract retains TSV
-word geometry from normal, inverted, chroma, and conditional small-text passes
-for targets that need more analysis. Only uncached unique Danish words from the
+The pointer's word is read by accurate Vision; when its colours defeat that, one
+colour-separated retry runs before any external engine starts. Tesseract retains
+TSV word geometry from raw, colour-separated block, automatic-layout, and
+conditional small-text passes for targets that need more analysis, and competing
+readings of the same place are ranked by the confidence Tesseract reports rather
+than by which string is longest. Only uncached unique Danish words from the
 focused source line are sent to the warmed local Argos worker. The app keeps
 hit-test data per display and renders one small,
 nonactivating interactive bubble only when the cursor enters an OCR word box.
