@@ -112,6 +112,46 @@ enum BubbleViewSizingChecks {
             hostingView: sentenceHostingView
         )
 
+        // Passive reading must be quieter than a deliberate hold: the same word
+        // gains the feedback row only once the learner settles on it.
+        let passiveCard = HoverCard(
+            word: word,
+            wordEnglishMeaning: "student accommodation",
+            wordBridgeText: "En bolig til students.",
+            wordBridgeEnglishTokenIndexes: [3],
+            learningText: "Noget som hører til Earth.",
+            englishSupport: "Relating to Earth or belonging to the planet.",
+            adaptiveEnglishTokenIndexes: [4],
+            showsControlsInWordBridge: false
+        )
+        let passiveHeight = measuredWordHeight(
+            passiveCard,
+            state: state,
+            hostingView: wordHostingView
+        )
+        precondition(
+            passiveHeight < wordOnlyHeight,
+            "A passing hover should not carry the feedback controls"
+        )
+
+        // Requesting all English keeps the bubble in the same shape; it changes
+        // what is glossed, not how much chrome the learner has to read past.
+        let allEnglishCard = HoverCard(
+            word: word,
+            wordEnglishMeaning: "student accommodation",
+            wordBridgeText: "En bolig til students.",
+            wordBridgeEnglishTokenIndexes: [3],
+            learningText: "Noget som hører til Earth.",
+            adaptiveEnglishTokenIndexes: [4],
+            showsAllEnglish: true
+        )
+        let allEnglishHeight = measuredWordHeight(
+            allEnglishCard,
+            state: state,
+            hostingView: wordHostingView
+        )
+        precondition(allEnglishHeight == wordHeight)
+
         precondition(wordHeight >= 42)
         precondition(wordHeight < 140)
         precondition(directMeaningOnlyHeight < wordHeight)

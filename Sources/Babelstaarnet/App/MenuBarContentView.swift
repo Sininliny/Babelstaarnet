@@ -15,8 +15,8 @@ struct MenuBarContentView: View {
 
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Learning translator")
-                        Text("Danish first · English when needed")
+                        Text("Hover to translate")
+                        Text("Danish stays · English fills the gaps")
                     }
                     Spacer()
                     Text(model.toggleLearningShortcutLabel)
@@ -30,7 +30,7 @@ struct MenuBarContentView: View {
 
                 HStack(spacing: 14) {
                     Toggle(
-                        "Word bridge",
+                        "Word meaning",
                         isOn: Binding(
                             get: {
                                 model.bridgeConfiguration.showsWordBridge
@@ -39,7 +39,7 @@ struct MenuBarContentView: View {
                         )
                     )
                     Toggle(
-                        "Sentence bridge",
+                        "Whole sentence",
                         isOn: Binding(
                             get: {
                                 model.bridgeConfiguration.showsSentenceBridge
@@ -50,6 +50,8 @@ struct MenuBarContentView: View {
                 }
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
+
+                bubbleShortcutHint
 
             } else {
                 permissionControl
@@ -100,6 +102,29 @@ struct MenuBarContentView: View {
         }
     }
 
+    /// The bubble itself stays out of the way while reading, so the shortcuts
+    /// it responds to are discoverable here instead of on every hover.
+    private var bubbleShortcutHint: some View {
+        HStack(spacing: 5) {
+            ForEach(model.bubbleShortcutHints, id: \.label) { hint in
+                Text(hint.key)
+                    .font(
+                        .system(size: 9, weight: .semibold, design: .rounded)
+                    )
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(
+                        .quaternary.opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: 4)
+                    )
+                Text(hint.label)
+                    .font(.system(size: 10))
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.secondary)
+    }
+
     private var learningControl: some View {
         Button {
             Task {
@@ -117,8 +142,8 @@ struct MenuBarContentView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(
                         model.learningModeActive
-                            ? "Stop hover learning"
-                            : "Start hover learning"
+                            ? "Stop translating"
+                            : "Start translating"
                     )
                     .font(.system(size: 12, weight: .semibold))
 

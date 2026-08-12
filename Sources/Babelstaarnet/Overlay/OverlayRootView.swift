@@ -17,63 +17,48 @@ struct WordBubbleView: View {
 
     @ViewBuilder
     private func wordBubble(_ card: HoverCard) -> some View {
+        // Hovering a word is a request for its meaning. The meaning is
+        // therefore the first thing in the bubble, at the largest size, with no
+        // header to read past. Danish stays directly underneath so the learner
+        // can see which word was actually read.
+        let danishLeads = card.wordEnglishMeaning == nil
+
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "character.book.closed")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-
-                Text("Word bridge")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "speaker.wave.2")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+            if let wordEnglishMeaning = card.wordEnglishMeaning {
+                Text(LearnerDisplayText.clean(wordEnglishMeaning))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            EncouragedDanishWord(
-                text: LearnerDisplayText.clean(card.word.sourceText),
-                font: .system(
-                    size: 13,
-                    weight: .semibold,
-                    design: .rounded
-                ),
-                opacity: KnowledgeTone.opacity(
-                    for: card.wordKnowledgeLevel
-                ),
-                animationTrigger: card.showsControlsInWordBridge
-                    ? state.knownAnimationID
-                    : 0
-            )
+            HStack(spacing: 5) {
+                EncouragedDanishWord(
+                    text: LearnerDisplayText.clean(card.word.sourceText),
+                    font: .system(
+                        size: danishLeads ? 15 : 11,
+                        weight: danishLeads ? .semibold : .medium,
+                        design: .rounded
+                    ),
+                    opacity: KnowledgeTone.opacity(
+                        for: card.wordKnowledgeLevel
+                    ),
+                    animationTrigger: state.knownAnimationID
+                )
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let wordEnglishMeaning = card.wordEnglishMeaning {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("EN")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                if card.speaksOnHover {
+                    Image(systemName: "speaker.wave.2")
+                        .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
-
-                    Text(LearnerDisplayText.clean(wordEnglishMeaning))
-                        .font(
-                            .system(
-                                size: 12,
-                                weight: .semibold,
-                                design: .rounded
-                            )
-                        )
-                        .foregroundStyle(
-                            .primary.opacity(
-                                EnglishGlossTone.opacity(
-                                    for: card.wordKnowledgeLevel
-                                )
-                            )
-                        )
-                        .fixedSize(horizontal: false, vertical: true)
                 }
+
+                if card.showsAllEnglish {
+                    AllEnglishIndicator()
+                }
+
+                Spacer(minLength: 0)
             }
+            .foregroundStyle(.secondary)
 
             if !card.wordBridgeText.trimmingCharacters(
                 in: .whitespacesAndNewlines
@@ -89,21 +74,17 @@ struct WordBubbleView: View {
             }
 
             if let englishSupport = card.englishSupport {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(card.wordEnglishMeaning == nil ? "EN" : "More")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.tertiary)
-
-                    Text(LearnerDisplayText.clean(englishSupport))
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(LearnerDisplayText.clean(englishSupport))
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if card.showsControlsInWordBridge {
-                BridgeFeedbackControls(state: state, card: card)
-            }
+            BridgeFooter(
+                state: state,
+                card: card,
+                showsControls: card.showsControlsInWordBridge
+            )
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
@@ -111,6 +92,19 @@ struct WordBubbleView: View {
         .fixedSize(horizontal: false, vertical: true)
         .liquidGlassBubble(tint: .primary.opacity(0.05), cornerRadius: 12)
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+    }
+}
+
+private struct AllEnglishIndicator: View {
+    var body: some View {
+        Text("All English")
+            .font(.system(size: 8, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background {
+                Capsule().fill(.primary.opacity(0.06))
+            }
     }
 }
 
@@ -131,19 +125,9 @@ struct SentenceBridgeBubbleView: View {
 
     @ViewBuilder
     private func sentenceBubble(_ card: HoverCard) -> some View {
+        // No header. The sentence is the content, and a label above it only
+        // adds a line to read before the text the learner came for.
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Image(systemName: "text.quote")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-
-                Text("Sentence bridge")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
-            }
-
             SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.learningText),
                 englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
@@ -157,35 +141,25 @@ struct SentenceBridgeBubbleView: View {
             if card.showsEnglishSupportInSentenceBridge,
                card.wordKnowledgeLevel == 3,
                let wordEnglishMeaning = card.wordEnglishMeaning {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("EN")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.tertiary)
-
-                    Text(LearnerDisplayText.clean(wordEnglishMeaning))
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.secondary.opacity(0.72))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(LearnerDisplayText.clean(wordEnglishMeaning))
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if card.showsEnglishSupportInSentenceBridge,
                let englishSupport = card.englishSupport {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("EN")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.tertiary)
-
-                    Text(LearnerDisplayText.clean(englishSupport))
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(LearnerDisplayText.clean(englishSupport))
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if card.showsControlsInSentenceBridge {
-                BridgeFeedbackControls(state: state, card: card)
-            }
+            BridgeFooter(
+                state: state,
+                card: card,
+                showsControls: card.showsControlsInSentenceBridge
+            )
         }
         .padding(12)
         .frame(
@@ -199,6 +173,32 @@ struct SentenceBridgeBubbleView: View {
 
 }
 
+/// The bubble never asks the learner for anything while they are reading, but
+/// acting on it always answers back. So the controls and the confirmation are
+/// separate: the buttons appear only once the learner has settled on a word,
+/// while a confirmation shows up on its own whenever a shortcut was used.
+private struct BridgeFooter: View {
+    @ObservedObject var state: OverlayState
+    let card: HoverCard
+    let showsControls: Bool
+
+    var body: some View {
+        if showsControls {
+            BridgeFeedbackControls(state: state, card: card)
+        } else if let confirmation = state.feedbackConfirmation {
+            Label(
+                confirmation == .markedKnown
+                    ? "Marked known"
+                    : "English restored",
+                systemImage: "checkmark"
+            )
+            .font(.system(size: 10, design: .rounded))
+            .foregroundStyle(.secondary)
+            .transition(.opacity)
+        }
+    }
+}
+
 private struct BridgeFeedbackControls: View {
     @ObservedObject var state: OverlayState
     let card: HoverCard
@@ -206,7 +206,9 @@ private struct BridgeFeedbackControls: View {
     var body: some View {
         Divider().opacity(0.45)
 
-        HStack(spacing: 10) {
+        // The narrow word bubble cannot fit four controls on one line, and a
+        // button that wraps mid-label reads as a layout accident.
+        InlineTokenLayout(spacing: 6, lineSpacing: 5) {
             Button {
                 state.onKnown()
             } label: {
@@ -228,6 +230,21 @@ private struct BridgeFeedbackControls: View {
             }
 
             Button {
+                state.onShowAllEnglish()
+            } label: {
+                Text(
+                    card.showsAllEnglish
+                        ? "\(card.showAllEnglishShortcutLabel)  Less English"
+                        : "\(card.showAllEnglishShortcutLabel)  All English"
+                )
+            }
+            .help(
+                card.showsAllEnglish
+                    ? "Return to adaptive support"
+                    : "Translate every word on this line"
+            )
+
+            Button {
                 state.onTogglePin()
             } label: {
                 Text(
@@ -237,12 +254,12 @@ private struct BridgeFeedbackControls: View {
                 )
             }
             .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
-
-            Spacer(minLength: 0)
         }
         .buttonStyle(BridgeFeedbackButtonStyle())
         .font(.system(size: 10, weight: .regular, design: .rounded))
         .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .fixedSize(horizontal: false, vertical: true)
         .animation(
             .easeOut(duration: 0.12),
             value: state.feedbackConfirmation
@@ -481,26 +498,32 @@ private struct EncouragedDanishWord: View {
     }
 }
 
+/// Danish is the text being read, so confidence is expressed inside a single
+/// perceptual step. A wider ramp made well-known words the hardest ones to read
+/// on a translucent panel — it charged legibility for a signal the learner was
+/// not meant to be studying anyway.
 enum KnowledgeTone {
     static func opacity(for level: Int) -> Double {
         switch min(max(level, 0), 5) {
         case 0: 1.00
-        case 1: 0.95
-        case 2: 0.90
-        case 3: 0.85
-        case 4: 0.80
-        default: 0.74
+        case 1: 0.98
+        case 2: 0.96
+        case 3: 0.94
+        case 4: 0.92
+        default: 0.90
         }
     }
 }
 
+/// English is the scaffolding, so this is where fading belongs and where it can
+/// afford a range wide enough to notice without anyone being told about it.
 private enum EnglishGlossTone {
     static func opacity(for level: Int) -> Double {
         switch min(max(level, 0), 3) {
-        case 0: 0.94
-        case 1: 0.84
-        case 2: 0.74
-        default: 0.60
+        case 0: 0.95
+        case 1: 0.82
+        case 2: 0.68
+        default: 0.55
         }
     }
 }

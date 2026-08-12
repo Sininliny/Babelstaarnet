@@ -1,62 +1,63 @@
 # Babelstårnet
 
-**Understand Danish without escaping into English.**
+**Hover any Danish word. Get the meaning. Keep reading.**
 
-Babelstårnet is a local-first macOS reading layer for learning Danish. It reads
-the text under the pointer and gives the learner enough English to recover the
-meaning, but never replaces the Danish sentence. You are supported through the
-source language instead of being given an English route around it.
+Babelstårnet is a local-first macOS translator for Danish. Point at a word
+anywhere on screen — a website, a PDF, a form, text inside an image — and its
+meaning appears where you are already looking. Nothing to select, paste, or
+submit.
 
-It is intentionally not a conventional translator, vocabulary-card system, or
-parallel subtitle layer. Its purpose is language transfer: keep the learner
-reading Danish, place English only beneath concepts that are not yet known, and
-quietly remove that help as comprehension grows.
+It is a translator first. What makes it different is what it does *while* you
+use it: because the Danish stays in place beside the English, and because the
+app quietly remembers which words keep coming back to you, ordinary use turns
+into ordinary learning. That part runs in the background and never asks you for
+anything.
 
-## The gap between Babelstårnet and a translator
+## Translation first
 
-A normal translator optimizes for obtaining the answer in another language.
-That is useful for communication, but it also makes it easy to stop processing
-the source language. Babelstårnet optimizes for a different outcome: obtaining
-the meaning while still having to read and understand Danish.
+The bubble answers before it teaches:
 
-| | Conventional translator | Babelstårnet |
-| --- | --- | --- |
-| Primary text | The translated language | The original Danish |
-| English help | Replaces the sentence or appears as a full parallel version | Appears only under selected unknown concepts |
-| Learner model | Usually the same output for every reader | A private knowledge level for each word |
-| Change over time | Repeating the request gives the same help | English fades as a word becomes known and returns immediately after **Don’t know** |
-| Interaction | Select, copy, or submit text | Hover the Danish text already on screen |
-| Reading pressure | The source can be skipped | Meaning is available, but Danish remains necessary |
-| Processing | Depends on the translation service | Screen reading, learning state, translation, and speech remain local |
+- **The meaning leads.** It is the first and largest thing in the bubble, with
+  no heading to read past. The Danish word sits underneath, so you can confirm
+  the pointer landed where you meant.
+- **You can always get everything.** Press `4` with a bubble open and every word
+  on the line is translated, regardless of what the app thinks you know. Press
+  it again to go back. It is a reading mode, so it stays on until you turn it
+  off.
+- **Nothing is asked of you.** While you read, the bubble has no buttons. The
+  **Knew** / **Don’t know** controls appear only once you deliberately settle on
+  a word — pin it, hold Option, or rest on it. Their shortcuts stay live the
+  whole time either way, and the menu-bar popover lists them.
+- **Acting always answers back.** The bubble never prompts, but pressing a
+  shortcut confirms itself inline.
 
-## Meaning without escape
+## Learning, without being a lesson
 
-The learning design follows four rules:
+Four rules keep the learning underneath the translation:
 
 1. **Danish never disappears.** The source word and Danish sentence structure
-   remain the visual foundation.
-2. **English is scaffolding, not the product.** Babelstårnet adds at most a few
-   concise English meaning anchors instead of translating everything. A new or
-   passively tested focused word receives its direct English meaning
-   immediately; the Danish sentence is never replaced.
-3. **Help follows the learner.** Unknown words receive support; learning words
-   are tested with less support; known words remain Danish-only.
-4. **Feedback is exceptional, not homework.** Hovering is passive. The learner
-   presses **Knew** or **Don’t know** only when the bridge has judged a word
-   incorrectly.
+   remain visible next to every answer.
+2. **English is scaffolding, not the product.** Babelstårnet adds a few concise
+   English anchors rather than translating everything by default, and the
+   anchors are what fade as a word becomes familiar. The Danish itself stays
+   fully legible at every level.
+3. **Help follows the reader.** Unknown words receive support; familiar words
+   need less; well-known words stay Danish-only. Reading is what moves this —
+   spaced encounters in different contexts count, repeated hovering does not.
+4. **Feedback is exceptional, not homework.** **Knew** and **Don’t know** exist
+   for the times the app judged a word wrong, not as a task to complete.
 
-The two independent bridges serve different reading problems:
+The two panels serve different reading problems and can be used separately:
 
-- **Word bridge**, above the pointer, explains the focused word in concise
-  Danish and adds English only for concepts the learner does not yet know.
-- **Sentence bridge**, below the pointer, preserves Danish order and grammar.
-  It uses one or two English anchors when the sentence is mostly familiar and
-  can grow to five when the text is genuinely difficult.
+- **Word meaning**, above the pointer: what the word means, plus a concise
+  Danish explanation with English only under concepts you do not yet know.
+- **Whole sentence**, below the pointer: the Danish line in its own word order
+  and grammar, with one or two English anchors when the sentence is mostly
+  familiar, growing to five when the text is genuinely difficult.
 
-Both bubbles use one frozen OCR snapshot, so the support does not keep changing
-after the pointer stops. `1` means **Knew**, `2` means **Don’t know**, and `3`
-pins the bubbles. The result is a reading tool that makes Danish understandable
-without making Danish optional.
+Both use one frozen OCR snapshot, so the answer does not keep changing after the
+pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, and
+`4` shows all English.
 
 ## What works
 
@@ -89,8 +90,12 @@ without making Danish optional.
   failure on one word cannot take the pointer's word with it
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
-- One Danish-first learning translator with no mode selection: familiar words
-  stay Danish while English appears only where it is needed for understanding
+- Meaning-first bubbles with no mode selection: the English answer is the
+  headline, the Danish word sits under it, and familiar words simply need less
+  English than new ones
+- A full-English reveal on `4`, which translates every word on the line no
+  matter what the profile believes, and stays on until it is turned off. The
+  profile is only overridden for display; the reveal records nothing
 - A private adaptive learning profile with a hidden knowledge level from 0 to
   5. One **Knew** action removes unnecessary English for the focused word; one
   **Don’t know** action immediately restores full help. Spaced encounters in
@@ -101,31 +106,37 @@ without making Danish optional.
   English gloss beneath selected Danish words, level 3 quietly tests
   comprehension without a gloss, and levels 4–5 remain Danish-only. Internal
   levels are intentionally absent from the reading bubbles. A testing-level
-  word keeps a faint direct meaning in the focused Word bridge so passive
+  word keeps a faint direct meaning in the focused word panel so passive
   learning never becomes a barrier to translation. Sentence-only mode carries
   the same focused safety meaning instead of silently removing it. Feedback
-  briefly confirms **Marked known** or **English restored** directly in the
-  active bubble. Marking a word known also gives that Danish word a short lift
-  and glow. Danish words use a restrained gray progression so different
-  confidence levels are perceptible without adding labels or progress numbers.
+  briefly confirms **Marked known** or **English restored** in the active
+  bubble whether or not the controls are on screen. Marking a word known also
+  gives that Danish word a short lift and glow. Confidence shows as a restrained
+  fade of the *English* gloss, which is the part meant to go away; the Danish
+  stays inside one perceptual step of full strength at every level so that
+  knowing a word never makes it harder to read.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
   receive a small interlinear English gloss. The support budget adapts from one
   to five anchors according to how much of the sentence is unfamiliar.
-- Two coordinated learning bubbles: a compact adaptive word explanation stays
-  above the hovered word while a wider sentence bridge stays below it. The word
-  bridge preserves a concise Danish explanation and attaches English only
-  beneath concepts the learner does not yet know. Each bridge can be enabled
-  independently in the menu-bar popover or Settings, and all content wraps
-  instead of being shortened. Both use one frozen
-  OCR snapshot, so background rescans cannot change them while the pointer is
-  still. `1` marks a word known, `2` marks it unknown and shows extra English,
-  and `3` pins or unpins the visible bubbles. Holding
-  Option keeps them open while the pointer moves to the controls. After 0.75
-  seconds without input, they are held temporarily; any pointer or keyboard
+- Two coordinated bubbles with no headings on either: a compact word panel above
+  the hovered word and a wider sentence panel below it. The word panel leads
+  with the English meaning, keeps the Danish word beneath it, and adds a concise
+  Danish explanation with English only under concepts the reader does not yet
+  know. Each panel can be enabled independently in the menu-bar popover or
+  Settings, and all content wraps instead of being shortened. Both use one
+  frozen OCR snapshot, so background rescans cannot change them while the
+  pointer is still. `1` marks a word known, `2` marks it unknown and shows extra
+  English, `3` pins or unpins the visible bubbles, and `4` toggles full English.
+  Holding Option keeps them open while the pointer moves to the controls. After
+  0.75 seconds without input, they are held temporarily; any pointer or keyboard
   input releases that temporary hold. Every shortcut and the hold modifier can
-  be changed in Settings; bubble shortcuts exist only while a learning bubble
-  is visible.
+  be changed in Settings; bubble shortcuts exist only while a bubble is visible.
+- Feedback controls that stay out of the reading path. While the pointer is
+  passing over text the bubble shows no buttons at all; they appear only once
+  the bubble is held — pinned, Option-held, or rested on — and disappear again
+  when it is released. The shortcuts work throughout, and the menu-bar popover
+  lists them so hiding the buttons costs no discoverability.
 - Versioned local JSON export/import for backing up or moving the adaptive
   learning profile without exporting screenshots or source sentences; imports
   merge idempotently with existing progress
@@ -171,7 +182,7 @@ and drag **Babelstaarnet.app** to **Applications**. On first launch:
 1. Click **Set up Babelstårnet**.
 2. Enable Babelstårnet in the System Settings page that opens.
 3. Return to the app and relaunch if macOS requests it.
-4. Click **Start hover learning**, or press `Fn+Z` (the default shortcut).
+4. Click **Start translating**, or press `Fn+Z` (the default shortcut).
 
 No account, terminal, or engine installation is required. Apple Vision and
 Translation provide an entirely on-device zero-setup path. The open-source
@@ -244,16 +255,17 @@ On first use:
 2. Enable Babelstårnet under **System Settings → Privacy & Security → Screen
    Recording**.
 3. Relaunch the app if macOS requests it.
-4. Choose **Activate hover learning** or press `Fn+Z` by default.
-5. Hover a Danish word to hear it and see the adaptive sentence bridge.
-6. With a learning card visible, use `1` for **Knew**, `2` for **Don’t know**,
-   or `3` to pin it. Hold Option while moving to its controls. Leaving the
-   pointer still temporarily holds the bubble until the next input. These
+4. Choose **Start translating** or press `Fn+Z` by default.
+5. Hover a Danish word to hear it and see what it means.
+6. With a bubble visible, press `4` to translate the whole line, `1` for
+   **Knew**, `2` for **Don’t know**, or `3` to pin it. The buttons themselves
+   appear only once the bubble is held — pin it, hold Option, or leave the
+   pointer still — but the shortcuts work whenever a bubble is on screen. These
    shortcuts and the hold modifier are editable under **Settings → Shortcuts**.
 7. Press the activation shortcut again to deactivate.
 
 Power saving is enabled by default. It can be disabled under **Settings →
-Learning → Pause screen reading when idle**. While suspended, detection remains
+Reading → Pause screen reading when idle**. While suspended, detection remains
 logically active, the current hover data stays available, and no new screenshot
 or OCR request is made.
 

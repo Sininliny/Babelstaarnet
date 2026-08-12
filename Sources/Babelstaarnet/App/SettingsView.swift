@@ -5,20 +5,9 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Learning") {
-                LabeledContent(
-                    "Learning translator",
-                    value: "Danish-first"
-                )
-
-                Text(
-                    "Danish always stays visible and carries the sentence structure. New concepts receive small English glosses underneath. Knew removes help for the focused word in one action; Don’t know immediately restores it. Spaced encounters quietly reduce support, while repeated hovering does not train the profile."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+            Section("Translation") {
                 Toggle(
-                    "Word bridge",
+                    "Word meaning",
                     isOn: Binding(
                         get: {
                             model.bridgeConfiguration.showsWordBridge
@@ -28,7 +17,7 @@ struct SettingsView: View {
                 )
 
                 Toggle(
-                    "Sentence bridge",
+                    "Whole sentence",
                     isOn: Binding(
                         get: {
                             model.bridgeConfiguration.showsSentenceBridge
@@ -38,13 +27,15 @@ struct SettingsView: View {
                 )
 
                 Text(
-                    "Use either bridge independently or show both together. Turning both off keeps Danish speech on hover."
+                    "Hovering a Danish word shows what it means. Use either panel on its own or both together; turning both off keeps Danish speech on hover. Press \(model.showAllEnglishShortcutLabel) with a bubble open to translate every word on the line, and again to go back."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
                 Toggle("Speak Danish on hover", isOn: $model.autoSpeak)
+            }
 
+            Section("Reading") {
                 HStack {
                     Text("Hover delay")
                     Slider(
@@ -128,9 +119,9 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Learning data") {
+            Section("What you have picked up") {
                 LabeledContent(
-                    "Learning profile",
+                    "Danish words seen",
                     value: wordCountDescription(
                         model.learnerTrackedWordCount
                     )
@@ -143,7 +134,7 @@ struct SettingsView: View {
                 )
 
                 Text(
-                    "The profile controls where English appears in both bridges. It is stored only on this Mac; imports merge without double-counting."
+                    "Babelstårnet keeps track of which Danish words keep coming back to you and quietly shows less English for those. Nothing here needs your attention — reading is enough to move it. Knew and Don’t know are there for the times it gets a word wrong. Stored only on this Mac; imports merge without double-counting."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -165,7 +156,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Button("Reset learning profile", role: .destructive) {
+                Button("Reset what Babelstårnet has learned", role: .destructive) {
                     model.confirmAndResetLearnerProfile()
                 }
                 .disabled(model.learnerTrackedWordCount == 0)

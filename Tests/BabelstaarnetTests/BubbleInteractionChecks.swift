@@ -71,6 +71,15 @@ enum BubbleInteractionChecks {
             )
         )
 
+        // Reading past a word must never put a question in front of the
+        // learner. Only a deliberate hold invites the feedback controls.
+        precondition(
+            !BridgeAttentionPolicy.showsFeedbackControls(bubbleIsHeld: false)
+        )
+        precondition(
+            BridgeAttentionPolicy.showsFeedbackControls(bubbleIsHeld: true)
+        )
+
         let bubble = CGRect(x: 80, y: 145, width: 320, height: 120)
         let resized = BubbleInteractionPolicy.preservedFrame(
             oldFrame: bubble,
@@ -80,6 +89,34 @@ enum BubbleInteractionChecks {
         precondition(resized.minX == bubble.minX)
         precondition(resized.maxY == bubble.maxY)
         precondition(resized.height == 170)
+
+        // A bubble sitting above the line it explains must grow upwards. The
+        // old behaviour held the top edge, so every extra row expanded down
+        // over the words the reader was looking at.
+        let source = CGRect(x: 80, y: 100, width: 300, height: 20)
+        let above = CGRect(x: 80, y: 129, width: 320, height: 90)
+        precondition(
+            BubbleInteractionPolicy.GrowthAnchor.growingAwayFrom(
+                sourceFrame: source,
+                bubbleFrame: above
+            ) == .bottom
+        )
+        let grown = BubbleInteractionPolicy.preservedFrame(
+            oldFrame: above,
+            newSize: CGSize(width: 320, height: 140),
+            screenFrame: CGRect(x: 0, y: 0, width: 900, height: 700),
+            anchoring: .bottom
+        )
+        precondition(grown.minY == above.minY, "Bubble grew toward the text")
+        precondition(grown.minY >= source.maxY, "Bubble overlaps the text")
+
+        let below = CGRect(x: 80, y: 20, width: 320, height: 70)
+        precondition(
+            BubbleInteractionPolicy.GrowthAnchor.growingAwayFrom(
+                sourceFrame: source,
+                bubbleFrame: below
+            ) == .top
+        )
 
         print("Bubble stationary stability checks passed")
     }

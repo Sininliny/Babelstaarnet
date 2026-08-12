@@ -143,6 +143,7 @@ struct AppShortcut: Codable, Equatable, Hashable, Sendable {
 
 enum ConfigurableHotKeyAction: String, CaseIterable, Identifiable, Sendable {
     case toggleLearning
+    case showAllEnglish
     case known
     case dontKnow
     case togglePin
@@ -151,7 +152,8 @@ enum ConfigurableHotKeyAction: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .toggleLearning: "Toggle hover learning"
+        case .toggleLearning: "Toggle hover translation"
+        case .showAllEnglish: "Show all English"
         case .known: "Knew"
         case .dontKnow: "Don’t know"
         case .togglePin: "Pin or unpin"
@@ -195,6 +197,7 @@ enum BubbleHoldModifier: String, CaseIterable, Codable, Identifiable, Sendable {
 
 struct HotKeyConfiguration: Codable, Equatable, Sendable {
     var toggleLearning: AppShortcut
+    var showAllEnglish: AppShortcut
     var known: AppShortcut
     var dontKnow: AppShortcut
     var togglePin: AppShortcut
@@ -204,6 +207,10 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
         toggleLearning: AppShortcut(
             keyCode: UInt32(kVK_ANSI_Z),
             modifiers: [.function]
+        ),
+        showAllEnglish: AppShortcut(
+            keyCode: UInt32(kVK_ANSI_4),
+            modifiers: []
         ),
         known: AppShortcut(keyCode: UInt32(kVK_ANSI_1), modifiers: []),
         dontKnow: AppShortcut(keyCode: UInt32(kVK_ANSI_2), modifiers: []),
@@ -225,6 +232,7 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
     func shortcut(for action: ConfigurableHotKeyAction) -> AppShortcut {
         switch action {
         case .toggleLearning: toggleLearning
+        case .showAllEnglish: showAllEnglish
         case .known: known
         case .dontKnow: dontKnow
         case .togglePin: togglePin
@@ -237,6 +245,7 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
     ) {
         switch action {
         case .toggleLearning: toggleLearning = shortcut
+        case .showAllEnglish: showAllEnglish = shortcut
         case .known: known = shortcut
         case .dontKnow: dontKnow = shortcut
         case .togglePin: togglePin = shortcut
@@ -250,5 +259,30 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
         ConfigurableHotKeyAction.allCases.first {
             $0 != action && self.shortcut(for: $0) == shortcut
         }
+    }
+}
+
+// Declared in an extension so the memberwise initializer above survives.
+extension HotKeyConfiguration {
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        toggleLearning = try container.decode(
+            AppShortcut.self,
+            forKey: .toggleLearning
+        )
+        // Added after the first release. A stored configuration written before
+        // it existed is still valid; dropping the whole thing would silently
+        // reset every shortcut the learner had already chosen.
+        showAllEnglish = try container.decodeIfPresent(
+            AppShortcut.self,
+            forKey: .showAllEnglish
+        ) ?? Self.defaults.showAllEnglish
+        known = try container.decode(AppShortcut.self, forKey: .known)
+        dontKnow = try container.decode(AppShortcut.self, forKey: .dontKnow)
+        togglePin = try container.decode(AppShortcut.self, forKey: .togglePin)
+        holdModifier = try container.decode(
+            BubbleHoldModifier.self,
+            forKey: .holdModifier
+        )
     }
 }

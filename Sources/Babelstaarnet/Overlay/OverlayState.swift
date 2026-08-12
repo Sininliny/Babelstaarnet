@@ -15,6 +15,7 @@ final class OverlayState: ObservableObject {
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
     var onTogglePin: () -> Void = {}
+    var onShowAllEnglish: () -> Void = {}
     private var feedbackClearTask: Task<Void, Never>?
 
     func showFeedback(_ confirmation: BridgeFeedbackConfirmation) {

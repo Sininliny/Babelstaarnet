@@ -1,6 +1,19 @@
 import CoreGraphics
 import Foundation
 
+/// Reading is the task; rating vocabulary is not. The bridge therefore asks
+/// nothing while the pointer is passing over text, and offers its controls only
+/// once the learner has deliberately settled on a word — by pinning, holding
+/// the modifier, or resting long enough that the bubble holds itself.
+///
+/// The shortcuts stay live the whole time, so nothing is slower for someone who
+/// already knows them; the buttons are a discovery aid, not a prompt.
+enum BridgeAttentionPolicy {
+    static func showsFeedbackControls(bubbleIsHeld: Bool) -> Bool {
+        bubbleIsHeld
+    }
+}
+
 enum BubbleInteractionPolicy {
     static let stationaryTolerance: CGFloat = 3
     static let stationaryPinDelay: TimeInterval = 0.75
@@ -42,15 +55,33 @@ enum BubbleInteractionPolicy {
         pointerMoved || idleDuration < 0.12
     }
 
+    /// Which edge stays put when a visible bubble changes height. A bubble
+    /// resting above the source line has to grow upwards, or it expands over
+    /// the very text the reader is looking at.
+    enum GrowthAnchor {
+        case top
+        case bottom
+
+        static func growingAwayFrom(
+            sourceFrame: CGRect,
+            bubbleFrame: CGRect
+        ) -> Self {
+            bubbleFrame.midY >= sourceFrame.midY ? .bottom : .top
+        }
+    }
+
     static func preservedFrame(
         oldFrame: CGRect,
         newSize: CGSize,
-        screenFrame: CGRect
+        screenFrame: CGRect,
+        anchoring anchor: GrowthAnchor = .top
     ) -> CGRect {
         let safeScreen = screenFrame.insetBy(dx: 8, dy: 8)
         let proposed = CGRect(
             x: oldFrame.minX,
-            y: oldFrame.maxY - newSize.height,
+            y: anchor == .top
+                ? oldFrame.maxY - newSize.height
+                : oldFrame.minY,
             width: newSize.width,
             height: newSize.height
         )

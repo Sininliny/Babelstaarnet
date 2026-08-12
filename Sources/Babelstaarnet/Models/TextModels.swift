@@ -98,9 +98,12 @@ struct HoverCard: Equatable, Sendable {
     let showsControlsInWordBridge: Bool
     let showsControlsInSentenceBridge: Bool
     let showsEnglishSupportInSentenceBridge: Bool
+    let showsAllEnglish: Bool
+    let speaksOnHover: Bool
     let knownShortcutLabel: String
     let dontKnowShortcutLabel: String
     let pinShortcutLabel: String
+    let showAllEnglishShortcutLabel: String
 
     init(
         word: WordRegion,
@@ -118,9 +121,12 @@ struct HoverCard: Equatable, Sendable {
         showsControlsInWordBridge: Bool = false,
         showsControlsInSentenceBridge: Bool = false,
         showsEnglishSupportInSentenceBridge: Bool = false,
+        showsAllEnglish: Bool = false,
+        speaksOnHover: Bool = false,
         knownShortcutLabel: String = "1",
         dontKnowShortcutLabel: String = "2",
-        pinShortcutLabel: String = "3"
+        pinShortcutLabel: String = "3",
+        showAllEnglishShortcutLabel: String = "4"
     ) {
         self.word = word
         self.wordKnowledgeLevel = wordKnowledgeLevel
@@ -139,9 +145,12 @@ struct HoverCard: Equatable, Sendable {
         self.showsControlsInSentenceBridge = showsControlsInSentenceBridge
         self.showsEnglishSupportInSentenceBridge =
             showsEnglishSupportInSentenceBridge
+        self.showsAllEnglish = showsAllEnglish
+        self.speaksOnHover = speaksOnHover
         self.knownShortcutLabel = knownShortcutLabel
         self.dontKnowShortcutLabel = dontKnowShortcutLabel
         self.pinShortcutLabel = pinShortcutLabel
+        self.showAllEnglishShortcutLabel = showAllEnglishShortcutLabel
     }
 }
 

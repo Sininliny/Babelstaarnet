@@ -21,6 +21,11 @@ final class OverlayWindowController {
     private var currentRegion: TextRegion?
     private var hoverAnchorPoint: CGPoint?
     private var expandedEnglishWords = Set<String>()
+    /// Sticky for the whole session: asking for full English is a way of
+    /// reading, not a question about one word, and re-pressing it on every
+    /// hover would be exactly the kind of nagging the bridge avoids.
+    private var showsAllEnglish = false
+    private var renderedControlsVisible = false
     private var pinnedByUser = false
     private var temporarilyHeldForIdle = false
     private var holdModifierPressed = false
@@ -65,6 +70,9 @@ final class OverlayWindowController {
         }
         bubbleState.onTogglePin = { [weak self] in
             self?.toggleBubblePin()
+        }
+        bubbleState.onShowAllEnglish = { [weak self] in
+            self?.toggleAllEnglish()
         }
     }
 
@@ -137,6 +145,7 @@ final class OverlayWindowController {
         overlays.removeAll()
         dismissBubble()
         expandedEnglishWords.removeAll()
+        showsAllEnglish = false
         mouseTimer?.invalidate()
         mouseTimer = nil
         hoverSpeechTimer?.invalidate()
@@ -184,6 +193,7 @@ final class OverlayWindowController {
                 self?.updateHoldModifierState()
                 self?.updateStationaryHold(at: point)
                 self?.updateHover(at: point)
+                self?.syncBridgeControls()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -317,8 +327,15 @@ final class OverlayWindowController {
             knowledgeLevelCache[normalized] = level
             return level
         }
-        let stateForWord: (String) -> LanguageTransferState = { candidate in
-            LanguageTransferState.forKnowledgeLevel(
+        // Asking for all English is a direct request for the translation, so it
+        // overrides the learner profile for display without touching it. The
+        // profile keeps its real levels; only what is drawn changes.
+        let stateForWord: (String) -> LanguageTransferState = {
+            [showsAllEnglish] candidate in
+            guard !showsAllEnglish else {
+                return .unknown
+            }
+            return LanguageTransferState.forKnowledgeLevel(
                 knowledgeLevelForWord(candidate)
             )
         }
@@ -336,7 +353,7 @@ final class OverlayWindowController {
             .directEnglishMeaning(
                 sourceWord: word.sourceText,
                 englishTranslation: word.translatedText,
-                knowledgeLevel: wordKnowledgeLevel
+                knowledgeLevel: showsAllEnglish ? 0 : wordKnowledgeLevel
             )
         let explanation = adaptiveExplanationService.explanation(
             bridgeText: bridge?.text ?? fallbackBridge(for: word),
@@ -377,16 +394,25 @@ final class OverlayWindowController {
                 excluding: bridge?.englishTokenIndexes ?? []
             ),
             showsControlsInWordBridge:
-                bridgeConfiguration.showsWordBridge,
+                bridgeConfiguration.showsWordBridge && controlsAreInvited,
             showsControlsInSentenceBridge:
                 !bridgeConfiguration.showsWordBridge
-                    && bridgeConfiguration.showsSentenceBridge,
+                    && bridgeConfiguration.showsSentenceBridge
+                    && controlsAreInvited,
             showsEnglishSupportInSentenceBridge:
                 !bridgeConfiguration.showsWordBridge,
+            showsAllEnglish: showsAllEnglish,
+            speaksOnHover: autoSpeak,
             knownShortcutLabel: hotKeyConfiguration.known.displayText,
             dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
-            pinShortcutLabel: hotKeyConfiguration.togglePin.displayText
+            pinShortcutLabel: hotKeyConfiguration.togglePin.displayText,
+            showAllEnglishShortcutLabel:
+                hotKeyConfiguration.showAllEnglish.displayText
         )
+    }
+
+    private var controlsAreInvited: Bool {
+        BridgeAttentionPolicy.showsFeedbackControls(bubbleIsHeld: isBubbleHeld)
     }
 
     private func tokenKnowledgeLevels(
@@ -612,6 +638,11 @@ final class OverlayWindowController {
         bubbleState.showFeedback(.englishRestored)
     }
 
+    private func toggleAllEnglish() {
+        showsAllEnglish.toggle()
+        refreshCurrentCard(preservePosition: true)
+    }
+
     private func markCurrentWordKnown() {
         guard let currentWord else {
             return
@@ -636,11 +667,16 @@ final class OverlayWindowController {
         )
         if preservePosition, bubblesAreVisible {
             let sizes = prepareBubbles(card)
+            let sourceFrame = currentRegion.frame
             if bridgeConfiguration.showsWordBridge {
                 let wordFrame = BubbleInteractionPolicy.preservedFrame(
                     oldFrame: wordBubblePanel.frame,
                     newSize: sizes.word,
-                    screenFrame: currentWord.screenFrame
+                    screenFrame: currentWord.screenFrame,
+                    anchoring: .growingAwayFrom(
+                        sourceFrame: sourceFrame,
+                        bubbleFrame: wordBubblePanel.frame
+                    )
                 )
                 wordBubblePanel.setFrame(wordFrame, display: true)
                 wordBubblePanel.orderFrontRegardless()
@@ -651,7 +687,11 @@ final class OverlayWindowController {
                 let sentenceFrame = BubbleInteractionPolicy.preservedFrame(
                     oldFrame: sentenceBubblePanel.frame,
                     newSize: sizes.sentence,
-                    screenFrame: currentWord.screenFrame
+                    screenFrame: currentWord.screenFrame,
+                    anchoring: .growingAwayFrom(
+                        sourceFrame: sourceFrame,
+                        bubbleFrame: sentenceBubblePanel.frame
+                    )
                 )
                 sentenceBubblePanel.setFrame(sentenceFrame, display: true)
                 sentenceBubblePanel.orderFrontRegardless()
@@ -701,10 +741,24 @@ final class OverlayWindowController {
         return word.sourceText
     }
 
+    /// The controls appear and disappear with the hold state, which changes
+    /// outside the hover path — a modifier press, or the pointer going still.
+    /// Rebuild the card when that happens so the footer matches the intent.
+    private func syncBridgeControls() {
+        guard bubblesAreVisible,
+              currentWord != nil,
+              controlsAreInvited != renderedControlsVisible else {
+            return
+        }
+        refreshCurrentCard(preservePosition: true)
+    }
+
     private func prepareBubbles(
         _ card: HoverCard
     ) -> (word: CGSize, sentence: CGSize) {
         bubbleState.hoverCard = card
+        renderedControlsVisible = card.showsControlsInWordBridge
+            || card.showsControlsInSentenceBridge
         var wordSize = CGSize.zero
         var sentenceSize = CGSize.zero
         if bridgeConfiguration.showsWordBridge {
@@ -742,6 +796,7 @@ final class OverlayWindowController {
         holdModifierPressed = false
         stationaryPoint = nil
         stationarySince = nil
+        renderedControlsVisible = false
         bubbleState.isPinned = false
     }
 
@@ -768,6 +823,8 @@ final class OverlayWindowController {
             markCurrentWordUnknown()
         case .togglePin:
             toggleBubblePin()
+        case .showAllEnglish:
+            toggleAllEnglish()
         }
     }
 
