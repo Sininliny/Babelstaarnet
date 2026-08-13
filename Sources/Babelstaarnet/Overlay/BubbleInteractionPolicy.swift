@@ -8,9 +8,22 @@ import Foundation
 ///
 /// The shortcuts stay live the whole time, so nothing is slower for someone who
 /// already knows them; the buttons are a discovery aid, not a prompt.
+///
+/// Settling is a latch, not a level. The temporary hold that earns it is
+/// released by *any* system input — a keystroke, a scroll, a fingertip resting
+/// on a trackpad — and is then re-earned only after another three quarters of a
+/// second of complete stillness. Someone reading a page with the pointer parked
+/// on a word generates that pattern constantly, so the controls appeared and
+/// vanished repeatedly underneath a reader who had never left the word. Once
+/// they are earned they therefore stay until the pointer moves to something
+/// else: retracting a control the reader may be reaching for is a worse failure
+/// than showing one they did not ask for.
 enum BridgeAttentionPolicy {
-    static func showsFeedbackControls(bubbleIsHeld: Bool) -> Bool {
-        bubbleIsHeld
+    static func showsFeedbackControls(
+        bubbleIsHeld: Bool,
+        hasSettledOnWord: Bool
+    ) -> Bool {
+        bubbleIsHeld || hasSettledOnWord
     }
 }
 

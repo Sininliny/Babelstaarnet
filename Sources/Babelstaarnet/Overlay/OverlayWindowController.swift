@@ -28,6 +28,11 @@ final class OverlayWindowController {
     private var renderedControlsVisible = false
     private var pinnedByUser = false
     private var temporarilyHeldForIdle = false
+    /// Whether the reader has settled on the word currently under the pointer.
+    /// Held separately from `temporarilyHeldForIdle` because that flag tracks
+    /// system input, which stops and starts many times while someone reads one
+    /// line. Cleared when the pointer reaches a different word.
+    private var hasSettledOnCurrentWord = false
     private var holdModifierPressed = false
     private var stationaryPoint: CGPoint?
     private var stationarySince: Date?
@@ -250,6 +255,8 @@ final class OverlayWindowController {
             hoverSpeechTimer?.invalidate()
             hoverSpeechTimer = nil
             bubbleState.clearFeedback()
+            // A different word has to be settled on in its own right.
+            hasSettledOnCurrentWord = false
         }
         currentWord = match?.word
         currentRegion = match?.region
@@ -412,7 +419,10 @@ final class OverlayWindowController {
     }
 
     private var controlsAreInvited: Bool {
-        BridgeAttentionPolicy.showsFeedbackControls(bubbleIsHeld: isBubbleHeld)
+        BridgeAttentionPolicy.showsFeedbackControls(
+            bubbleIsHeld: isBubbleHeld,
+            hasSettledOnWord: hasSettledOnCurrentWord
+        )
     }
 
     private func tokenKnowledgeLevels(
@@ -745,9 +755,13 @@ final class OverlayWindowController {
     /// outside the hover path — a modifier press, or the pointer going still.
     /// Rebuild the card when that happens so the footer matches the intent.
     private func syncBridgeControls() {
-        guard bubblesAreVisible,
-              currentWord != nil,
-              controlsAreInvited != renderedControlsVisible else {
+        guard bubblesAreVisible, currentWord != nil else {
+            return
+        }
+        if isBubbleHeld {
+            hasSettledOnCurrentWord = true
+        }
+        guard controlsAreInvited != renderedControlsVisible else {
             return
         }
         refreshCurrentCard(preservePosition: true)
@@ -794,6 +808,7 @@ final class OverlayWindowController {
         pinnedByUser = false
         temporarilyHeldForIdle = false
         holdModifierPressed = false
+        hasSettledOnCurrentWord = false
         stationaryPoint = nil
         stationarySince = nil
         renderedControlsVisible = false

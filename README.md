@@ -149,10 +149,14 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   input releases that temporary hold. Every shortcut and the hold modifier can
   be changed in Settings; bubble shortcuts exist only while a bubble is visible.
 - Feedback controls that stay out of the reading path. While the pointer is
-  passing over text the bubble shows no buttons at all; they appear only once
-  the bubble is held — pinned, Option-held, or rested on — and disappear again
-  when it is released. The shortcuts work throughout, and the menu-bar popover
-  lists them so hiding the buttons costs no discoverability.
+  passing over text the bubble shows no buttons at all; they appear once the
+  bubble is held — pinned, Option-held, or rested on — and stay until the
+  pointer reaches a different word. Settling is a latch rather than a state to
+  be maintained: the temporary hold behind it is released by any system input
+  at all, including a keystroke or a scroll elsewhere, which made the buttons
+  appear and vanish about once a second under a reader who had never left the
+  word. The shortcuts work throughout, and the menu-bar popover lists them so
+  hiding the buttons costs no discoverability.
 - Versioned local JSON export/import for backing up or moving the adaptive
   learning profile without exporting screenshots or source sentences; imports
   merge idempotently with existing progress

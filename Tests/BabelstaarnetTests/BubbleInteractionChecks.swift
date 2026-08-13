@@ -74,10 +74,33 @@ enum BubbleInteractionChecks {
         // Reading past a word must never put a question in front of the
         // learner. Only a deliberate hold invites the feedback controls.
         precondition(
-            !BridgeAttentionPolicy.showsFeedbackControls(bubbleIsHeld: false)
+            !BridgeAttentionPolicy.showsFeedbackControls(
+                bubbleIsHeld: false,
+                hasSettledOnWord: false
+            )
         )
         precondition(
-            BridgeAttentionPolicy.showsFeedbackControls(bubbleIsHeld: true)
+            BridgeAttentionPolicy.showsFeedbackControls(
+                bubbleIsHeld: true,
+                hasSettledOnWord: false
+            )
+        )
+
+        // The reported fault: the hold is released by any system input at all,
+        // so a keystroke or a scroll while the pointer rested on a word made
+        // the controls vanish and then return 0.75 s later, over and over.
+        // Once settled, they hold through that.
+        precondition(
+            BridgeAttentionPolicy.showsFeedbackControls(
+                bubbleIsHeld: false,
+                hasSettledOnWord: true
+            )
+        )
+        precondition(
+            BridgeAttentionPolicy.showsFeedbackControls(
+                bubbleIsHeld: true,
+                hasSettledOnWord: true
+            )
         )
 
         let bubble = CGRect(x: 80, y: 145, width: 320, height: 120)
