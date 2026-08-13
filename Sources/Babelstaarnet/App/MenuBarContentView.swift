@@ -13,6 +13,10 @@ struct MenuBarContentView: View {
             if model.screenPermissionGranted {
                 learningControl
 
+                if let failureMessage = model.failureMessage {
+                    failureNotice(failureMessage)
+                }
+
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Hover to translate")
@@ -100,6 +104,37 @@ struct MenuBarContentView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Why reading stopped on its own, shown where the reader comes to start it
+    /// again. Without this the app just went quiet: hovering stopped answering
+    /// and nothing anywhere said what had gone wrong.
+    private func failureNotice(_ message: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 11))
+                .foregroundStyle(.orange)
+
+            Text(message)
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("Retry") {
+                Task {
+                    await model.toggleLearningMode()
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.tint)
+        }
+        .padding(9)
+        .background(
+            .orange.opacity(0.10),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     /// The bubble itself stays out of the way while reading, so the shortcuts

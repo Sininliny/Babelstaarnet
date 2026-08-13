@@ -214,3 +214,19 @@ swiftc \
     -o "$output_dir/PowerSavingPolicyChecks"
 
 "$output_dir/PowerSavingPolicyChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/OCRFocusWindowChecks.swift" \
+    -o "$output_dir/OCRFocusWindowChecks"
+
+"$output_dir/OCRFocusWindowChecks"

@@ -243,6 +243,20 @@ final class AppModel: ObservableObject {
         isInstallingEngines = false
     }
 
+    /// What stopped the last reading session, if something did.
+    ///
+    /// Every failure used to be written into `phase` and then never shown
+    /// anywhere, so a session that ended because translation or capture failed
+    /// looked exactly like one the reader had switched off: hovering simply
+    /// stopped answering. The menu bar carries the reason now, and clears it as
+    /// soon as reading resumes.
+    var failureMessage: String? {
+        guard case let .failed(message) = phase else {
+            return nil
+        }
+        return message
+    }
+
     func requestScreenPermission() {
         screenPermissionWasRequested = true
         UserDefaults.standard.set(
@@ -529,10 +543,40 @@ final class AppModel: ObservableObject {
             guard generation == scanGeneration else {
                 return
             }
-            learningModeActive = false
-            phase = .failed(
-                message: "Translation failed: \(error.localizedDescription)"
+            stopAfterFailure(
+                "Translation failed: \(error.localizedDescription)"
             )
+        }
+    }
+
+    /// Ends a reading session that cannot continue, and records why.
+    ///
+    /// Stopping and explaining are the same event, so they happen in one place.
+    /// Separately, a failure used to leave the app half-running: learning mode
+    /// was off, but the hover overlay kept tracking the pointer and answering
+    /// from the last regions it had, so the bubbles went on showing
+    /// translations for a session that had already ended.
+    private func stopAfterFailure(_ message: String) {
+        deactivateLearningMode()
+        phase = .failed(message: message)
+    }
+
+    /// Nothing readable was under the pointer. That is an ordinary outcome of
+    /// moving across a page, not a failure, so the overlay is emptied and
+    /// reading continues.
+    private func presentNoReadableText() {
+        translatedRegions = []
+        lastCompletedScanDate = Date()
+        overlayController.show(
+            regions: [],
+            autoSpeak: autoSpeak,
+            hoverDelay: hoverDelay,
+            hotKeyConfiguration: hotKeyConfiguration,
+            bridgeConfiguration: bridgeConfiguration
+        )
+        phase = .showing(regionCount: 0)
+        if liveMode, liveTask == nil {
+            updateLiveMode()
         }
     }
 
@@ -649,26 +693,14 @@ final class AppModel: ObservableObject {
                 against: translatedRegions
             )
             guard !allRegions.isEmpty else {
-                translatedRegions = []
-                lastCompletedScanDate = Date()
-                overlayController.show(
-                    regions: [],
-                    autoSpeak: autoSpeak,
-                    hoverDelay: hoverDelay,
-                    hotKeyConfiguration: hotKeyConfiguration,
-                    bridgeConfiguration: bridgeConfiguration
-                )
-                phase = .showing(regionCount: 0)
-                if liveMode, liveTask == nil {
-                    updateLiveMode()
-                }
+                presentNoReadableText()
                 return
             }
 
             let jobs = translationJobs(for: allRegions)
             let uniqueTexts = uniqueSourceTexts(from: jobs)
             guard !uniqueTexts.isEmpty else {
-                phase = .failed(message: "No Danish words found on screen.")
+                presentNoReadableText()
                 return
             }
 
@@ -770,9 +802,7 @@ final class AppModel: ObservableObject {
             guard generation == scanGeneration else {
                 return
             }
-            learningModeActive = false
-            overlayController.hide()
-            phase = .failed(message: error.localizedDescription)
+            stopAfterFailure(error.localizedDescription)
         }
     }
 

@@ -33,11 +33,13 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
 
                 Toggle("Speak Danish on hover", isOn: $model.autoSpeak)
-            }
 
-            Section("Reading") {
+                // This slider only ever delayed the pronunciation. Under its
+                // old name, in its own section, it read as a delay on the
+                // bubble — which appears as soon as the word is recognized and
+                // is not waited on at all.
                 HStack {
-                    Text("Hover delay")
+                    Text("Speak after")
                     Slider(
                         value: $model.hoverDelay,
                         in: 0.2...1.2,
@@ -51,7 +53,16 @@ struct SettingsView: View {
                     .monospacedDigit()
                     .frame(width: 42, alignment: .trailing)
                 }
+                .disabled(!model.autoSpeak)
 
+                Text(
+                    "How long the pointer rests on a word before it is spoken. The bubble itself appears as soon as the word is read."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Reading") {
                 Toggle("Follow screen changes", isOn: $model.liveMode)
                     .disabled(!model.screenPermissionGranted)
 
@@ -209,9 +220,15 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // A fixed 760-point height does not fit under the menu bar on a 13"
+        // display at its default scaling, which put the last section — the one
+        // holding screen access — off the bottom of the window with no way to
+        // reach it. The form scrolls, so it only needs a floor.
+        .frame(width: 480)
         .frame(
-            width: 480,
-            height: 760
+            minHeight: 420,
+            idealHeight: 760,
+            maxHeight: .infinity
         )
     }
 

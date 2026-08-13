@@ -81,7 +81,23 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   luminance steps from their panel, and red-on-green text all separate. This
   runs as a second pass only when the original capture could not be read
 - Fine print is re-read from an enlarged crop when the line under the pointer is
-  small, which is what restores diacritics that dense forms and tables lose
+  small, which is what restores diacritics that dense forms and tables lose.
+  Only that line is cropped and enlarged, by as much as its own type size calls
+  for rather than a fixed doubling, and the refined line is substituted back
+  into the reading rather than replacing it, so the rest of the sentence
+  survives a crop that no longer holds it. The two dense-table scenarios in
+  `make benchmark-ocr` fell from 137 and 150 ms to 78 and 73 ms at unchanged
+  scores
+- No pass is run twice. Reaching the whole-capture fallback used to re-run the
+  accurate and colour-separated passes the focused attempts had already made and
+  discarded: three accurate Vision passes where two answer the same question.
+  That path is what a hover over a blank area takes, which is the most common
+  place a pointer sits while reading. Best of five sweeps, it fell from 313 ms
+  to 267 ms; individual runs vary by more than that margin, but the pass count
+  does not
+- The smallest text worth searching for is stated in pixels rather than as a
+  share of the capture, so the same text is looked for the same way whether the
+  crop around the pointer came out short or tall
 - Adaptive small-text OCR for dense PDFs and forms: table rules are removed
   while filled areas are kept, antialiased strokes are strengthened, tiny glyphs
   are enlarged to a reliable target size within a bounded pixel budget, and cell
@@ -166,6 +182,9 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   disabled bubbles
 - One independent overlay per display to preserve OCR coordinate alignment
 - Menu-bar setup with permission and engine readiness checks
+- When reading stops on its own, the menu bar says why and offers to start
+  again. A failure ends the session completely rather than leaving the bubbles
+  answering from the last thing they read
 - In-app installation and rechecking for the open-source engines
 - Zero-setup Apple Vision and Translation fallbacks when Tesseract or Argos is
   not installed
