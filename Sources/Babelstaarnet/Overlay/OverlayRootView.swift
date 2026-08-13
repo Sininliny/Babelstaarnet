@@ -41,6 +41,15 @@ struct WordBubbleView: View {
         let danishLeads = card.wordEnglishMeaning == nil
 
         VStack(alignment: .leading, spacing: 6) {
+            // The controls sit above the answer and never leave. They used to
+            // be earned by settling on a word and dropped again the moment the
+            // machine saw any input, which made them flicker under a reader who
+            // had not moved. A fixed row cannot flicker, and keeping it out of
+            // the answer's own column — above it, behind a rule — is what stops
+            // it from being read as part of the meaning.
+            BridgeFeedbackControls(state: state, card: card)
+            Divider().opacity(0.45)
+
             if let wordEnglishMeaning = card.wordEnglishMeaning {
                 Text(LearnerDisplayText.clean(wordEnglishMeaning))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -96,12 +105,6 @@ struct WordBubbleView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            BridgeFooter(
-                state: state,
-                card: card,
-                showsControls: card.showsControlsInWordBridge
-            )
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
@@ -153,7 +156,7 @@ struct SentenceBridgeBubbleView: View {
                 englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
                 knowledgeLevels: card.sentenceBridgeKnowledgeLevels,
                 focusTokenIndexes: card.sentenceFocusTokenIndexes,
-                knownAnimationTrigger: card.showsControlsInSentenceBridge
+                knownAnimationTrigger: card.showsEnglishSupportInSentenceBridge
                     ? state.knownAnimationID
                     : 0
             )
@@ -175,11 +178,11 @@ struct SentenceBridgeBubbleView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            BridgeFooter(
-                state: state,
-                card: card,
-                showsControls: card.showsControlsInSentenceBridge
-            )
+            // No controls here — they live permanently in the word panel. The
+            // confirmation still does, because the shortcuts stay live even
+            // when the word panel is switched off and there is no button
+            // anywhere to answer back.
+            BridgeConfirmation(state: state)
         }
         .padding(12)
         .frame(
@@ -194,19 +197,14 @@ struct SentenceBridgeBubbleView: View {
 
 }
 
-/// The bubble never asks the learner for anything while they are reading, but
-/// acting on it always answers back. So the controls and the confirmation are
-/// separate: the buttons appear only once the learner has settled on a word,
-/// while a confirmation shows up on its own whenever a shortcut was used.
-private struct BridgeFooter: View {
+/// Acting on the bubble always answers back, including where no button exists
+/// to answer with — the shortcuts stay live whether or not the word panel that
+/// carries the buttons is switched on.
+private struct BridgeConfirmation: View {
     @ObservedObject var state: OverlayState
-    let card: HoverCard
-    let showsControls: Bool
 
     var body: some View {
-        if showsControls {
-            BridgeFeedbackControls(state: state, card: card)
-        } else if let confirmation = state.feedbackConfirmation {
+        if let confirmation = state.feedbackConfirmation {
             Label(
                 confirmation == .markedKnown
                     ? "Marked known"
@@ -225,8 +223,6 @@ private struct BridgeFeedbackControls: View {
     let card: HoverCard
 
     var body: some View {
-        Divider().opacity(0.45)
-
         // The narrow word bubble cannot fit four controls on one line, and a
         // button that wraps mid-label reads as a layout accident.
         InlineTokenLayout(spacing: 6, lineSpacing: 5) {

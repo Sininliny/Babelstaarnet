@@ -25,14 +25,8 @@ final class OverlayWindowController {
     /// reading, not a question about one word, and re-pressing it on every
     /// hover would be exactly the kind of nagging the bridge avoids.
     private var showsAllEnglish = false
-    private var renderedControlsVisible = false
     private var pinnedByUser = false
     private var temporarilyHeldForIdle = false
-    /// Whether the reader has settled on the word currently under the pointer.
-    /// Held separately from `temporarilyHeldForIdle` because that flag tracks
-    /// system input, which stops and starts many times while someone reads one
-    /// line. Cleared when the pointer reaches a different word.
-    private var hasSettledOnCurrentWord = false
     private var holdModifierPressed = false
     private var stationaryPoint: CGPoint?
     private var stationarySince: Date?
@@ -198,7 +192,6 @@ final class OverlayWindowController {
                 self?.updateHoldModifierState()
                 self?.updateStationaryHold(at: point)
                 self?.updateHover(at: point)
-                self?.syncBridgeControls()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -255,8 +248,6 @@ final class OverlayWindowController {
             hoverSpeechTimer?.invalidate()
             hoverSpeechTimer = nil
             bubbleState.clearFeedback()
-            // A different word has to be settled on in its own right.
-            hasSettledOnCurrentWord = false
         }
         currentWord = match?.word
         currentRegion = match?.region
@@ -400,12 +391,6 @@ final class OverlayWindowController {
                 in: explanation.primaryText,
                 excluding: bridge?.englishTokenIndexes ?? []
             ),
-            showsControlsInWordBridge:
-                bridgeConfiguration.showsWordBridge && controlsAreInvited,
-            showsControlsInSentenceBridge:
-                !bridgeConfiguration.showsWordBridge
-                    && bridgeConfiguration.showsSentenceBridge
-                    && controlsAreInvited,
             showsEnglishSupportInSentenceBridge:
                 !bridgeConfiguration.showsWordBridge,
             showsAllEnglish: showsAllEnglish,
@@ -415,13 +400,6 @@ final class OverlayWindowController {
             pinShortcutLabel: hotKeyConfiguration.togglePin.displayText,
             showAllEnglishShortcutLabel:
                 hotKeyConfiguration.showAllEnglish.displayText
-        )
-    }
-
-    private var controlsAreInvited: Bool {
-        BridgeAttentionPolicy.showsFeedbackControls(
-            bubbleIsHeld: isBubbleHeld,
-            hasSettledOnWord: hasSettledOnCurrentWord
         )
     }
 
@@ -751,28 +729,11 @@ final class OverlayWindowController {
         return word.sourceText
     }
 
-    /// The controls appear and disappear with the hold state, which changes
-    /// outside the hover path — a modifier press, or the pointer going still.
-    /// Rebuild the card when that happens so the footer matches the intent.
-    private func syncBridgeControls() {
-        guard bubblesAreVisible, currentWord != nil else {
-            return
-        }
-        if isBubbleHeld {
-            hasSettledOnCurrentWord = true
-        }
-        guard controlsAreInvited != renderedControlsVisible else {
-            return
-        }
-        refreshCurrentCard(preservePosition: true)
-    }
 
     private func prepareBubbles(
         _ card: HoverCard
     ) -> (word: CGSize, sentence: CGSize) {
         bubbleState.hoverCard = card
-        renderedControlsVisible = card.showsControlsInWordBridge
-            || card.showsControlsInSentenceBridge
         var wordSize = CGSize.zero
         var sentenceSize = CGSize.zero
         if bridgeConfiguration.showsWordBridge {
@@ -808,10 +769,8 @@ final class OverlayWindowController {
         pinnedByUser = false
         temporarilyHeldForIdle = false
         holdModifierPressed = false
-        hasSettledOnCurrentWord = false
         stationaryPoint = nil
         stationarySince = nil
-        renderedControlsVisible = false
         bubbleState.isPinned = false
     }
 

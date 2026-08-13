@@ -24,10 +24,12 @@ The bubble answers before it teaches:
   on the line is translated, regardless of what the app thinks you know. Press
   it again to go back. It is a reading mode, so it stays on until you turn it
   off.
-- **Nothing is asked of you.** While you read, the bubble has no buttons. The
-  **Knew** / **Don’t know** controls appear only once you deliberately settle on
-  a word — pin it, hold Option, or rest on it. Their shortcuts stay live the
-  whole time either way, and the menu-bar popover lists them.
+- **Nothing is asked of you.** The **Knew** / **Don’t know** controls sit in a
+  fixed row above the answer, behind a rule, so the meaning is still the first
+  thing you read inside the bubble. They are a permanent tool rather than a
+  question: nothing about them changes as you read, and ignoring them for a
+  whole session costs nothing. Their shortcuts stay live either way, and the
+  menu-bar popover lists them.
 - **Acting always answers back.** The bubble never prompts, but pressing a
   shortcut confirms itself inline.
 
@@ -148,15 +150,18 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   0.75 seconds without input, they are held temporarily; any pointer or keyboard
   input releases that temporary hold. Every shortcut and the hold modifier can
   be changed in Settings; bubble shortcuts exist only while a bubble is visible.
-- Feedback controls that stay out of the reading path. While the pointer is
-  passing over text the bubble shows no buttons at all; they appear once the
-  bubble is held — pinned, Option-held, or rested on — and stay until the
-  pointer reaches a different word. Settling is a latch rather than a state to
-  be maintained: the temporary hold behind it is released by any system input
-  at all, including a keystroke or a scroll elsewhere, which made the buttons
-  appear and vanish about once a second under a reader who had never left the
-  word. The shortcuts work throughout, and the menu-bar popover lists them so
-  hiding the buttons costs no discoverability.
+- Feedback controls in a fixed row at the top of the word panel, above the
+  answer and separated from it by a rule. They are never conditional, so they
+  cannot flicker and the answer under them never reflows. Revealing them on
+  demand was tried first and removed: it derived from the temporary bubble hold,
+  which any system input releases — a keystroke, a scroll, a fingertip settling
+  on a trackpad — after which it is re-earned only following another 0.75 s of
+  complete stillness. Reading a page with the pointer parked produces that
+  pattern roughly once a second, so the row appeared and vanished under a reader
+  who had never left the word. Position, not visibility, now keeps them out of
+  the reading path. The sentence panel carries no controls; it still confirms a
+  shortcut inline, because the shortcuts work whether or not the word panel is
+  switched on
 - Versioned local JSON export/import for backing up or moving the adaptive
   learning profile without exporting screenshots or source sentences; imports
   merge idempotently with existing progress
@@ -281,10 +286,11 @@ On first use:
 4. Choose **Start translating** or press `Fn+Z` by default.
 5. Hover a Danish word to hear it and see what it means.
 6. With a bubble visible, press `4` to translate the whole line, `1` for
-   **Knew**, `2` for **Don’t know**, or `3` to pin it. The buttons themselves
-   appear only once the bubble is held — pin it, hold Option, or leave the
-   pointer still — but the shortcuts work whenever a bubble is on screen. These
-   shortcuts and the hold modifier are editable under **Settings → Shortcuts**.
+   **Knew**, `2` for **Don’t know**, or `3` to pin it. The same four are buttons
+   in the row at the top of the word panel, and the shortcuts work whenever a
+   bubble is on screen — including when the word panel is switched off and there
+   is no row. These shortcuts and the hold modifier are editable under
+   **Settings → Shortcuts**.
 7. Press the activation shortcut again to deactivate.
 
 Power saving is enabled by default. It can be disabled under **Settings →

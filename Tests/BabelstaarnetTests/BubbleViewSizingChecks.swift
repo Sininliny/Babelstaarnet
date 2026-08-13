@@ -75,8 +75,7 @@ enum BubbleViewSizingChecks {
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
-            adaptiveEnglishTokenIndexes: [4],
-            showsControlsInWordBridge: true
+            adaptiveEnglishTokenIndexes: [4]
         )
         let wordOnlyHeight = measuredWordHeight(
             wordOnlyCard,
@@ -90,7 +89,6 @@ enum BubbleViewSizingChecks {
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
             adaptiveEnglishTokenIndexes: [4],
-            showsControlsInSentenceBridge: true,
             showsEnglishSupportInSentenceBridge: true
         )
         let sentenceOnlyHeight = measuredSentenceHeight(
@@ -103,7 +101,6 @@ enum BubbleViewSizingChecks {
             wordKnowledgeLevel: 3,
             wordEnglishMeaning: "student accommodation",
             learningText: "Mange studieboliger står tomme.",
-            showsControlsInSentenceBridge: true,
             showsEnglishSupportInSentenceBridge: true
         )
         let testingSentenceOnlyHeight = measuredSentenceHeight(
@@ -112,8 +109,11 @@ enum BubbleViewSizingChecks {
             hostingView: sentenceHostingView
         )
 
-        // Passive reading must be quieter than a deliberate hold: the same word
-        // gains the feedback row only once the learner settles on it.
+        // The feedback row is fixed above the answer, so a hover that is only
+        // passing over a word and one the reader has settled on are the same
+        // bubble at the same size. That equality is the whole point: a row
+        // that never comes or goes cannot flicker, and the answer underneath
+        // it never reflows.
         let passiveCard = HoverCard(
             word: word,
             wordEnglishMeaning: "student accommodation",
@@ -121,8 +121,7 @@ enum BubbleViewSizingChecks {
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
-            adaptiveEnglishTokenIndexes: [4],
-            showsControlsInWordBridge: false
+            adaptiveEnglishTokenIndexes: [4]
         )
         let passiveHeight = measuredWordHeight(
             passiveCard,
@@ -130,8 +129,9 @@ enum BubbleViewSizingChecks {
             hostingView: wordHostingView
         )
         precondition(
-            passiveHeight < wordOnlyHeight,
-            "A passing hover should not carry the feedback controls"
+            passiveHeight == wordOnlyHeight,
+            "The feedback row must not change the bubble between a passing "
+                + "hover and a settled one"
         )
 
         // Requesting all English keeps the bubble in the same shape; it changes
@@ -157,16 +157,51 @@ enum BubbleViewSizingChecks {
         precondition(directMeaningOnlyHeight < wordHeight)
         precondition(translatedWordHeight > wordHeight)
         precondition(translatedWordHeight < 170)
-        precondition(wordOnlyHeight > translatedWordHeight)
+        precondition(wordOnlyHeight == translatedWordHeight)
         precondition(wordOnlyHeight < 230)
         precondition(compactHeight >= 76)
         precondition(compactHeight < 140)
         precondition(supportedHeight == compactHeight)
         precondition(supportedHeight < 180)
-        precondition(sentenceOnlyHeight > compactHeight)
         precondition(sentenceOnlyHeight < 200)
-        precondition(testingSentenceOnlyHeight > compactHeight)
         precondition(testingSentenceOnlyHeight < 200)
+
+        // English support still has to earn its room. Measured on a line long
+        // enough to clear the panel's minimum height, since below that floor
+        // every difference is clamped away and nothing is being tested.
+        let longLine = String(
+            repeating: "Mange studieboliger står tomme fordi de ligger langt "
+                + "fra byen og fra de uddannelsessteder de blev bygget til. ",
+            count: 4
+        )
+        let plainSentence = HoverCard(
+            word: word,
+            learningText: longLine
+        )
+        let supportedSentence = HoverCard(
+            word: word,
+            learningText: longLine,
+            englishSupport: "Relating to Earth or belonging to the planet.",
+            showsEnglishSupportInSentenceBridge: true
+        )
+        let plainSentenceHeight = measuredSentenceHeight(
+            plainSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        let supportedSentenceHeight = measuredSentenceHeight(
+            supportedSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        precondition(
+            plainSentenceHeight > SentenceBubbleMetrics.fittedSize(.zero).height,
+            "The fixture is still clamped to the panel minimum"
+        )
+        precondition(
+            supportedSentenceHeight > plainSentenceHeight,
+            "English support did not add a row to the sentence panel"
+        )
         print(
             "Two-bubble content sizing checks passed "
                 + "(word \(translatedWordHeight), sentence \(compactHeight), "

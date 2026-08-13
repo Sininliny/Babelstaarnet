@@ -1,32 +1,22 @@
 import CoreGraphics
 import Foundation
 
-/// Reading is the task; rating vocabulary is not. The bridge therefore asks
-/// nothing while the pointer is passing over text, and offers its controls only
-/// once the learner has deliberately settled on a word — by pinning, holding
-/// the modifier, or resting long enough that the bubble holds itself.
+/// The feedback controls are a fixed row at the top of the word panel and are
+/// never conditional, so the policy that used to decide when to reveal them is
+/// gone rather than left answering a question nothing asks.
 ///
-/// The shortcuts stay live the whole time, so nothing is slower for someone who
-/// already knows them; the buttons are a discovery aid, not a prompt.
+/// It existed because the buttons were once drawn on every hover and read as a
+/// demand; hiding them until the reader settled on a word was the answer. That
+/// cure had its own fault. Settling was derived from the temporary hold, and
+/// the hold is released by *any* system input — a keystroke, a scroll, a
+/// fingertip resting on a trackpad — then re-earned only after another three
+/// quarters of a second of complete stillness. Reading a page with the pointer
+/// parked produces that pattern about once a second, so the row appeared and
+/// vanished under a reader who had never left the word.
 ///
-/// Settling is a latch, not a level. The temporary hold that earns it is
-/// released by *any* system input — a keystroke, a scroll, a fingertip resting
-/// on a trackpad — and is then re-earned only after another three quarters of a
-/// second of complete stillness. Someone reading a page with the pointer parked
-/// on a word generates that pattern constantly, so the controls appeared and
-/// vanished repeatedly underneath a reader who had never left the word. Once
-/// they are earned they therefore stay until the pointer moves to something
-/// else: retracting a control the reader may be reaching for is a worse failure
-/// than showing one they did not ask for.
-enum BridgeAttentionPolicy {
-    static func showsFeedbackControls(
-        bubbleIsHeld: Bool,
-        hasSettledOnWord: Bool
-    ) -> Bool {
-        bubbleIsHeld || hasSettledOnWord
-    }
-}
-
+/// Position now does the work that hiding was doing: the row sits above the
+/// answer, behind a rule, outside the column the meaning is read in. A fixed
+/// row cannot flicker, and there is no state left to get wrong.
 enum BubbleInteractionPolicy {
     static let stationaryTolerance: CGFloat = 3
     static let stationaryPinDelay: TimeInterval = 0.75

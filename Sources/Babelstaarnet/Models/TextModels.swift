@@ -95,8 +95,6 @@ struct HoverCard: Equatable, Sendable {
     let adaptiveEnglishTokenIndexes: [Int]
     let sentenceBridgeKnowledgeLevels: [Int: Int]
     let sentenceFocusTokenIndexes: [Int]
-    let showsControlsInWordBridge: Bool
-    let showsControlsInSentenceBridge: Bool
     let showsEnglishSupportInSentenceBridge: Bool
     let showsAllEnglish: Bool
     let speaksOnHover: Bool
@@ -118,8 +116,6 @@ struct HoverCard: Equatable, Sendable {
         adaptiveEnglishTokenIndexes: [Int] = [],
         sentenceBridgeKnowledgeLevels: [Int: Int] = [:],
         sentenceFocusTokenIndexes: [Int] = [],
-        showsControlsInWordBridge: Bool = false,
-        showsControlsInSentenceBridge: Bool = false,
         showsEnglishSupportInSentenceBridge: Bool = false,
         showsAllEnglish: Bool = false,
         speaksOnHover: Bool = false,
@@ -141,8 +137,6 @@ struct HoverCard: Equatable, Sendable {
         self.sentenceBridgeKnowledgeLevels =
             sentenceBridgeKnowledgeLevels
         self.sentenceFocusTokenIndexes = sentenceFocusTokenIndexes
-        self.showsControlsInWordBridge = showsControlsInWordBridge
-        self.showsControlsInSentenceBridge = showsControlsInSentenceBridge
         self.showsEnglishSupportInSentenceBridge =
             showsEnglishSupportInSentenceBridge
         self.showsAllEnglish = showsAllEnglish
