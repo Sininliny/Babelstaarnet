@@ -225,6 +225,47 @@ enum BubbleViewSizingChecks {
             ) == wordOnly
         )
 
+        // The reported fault: pressing Knew swapped "1  Knew" for "Marked
+        // known", more than doubling that button, and the row wrapped onto a
+        // second line — acting on the bubble resized it. Confirmation lands on
+        // the capsule now, so no control ever changes width.
+        let restingHeight = measuredWordHeight(
+            compact,
+            state: state,
+            hostingView: wordHostingView
+        )
+        state.showFeedback(.markedKnown)
+        let confirmedHeight = measuredWordHeight(
+            compact,
+            state: state,
+            hostingView: wordHostingView
+        )
+        precondition(
+            confirmedHeight == restingHeight,
+            "Confirming Knew changed the bubble height: "
+                + "\(restingHeight) -> \(confirmedHeight)"
+        )
+        state.showFeedback(.englishRestored)
+        precondition(
+            measuredWordHeight(
+                compact,
+                state: state,
+                hostingView: wordHostingView
+            ) == restingHeight,
+            "Confirming Don’t know changed the bubble height"
+        )
+        state.clearFeedback()
+        state.isPinned = true
+        precondition(
+            measuredWordHeight(
+                compact,
+                state: state,
+                hostingView: wordHostingView
+            ) == restingHeight,
+            "Pinning changed the bubble height"
+        )
+        state.isPinned = false
+
         let initialAnimationID = state.knownAnimationID
         state.showFeedback(.markedKnown)
         precondition(state.feedbackConfirmation == .markedKnown)

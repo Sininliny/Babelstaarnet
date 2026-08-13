@@ -209,35 +209,40 @@ private struct BridgeFeedbackControls: View {
         // The narrow word bubble cannot fit four controls on one line, and a
         // button that wraps mid-label reads as a layout accident.
         InlineTokenLayout(spacing: 6, lineSpacing: 5) {
+            // No control ever changes width. Confirmation lands on the capsule
+            // of the control that was pressed, not in its label: swapping
+            // "1  Knew" for "Marked known" more than doubled that button and
+            // wrapped the row onto a second line, so acting on the bubble
+            // resized it. The Danish word's own lift and glow answers the same
+            // press, and restoring English is visible in the line itself.
             Button {
                 state.onKnown()
             } label: {
-                if state.feedbackConfirmation == .markedKnown {
-                    Label("Marked known", systemImage: "checkmark")
-                } else {
-                    Text("\(card.knownShortcutLabel)  Knew")
-                }
+                Text("\(card.knownShortcutLabel)  Knew")
             }
+            .buttonStyle(
+                BridgeFeedbackButtonStyle(
+                    isOn: state.feedbackConfirmation == .markedKnown
+                )
+            )
 
             Button {
                 state.onDontKnow()
             } label: {
-                if state.feedbackConfirmation == .englishRestored {
-                    Label("English restored", systemImage: "checkmark")
-                } else {
-                    Text("\(card.dontKnowShortcutLabel)  Don’t know")
-                }
+                Text("\(card.dontKnowShortcutLabel)  Don’t know")
             }
+            .buttonStyle(
+                BridgeFeedbackButtonStyle(
+                    isOn: state.feedbackConfirmation == .englishRestored
+                )
+            )
 
             Button {
                 state.onTogglePin()
             } label: {
-                Text(
-                    state.isPinned
-                        ? "\(card.pinShortcutLabel)  Unpin"
-                        : "\(card.pinShortcutLabel)  Pin"
-                )
+                Text("\(card.pinShortcutLabel)  Pin")
             }
+            .buttonStyle(BridgeFeedbackButtonStyle(isOn: state.isPinned))
             .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
 
             // The label stays put and the capsule carries the state instead.
