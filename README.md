@@ -8,9 +8,9 @@ meaning appears where you are already looking. Nothing to select, paste, or
 submit.
 
 It is a translator first. What makes it different is what it does *while* you
-use it: because the Danish stays in place beside the English, and because the
-app quietly remembers which words keep coming back to you, ordinary use turns
-into ordinary learning. That part runs in the background and never asks you for
+use it: because every Danish word you can already read stays Danish, and because
+the app quietly remembers which words keep coming back to you, ordinary use
+turns into ordinary learning. That part runs in the background and never asks you for
 anything.
 
 ## Translation first
@@ -37,12 +37,15 @@ The bubble answers before it teaches:
 
 Four rules keep the learning underneath the translation:
 
-1. **Danish never disappears.** The source word and Danish sentence structure
-   remain visible next to every answer.
+1. **Danish carries the sentence.** Word order and grammar stay Danish, and
+   every word the reader knows stays Danish with it. Only the words they cannot
+   read are swapped for English, in place, so what is left is one line to read
+   rather than two texts to reconcile. The word being pointed at is still shown
+   in Danish in the word panel, under its meaning.
 2. **English is scaffolding, not the product.** Babelstårnet adds a few concise
    English anchors rather than translating everything by default, and the
-   anchors are what fade as a word becomes familiar. The Danish itself stays
-   fully legible at every level.
+   anchors are what fade as a word becomes familiar, giving the Danish back one
+   word at a time. Whatever Danish remains is fully legible at every level.
 3. **Help follows the reader.** Unknown words receive support; familiar words
    need less; well-known words stay Danish-only. Reading is what moves this —
    spaced encounters in different contexts count, repeated hovering does not.
@@ -52,7 +55,8 @@ Four rules keep the learning underneath the translation:
 The two panels serve different reading problems and can be used separately:
 
 - **Word meaning**, above the pointer: what the word means, plus a concise
-  Danish explanation with English only under concepts you do not yet know.
+  Danish explanation with English standing in for the concepts you do not yet
+  know.
 - **Whole sentence**, below the pointer: the Danish line in its own word order
   and grammar, with one or two English anchors when the sentence is mostly
   familiar, growing to five when the text is genuinely difficult.
@@ -120,9 +124,10 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   different contexts gradually reduce support through the learning levels,
   while repeated hovering on the same text contributes no knowledge. Passive
   learning stops before mastery, and a later explicit confirmation can make a
-  known word stable. Danish always remains visible: levels 0–2 attach a concise
-  English gloss beneath selected Danish words, level 3 quietly tests
-  comprehension without a gloss, and levels 4–5 remain Danish-only. Internal
+  known word stable. Levels 0–2 put a concise English word in place of the
+  Danish one, level 3 quietly tests comprehension with no help at all, and
+  levels 4–5 stay Danish. A word therefore returns to Danish as it is learned,
+  which is the only progress signal the reader ever sees. Internal
   levels are intentionally absent from the reading bubbles. A testing-level
   word keeps a faint direct meaning in the focused word panel so passive
   learning never becomes a barrier to translation. Sentence-only mode carries
@@ -135,8 +140,12 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   knowing a word never makes it harder to read.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
-  receive a small interlinear English gloss. The support budget adapts from one
-  to five anchors according to how much of the sentence is unfamiliar.
+  are replaced by their English in place, keeping the Danish word order around
+  them. The support budget adapts from one to five substitutions according to
+  how much of the sentence is unfamiliar. English set beneath the Danish rather
+  than in place of it was tried and removed: it left the reader assembling the
+  sentence from a Danish line and a row of footnotes, and a word someone cannot
+  read is not made readable by being left in place with a note attached.
 - Anchors are not spent on Danish's closed classes — articles, pronouns,
   prepositions, conjunctions, and the auxiliary and copula verbs. They are the
   first fifty words of the language, and they are also where word-at-a-time

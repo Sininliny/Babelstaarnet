@@ -239,54 +239,26 @@ enum BubbleViewSizingChecks {
         precondition(opacities == opacities.sorted(by: >))
         precondition(opacities[0] - opacities[5] < 0.30)
 
-        let interlinear = InterlinearBridgePresentation.units(
-            text: "Hun tøvede hesitated, før hun svarede.",
-            englishTokenIndexes: [2]
+        // English stands in the line instead of under it, so every token
+        // belongs to one language and nothing is paired. A Danish word worth
+        // several English ones stays a single substitution.
+        let substituted = InterlinearBridgePresentation.units(
+            text: "Hun the period of reflection, før hun svarede.",
+            englishTokenIndexes: [1, 2, 3, 4]
         )
-        precondition(interlinear[1].danish == "tøvede,")
-        precondition(interlinear[1].english == "hesitated")
-        precondition(interlinear.map(\.danish).compactMap { $0 }
-            == ["Hun", "tøvede,", "før", "hun", "svarede."])
-
-        // Words are translated one at a time, so the translator answers each of
-        // them as though it opened a sentence. A capital under a lowercase
-        // Danish word reads as a name it is not.
+        precondition(substituted.count == 5)
+        precondition(substituted[0].danish == "Hun")
+        precondition(substituted[0].english == nil)
+        precondition(substituted[1].danish == nil)
         precondition(
-            InterlinearBridgePresentation.matchingCase(
-                of: "Allocation",
-                to: "tildele"
-            ) == "allocation"
+            substituted[1].english == "the period of reflection,",
+            "One substitution split into several: "
+                + String(describing: substituted[1].english)
         )
         precondition(
-            InterlinearBridgePresentation.matchingCase(
-                of: "Copenhagen",
-                to: "København"
-            ) == "Copenhagen"
+            substituted.compactMap(\.danish)
+                == ["Hun", "før", "hun", "svarede."]
         )
-        precondition(
-            InterlinearBridgePresentation.matchingCase(
-                of: "condition",
-                to: "betingelse"
-            ) == "condition"
-        )
-        precondition(
-            InterlinearBridgePresentation.matchingCase(
-                of: "CPR",
-                to: "cpr"
-            ) == "cPR",
-            "Only the first letter follows the Danish; an acronym's remaining "
-                + "capitals are not the translator's sentence case."
-        )
-        let cased = InterlinearBridgePresentation.units(
-            text: "at CPR-kontoret kan tildele Allocation.",
-            englishTokenIndexes: [4]
-        )
-        precondition(
-            cased.last?.english == "allocation",
-            "A gloss kept its sentence capital inside a line: "
-                + String(describing: cased.last?.english)
-        )
-        precondition(cased.last?.danish == "tildele.")
     }
 
     private static func measuredWordHeight(

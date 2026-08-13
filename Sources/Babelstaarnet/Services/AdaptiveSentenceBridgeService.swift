@@ -225,7 +225,17 @@ struct AdaptiveSentenceBridgeService {
             let replacement: String
             switch stateForWord(key) {
             case .unknown, .learning:
-                replacement = "\(match.word) \(markedEnglish(english))"
+                // The English takes the word's place rather than being hung
+                // underneath it. Keeping both meant the reader assembled the
+                // sentence from two texts at once, reading a Danish line and a
+                // row of footnotes against it; a word they cannot read is not
+                // made readable by being left in place with a note attached.
+                // Substituting gives them one line they can read straight
+                // through, in Danish word order, with the words they do know
+                // still in Danish.
+                replacement = markedEnglish(
+                    Self.matchingCase(of: english, to: match.word)
+                )
             case .testing, .known:
                 continue
             }
@@ -313,6 +323,28 @@ struct AdaptiveSentenceBridgeService {
 
     private func markedEnglish(_ value: String) -> String {
         Self.englishStart + value + Self.englishEnd
+    }
+
+    /// Gives the English the case of the Danish it stands in for.
+    ///
+    /// Words are translated one at a time, so each comes back as though it
+    /// opened a sentence. Standing in the middle of a line, a capital reads as
+    /// a proper noun; standing at the start of one, a lower-case word reads as
+    /// a fragment. The Danish it replaces settles both, and Danish capitalises
+    /// proper nouns and sentence openings only — which is what makes this safe
+    /// here and would not make it safe for German.
+    static func matchingCase(of english: String, to danish: String) -> String {
+        guard let englishFirst = english.first,
+              let danishFirst = danish.first else {
+            return english
+        }
+        if danishFirst.isUppercase, englishFirst.isLowercase {
+            return english.prefix(1).uppercased() + english.dropFirst()
+        }
+        if danishFirst.isLowercase, englishFirst.isUppercase {
+            return english.prefix(1).lowercased() + english.dropFirst()
+        }
+        return english
     }
 
     private func annotatedBridge(from markedText: String) -> AdaptiveSentenceBridge {

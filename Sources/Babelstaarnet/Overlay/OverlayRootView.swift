@@ -334,69 +334,45 @@ private struct SentenceBridgeText: View {
     let knownAnimationTrigger: Int
 
     var body: some View {
-        InlineTokenLayout(spacing: 3, lineSpacing: 3) {
+        // One line of running text, set at one size. English words stand in
+        // the sentence rather than under it, so they are typed like the words
+        // beside them — a substitution the reader reads, not a note they
+        // consult. A faint tint is the only thing marking which words were
+        // swapped, so the swap stays visible without costing legibility.
+        InlineTokenLayout(spacing: 4, lineSpacing: 4) {
             ForEach(Array(displayUnits.enumerated()), id: \.offset) {
                 _, unit in
                 if let danish = unit.danish {
-                    // Danish and its gloss share a column as wide as the wider
-                    // of the two, and the gloss is usually wider. Centring them
-                    // spent that difference on both sides, so every glossed
-                    // word was nudged right and the Danish line came out
-                    // ragged — the line a reader is meant to be reading. Left
-                    // alignment puts each Danish word where the previous one
-                    // ended and leaves the slack after it, which is also how
-                    // interlinear glosses are set.
-                    VStack(alignment: .leading, spacing: 1) {
-                        EncouragedDanishWord(
-                            text: danish,
-                            font: .system(size: 12, design: .rounded),
-                            opacity: KnowledgeTone.opacity(
-                                for: knowledgeLevels[unit.sourceIndex] ?? 0
-                            ),
-                            animationTrigger: focusTokenIndexes.contains(
-                                unit.sourceIndex
-                            )
-                                ? knownAnimationTrigger
-                                : 0
+                    EncouragedDanishWord(
+                        text: danish,
+                        font: .system(size: 12, design: .rounded),
+                        opacity: KnowledgeTone.opacity(
+                            for: knowledgeLevels[unit.sourceIndex] ?? 0
+                        ),
+                        animationTrigger: focusTokenIndexes.contains(
+                            unit.sourceIndex
                         )
-
-                        if let english = unit.english {
-                            // A gloss is an annotation on the Danish above it,
-                            // so it is set apart by size, weight, and a wash of
-                            // tint. It used to carry a stroked outline as well,
-                            // which drew a box around every second word: a
-                            // short line came out looking like a row of form
-                            // fields rather than something to read through.
-                            Text(english)
-                                .font(
-                                    .system(
-                                        size: 9,
-                                        weight: .medium,
-                                        design: .rounded
-                                    )
-                                )
-                                .foregroundStyle(
-                                    .primary.opacity(
-                                        EnglishGlossTone.opacity(
-                                            for: knowledgeLevels[
-                                                unit.sourceIndex
-                                            ] ?? 0
-                                        )
-                                    )
-                                )
-                                .padding(.horizontal, 3)
-                                .padding(.vertical, 1)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(.primary.opacity(0.06))
-                                }
-                        }
-                    }
+                            ? knownAnimationTrigger
+                            : 0
+                    )
                     .fixedSize(horizontal: true, vertical: true)
                 } else if let english = unit.english {
                     Text(english)
-                        .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.primary.opacity(0.9))
+                        .font(
+                            .system(
+                                size: 12,
+                                weight: .medium,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.primary.opacity(0.07))
+                        }
+                        .fixedSize(horizontal: true, vertical: true)
                 }
             }
         }
@@ -418,6 +394,14 @@ struct BridgeDisplayUnit: Equatable {
 }
 
 enum InterlinearBridgePresentation {
+    /// Splits the bridge into the run of words it is read as.
+    ///
+    /// English stands in place of the Danish it replaced rather than beneath
+    /// it, so there is nothing to pair: every token belongs to one language or
+    /// the other and the line reads straight through. Consecutive English
+    /// tokens are grouped, because one Danish word is often several English
+    /// ones — "refleksionsperioden" is "the period of reflection" — and those
+    /// four words are one substitution, not four.
     static func units(
         text: String,
         englishTokenIndexes: [Int]
@@ -429,9 +413,9 @@ enum InterlinearBridgePresentation {
         var result: [BridgeDisplayUnit] = []
         var index = 0
         while index < tokens.count {
+            let start = index
             if englishIndexes.contains(index) {
                 var english: [String] = []
-                let start = index
                 while index < tokens.count,
                       englishIndexes.contains(index) {
                     english.append(tokens[index])
@@ -446,72 +430,16 @@ enum InterlinearBridgePresentation {
                 )
                 continue
             }
-
-            let sourceIndex = index
-            var danish = tokens[index]
-            index += 1
-            var glossTokens: [String] = []
-            while index < tokens.count,
-                  englishIndexes.contains(index) {
-                glossTokens.append(tokens[index])
-                index += 1
-            }
-            var english = glossTokens.joined(separator: " ")
-            if !english.isEmpty {
-                let split = splitTrailingPunctuation(from: english)
-                english = split.text
-                danish += split.punctuation
-                english = matchingCase(of: english, to: danish)
-            }
             result.append(
                 BridgeDisplayUnit(
-                    sourceIndex: sourceIndex,
-                    danish: danish,
-                    english: english.isEmpty ? nil : english
+                    sourceIndex: start,
+                    danish: tokens[index],
+                    english: nil
                 )
             )
+            index += 1
         }
         return result
-    }
-
-    /// Lowers a gloss that only got its capital from being translated alone.
-    ///
-    /// Words are sent to the translator one at a time, so it answers each of
-    /// them as if it began a sentence: "tildele" comes back as "Allocation"
-    /// and sits under a lowercase Danish word in the middle of a line, where a
-    /// capital letter reads as a proper noun. The Danish above the gloss says
-    /// which it is — a word Danish itself does not capitalise is not a name —
-    /// so the gloss follows it. Danish capitalises proper nouns and nothing
-    /// else in running text, which is what makes this safe here and would not
-    /// make it safe for German.
-    static func matchingCase(of english: String, to danish: String) -> String {
-        guard let englishFirst = english.first,
-              englishFirst.isUppercase,
-              let danishFirst = danish.first,
-              danishFirst.isLowercase else {
-            return english
-        }
-        return english.prefix(1).lowercased() + english.dropFirst()
-    }
-
-    private static func splitTrailingPunctuation(
-        from value: String
-    ) -> (text: String, punctuation: String) {
-        var boundary = value.endIndex
-        while boundary > value.startIndex {
-            let candidate = value.index(before: boundary)
-            let character = value[candidate]
-            guard character.unicodeScalars.allSatisfy(
-                CharacterSet.punctuationCharacters.contains
-            ) else {
-                break
-            }
-            boundary = candidate
-        }
-        return (
-            String(value[..<boundary]),
-            String(value[boundary...])
-        )
     }
 }
 

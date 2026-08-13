@@ -26,10 +26,12 @@ enum AdaptiveWordBridgeChecks {
                 word == "viden" ? .known : .unknown
             }
         )
+        // A word the reader knows stays Danish; one they do not is replaced
+        // outright rather than annotated, so its Danish is gone from the line.
         precondition(bridge.text.contains("viden"))
         precondition(!bridge.text.contains("knowledge"))
         precondition(bridge.text.contains("skill"))
-        precondition(bridge.text.contains("færdighed"))
+        precondition(!bridge.text.contains("færdighed"))
         precondition(
             bridge.englishTokenIndexes.allSatisfy {
                 bridge.text.split(separator: " ").indices.contains($0)
@@ -62,9 +64,10 @@ enum AdaptiveWordBridgeChecks {
         )
         precondition(
             housingBridge.text
-                == "Boliger housing, der er lavet made til studerende students."
+                == "Housing, der er made til students.",
+            housingBridge.text
         )
-        precondition(housingBridge.englishTokenIndexes == [1, 5, 8])
+        precondition(housingBridge.englishTokenIndexes == [0, 3, 5])
 
         print("Adaptive word bridge checks passed")
     }
