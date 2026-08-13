@@ -329,10 +329,10 @@ final class AppModel: ObservableObject {
     /// while the learner reads, so the menu carries the discovery instead.
     var bubbleShortcutHints: [(key: String, label: String)] {
         [
-            (hotKeyConfiguration.showAllEnglish.displayText, "All English"),
             (hotKeyConfiguration.known.displayText, "Knew"),
             (hotKeyConfiguration.dontKnow.displayText, "Don’t know"),
-            (hotKeyConfiguration.togglePin.displayText, "Pin")
+            (hotKeyConfiguration.togglePin.displayText, "Pin"),
+            (hotKeyConfiguration.showAllEnglish.displayText, "All ENG")
         ]
     }
 

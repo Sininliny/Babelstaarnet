@@ -78,10 +78,6 @@ struct WordBubbleView: View {
                         .foregroundStyle(.tertiary)
                 }
 
-                if card.showsAllEnglish {
-                    AllEnglishIndicator()
-                }
-
                 Spacer(minLength: 0)
             }
             .foregroundStyle(.secondary)
@@ -115,19 +111,6 @@ struct WordBubbleView: View {
         .contentTransition(.identity)
         .liquidGlassBubble(tint: .primary.opacity(0.05), cornerRadius: 12)
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-    }
-}
-
-private struct AllEnglishIndicator: View {
-    var body: some View {
-        Text("All English")
-            .font(.system(size: 8, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background {
-                Capsule().fill(.primary.opacity(0.06))
-            }
     }
 }
 
@@ -246,23 +229,6 @@ private struct BridgeFeedbackControls: View {
                 }
             }
 
-            // The label stays put and the capsule carries the state instead.
-            // Swapping "All English" for "Less English" made the button wider
-            // exactly when it was pressed, which was enough to wrap the row
-            // onto a second line and jump the bubble 24 points taller on a
-            // mode toggle.
-            Button {
-                state.onShowAllEnglish()
-            } label: {
-                Text("\(card.showAllEnglishShortcutLabel)  All English")
-            }
-            .buttonStyle(BridgeFeedbackButtonStyle(isOn: card.showsAllEnglish))
-            .help(
-                card.showsAllEnglish
-                    ? "Return to adaptive support"
-                    : "Translate every word on this line"
-            )
-
             Button {
                 state.onTogglePin()
             } label: {
@@ -273,6 +239,23 @@ private struct BridgeFeedbackControls: View {
                 )
             }
             .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
+
+            // The label stays put and the capsule carries the state instead.
+            // Swapping "All English" for "Less English" made the button wider
+            // exactly when it was pressed, which was enough to wrap the row
+            // onto a second line and jump the bubble 24 points taller on a
+            // mode toggle.
+            Button {
+                state.onShowAllEnglish()
+            } label: {
+                Text("\(card.showAllEnglishShortcutLabel)  All ENG")
+            }
+            .buttonStyle(BridgeFeedbackButtonStyle(isOn: card.showsAllEnglish))
+            .help(
+                card.showsAllEnglish
+                    ? "Return to adaptive support"
+                    : "Translate every word on this line"
+            )
         }
         .buttonStyle(BridgeFeedbackButtonStyle())
         .font(.system(size: 10, weight: .regular, design: .rounded))

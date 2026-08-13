@@ -141,12 +141,16 @@ struct AppShortcut: Codable, Equatable, Hashable, Sendable {
     ]
 }
 
+/// Declared in the order the default shortcuts run, 1 through 4, because that
+/// order is what Settings lists and what the menu-bar popover prints. Showing
+/// all English came first and carried `4`, so every surface read 4, 1, 2, 3.
+/// The raw values are the case names, so persisted shortcuts are unaffected.
 enum ConfigurableHotKeyAction: String, CaseIterable, Identifiable, Sendable {
     case toggleLearning
-    case showAllEnglish
     case known
     case dontKnow
     case togglePin
+    case showAllEnglish
 
     var id: String { rawValue }
 
