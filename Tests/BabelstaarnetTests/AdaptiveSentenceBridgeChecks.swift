@@ -75,7 +75,11 @@ enum AdaptiveSentenceBridgeChecks {
         precondition(testing.text == sentence)
         precondition(testing.englishTokenIndexes.isEmpty)
 
-        // Structural words use a profile prior, never an absolute exclusion.
+        // Structural words use a profile prior, never an absolute exclusion —
+        // and pointing at one is a question about it, so the answer comes
+        // whatever class the word belongs to. Only the rest of the line
+        // withholds them, where an anchor would go to a word nobody asked
+        // about.
         let unknownGrammar = service.bridge(
             danishSentence: "Jeg er i huset.",
             englishByDanishWord: ["i": "in"],
@@ -212,6 +216,81 @@ enum AdaptiveSentenceBridgeChecks {
         )
         precondition(collision.text == "Et land blev kaldt called land.")
         precondition(collision.englishTokenIndexes == [4])
+
+        // The reported line. Two of three anchors went to "er" and "en", and
+        // "er" — Danish for "is" — came back from word-at-a-time translation
+        // as "no". Only "betingelse" is worth an anchor here.
+        let functionWords = service.bridge(
+            danishSentence: "Det er en betingelse for, at CPR-kontoret kan tildele.",
+            englishByDanishWord: [
+                "det": "that",
+                "er": "no",
+                "en": "a",
+                "betingelse": "condition",
+                "for": "for",
+                "at": "that",
+                "kan": "can",
+                "tildele": "allocate"
+            ],
+            focusWord: "betingelse",
+            stateForWord: { _ in .unknown }
+        )
+        precondition(
+            functionWords.text.contains("betingelse condition"),
+            "The one word worth glossing lost its anchor: \(functionWords.text)"
+        )
+        // The focus word is exempt, so hovering "er" still answers.
+        let focusedFunctionWord = service.bridge(
+            danishSentence: "Det er en betingelse.",
+            englishByDanishWord: ["er": "is", "betingelse": "condition"],
+            focusWord: "er",
+            stateForWord: { _ in .unknown }
+        )
+        precondition(
+            focusedFunctionWord.text.contains("er is"),
+            "Pointing at a function word must still answer: "
+                + focusedFunctionWord.text
+        )
+
+        for wasted in ["er no", "en a", "kan can", "det that"] {
+            precondition(
+                !functionWords.text.contains(wasted),
+                "An anchor was spent on a function word: \(functionWords.text)"
+            )
+        }
+
+        // Asking for all English is a request for the translation itself, so
+        // the same line answers in full.
+        let everyWord = service.bridge(
+            danishSentence: "Det er en betingelse.",
+            englishByDanishWord: [
+                "det": "that",
+                "er": "is",
+                "en": "a",
+                "betingelse": "condition"
+            ],
+            focusWord: "betingelse",
+            stateForWord: { _ in .unknown },
+            replacementLimit: 10,
+            glossesEveryWord: true
+        )
+        precondition(
+            everyWord.text.contains("er is")
+                && everyWord.text.contains("en a"),
+            "All English skipped function words: \(everyWord.text)"
+        )
+
+        // A content word must never be mistaken for a function word, however
+        // short or common it looks.
+        for content in ["hus", "barn", "tildele", "betingelse", "personnummer"] {
+            precondition(
+                !DanishFunctionWords.contains(content),
+                "\(content) is not a function word"
+            )
+        }
+        for function in ["er", "en", "at", "og", "på", "som", "kan", "der"] {
+            precondition(DanishFunctionWords.contains(function))
+        }
 
         print("Adaptive sentence bridge checks passed")
     }

@@ -49,6 +49,49 @@ enum AdaptiveMeaningCoveragePolicy {
     }
 }
 
+/// The Danish words an anchor is never worth spending on.
+///
+/// A gloss is for a word the reader may not know. Danish's closed classes —
+/// articles, pronouns, prepositions, conjunctions, and the auxiliary and copula
+/// verbs — are the first fifty words of the language, so a reader who needs
+/// them glossed cannot read the sentence they appear in either way. They are
+/// also where word-at-a-time translation is least trustworthy, because their
+/// English equivalent is decided by the construction around them rather than by
+/// the word: asked on its own, "er" came back as "no".
+///
+/// Both costs land at once, because these are the words that appear in every
+/// sentence. A line reading "Det er en betingelse for, at CPR-kontoret kan
+/// tildele" spent two of its three anchors on "er" and "en" and had one left
+/// for "betingelse", which is the only word in it a learner is likely to want.
+///
+/// Asking for all English overrides this: that is a direct request for the
+/// translation rather than for support, and it is answered in full.
+enum DanishFunctionWords {
+    static func contains(_ normalizedWord: String) -> Bool {
+        words.contains(normalizedWord)
+    }
+
+    private static let words: Set<String> = [
+        // Articles and determiners
+        "en", "et", "den", "det", "de", "denne", "dette", "disse",
+        // Conjunctions and subordinators
+        "og", "eller", "men", "som", "at", "når", "da", "hvis", "fordi",
+        "mens", "end", "både", "samt",
+        // Prepositions
+        "i", "på", "til", "af", "for", "med", "om", "ved", "fra", "over",
+        "under", "efter", "før", "mod", "hos", "uden", "mellem", "gennem",
+        "omkring", "ind", "ud",
+        // Pronouns and possessives
+        "jeg", "du", "han", "hun", "vi", "dig", "mig", "sig", "os", "jer",
+        "dem", "min", "mit", "din", "dit", "sin", "sit", "vores", "deres",
+        "hans", "hendes", "man", "der", "hvad", "hvem", "hvor", "hvilken",
+        // Auxiliary and copula verbs
+        "er", "var", "været", "har", "havde", "haft", "være", "blive",
+        "bliver", "blev", "blevet", "kan", "kunne", "skal", "skulle",
+        "vil", "ville", "må", "måtte", "bør"
+    ]
+}
+
 struct AdaptiveSentenceBridgeService {
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
@@ -84,7 +127,8 @@ struct AdaptiveSentenceBridgeService {
         focusOccurrence: Int = 0,
         stateForWord: (String) -> LanguageTransferState,
         wordLimit: Int = 20,
-        replacementLimit: Int? = nil
+        replacementLimit: Int? = nil,
+        glossesEveryWord: Bool = false
     ) -> AdaptiveSentenceBridge {
         let compact = danishSentence
             .replacingOccurrences(
@@ -108,6 +152,15 @@ struct AdaptiveSentenceBridgeService {
         let eligibleIndexes = matches.indices.filter { index in
             let key = normalized(matches[index].word)
             let state = stateForWord(key)
+            // The word under the pointer is always answerable, whatever class
+            // it belongs to: the reader is asking about that one. The
+            // exclusion applies to the rest of the line, which is where the
+            // budget gets spent on words nobody asked about.
+            guard glossesEveryWord
+                || key == normalizedFocus
+                || !DanishFunctionWords.contains(key) else {
+                return false
+            }
             guard state == .unknown || state == .learning,
                   let rawEnglish = englishByDanishWord[key],
                   let english = conciseEnglish(rawEnglish) else {

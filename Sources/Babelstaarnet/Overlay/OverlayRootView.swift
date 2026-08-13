@@ -48,7 +48,7 @@ struct WordBubbleView: View {
             // the answer's own column — above it, behind a rule — is what stops
             // it from being read as part of the meaning.
             BridgeFeedbackControls(state: state, card: card)
-            Divider().opacity(0.45)
+            Divider()
 
             if let wordEnglishMeaning = card.wordEnglishMeaning {
                 Text(LearnerDisplayText.clean(wordEnglishMeaning))
@@ -246,15 +246,17 @@ private struct BridgeFeedbackControls: View {
                 }
             }
 
+            // The label stays put and the capsule carries the state instead.
+            // Swapping "All English" for "Less English" made the button wider
+            // exactly when it was pressed, which was enough to wrap the row
+            // onto a second line and jump the bubble 24 points taller on a
+            // mode toggle.
             Button {
                 state.onShowAllEnglish()
             } label: {
-                Text(
-                    card.showsAllEnglish
-                        ? "\(card.showAllEnglishShortcutLabel)  Less English"
-                        : "\(card.showAllEnglishShortcutLabel)  All English"
-                )
+                Text("\(card.showAllEnglishShortcutLabel)  All English")
             }
+            .buttonStyle(BridgeFeedbackButtonStyle(isOn: card.showsAllEnglish))
             .help(
                 card.showsAllEnglish
                     ? "Return to adaptive support"
@@ -284,18 +286,32 @@ private struct BridgeFeedbackControls: View {
     }
 }
 
+/// A capsule filled at 4.5% of the foreground colour disappeared completely on
+/// a Liquid Glass panel, which is already a light wash over whatever is behind
+/// it: the row read as four pieces of grey text with nothing to say they could
+/// be clicked. The hierarchical fills resolve against the material the bubble
+/// is actually drawn on rather than against an assumed background, which is
+/// what keeps the capsule visible over a dark page and a light one alike.
 private struct BridgeFeedbackButtonStyle: ButtonStyle {
+    /// Set on a control that is currently switched on, so its state shows in
+    /// the capsule rather than in a label whose width would change with it.
+    var isOn = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
             .background {
-                Capsule()
-                    .fill(
-                        .primary.opacity(configuration.isPressed ? 0.10 : 0.045)
-                    )
+                Capsule().fill(fill(pressed: configuration.isPressed))
             }
             .contentShape(Capsule())
+    }
+
+    private func fill(pressed: Bool) -> HierarchicalShapeStyle {
+        if pressed {
+            return .secondary
+        }
+        return isOn ? .tertiary : .quaternary
     }
 }
 

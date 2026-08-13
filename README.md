@@ -137,6 +137,15 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   the visible source line. Established words remain Danish, learning words
   receive a small interlinear English gloss. The support budget adapts from one
   to five anchors according to how much of the sentence is unfamiliar.
+- Anchors are not spent on Danish's closed classes — articles, pronouns,
+  prepositions, conjunctions, and the auxiliary and copula verbs. They are the
+  first fifty words of the language, and they are also where word-at-a-time
+  translation is least trustworthy, because their English equivalent is decided
+  by the construction around them: asked on its own, `er` came back as `no`. A
+  line reading "Det er en betingelse for, at CPR-kontoret kan tildele" spent two
+  of three anchors on `er` and `en`. Pointing at one of these words is still a
+  question about it and is answered in full, as is asking for all English; the
+  rule only withholds anchors from the rest of the line
 - Two coordinated bubbles with no headings on either: a compact word panel above
   the hovered word and a wider sentence panel below it. The word panel leads
   with the English meaning, keeps the Danish word beneath it, and adds a concise
