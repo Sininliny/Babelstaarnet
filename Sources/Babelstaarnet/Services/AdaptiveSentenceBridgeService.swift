@@ -21,77 +21,6 @@ enum LanguageTransferState: Equatable, Sendable {
     }
 }
 
-enum AdaptiveMeaningCoveragePolicy {
-    /// Add only the English needed to keep the Danish sentence usable. Easy
-    /// text stays nearly Danish-only; unfamiliar text receives more anchors
-    /// without ever becoming a parallel English sentence.
-    static func englishAnchorLimit(
-        totalWordCount: Int,
-        wordsNeedingSupport: Int
-    ) -> Int {
-        let total = max(1, totalWordCount)
-        let unfamiliar = max(0, wordsNeedingSupport)
-        guard unfamiliar > 0 else {
-            return 0
-        }
-        if unfamiliar <= 2 {
-            return unfamiliar
-        }
-
-        let unfamiliarShare = Double(unfamiliar) / Double(total)
-        if unfamiliarShare <= 0.25 {
-            return 2
-        }
-        if unfamiliarShare <= 0.50 {
-            return min(3, unfamiliar)
-        }
-        return min(5, unfamiliar)
-    }
-}
-
-/// The Danish words an anchor is never worth spending on.
-///
-/// A gloss is for a word the reader may not know. Danish's closed classes —
-/// articles, pronouns, prepositions, conjunctions, and the auxiliary and copula
-/// verbs — are the first fifty words of the language, so a reader who needs
-/// them glossed cannot read the sentence they appear in either way. They are
-/// also where word-at-a-time translation is least trustworthy, because their
-/// English equivalent is decided by the construction around them rather than by
-/// the word: asked on its own, "er" came back as "no".
-///
-/// Both costs land at once, because these are the words that appear in every
-/// sentence. A line reading "Det er en betingelse for, at CPR-kontoret kan
-/// tildele" spent two of its three anchors on "er" and "en" and had one left
-/// for "betingelse", which is the only word in it a learner is likely to want.
-///
-/// Asking for all English overrides this: that is a direct request for the
-/// translation rather than for support, and it is answered in full.
-enum DanishFunctionWords {
-    static func contains(_ normalizedWord: String) -> Bool {
-        words.contains(normalizedWord)
-    }
-
-    private static let words: Set<String> = [
-        // Articles and determiners
-        "en", "et", "den", "det", "de", "denne", "dette", "disse",
-        // Conjunctions and subordinators
-        "og", "eller", "men", "som", "at", "når", "da", "hvis", "fordi",
-        "mens", "end", "både", "samt",
-        // Prepositions
-        "i", "på", "til", "af", "for", "med", "om", "ved", "fra", "over",
-        "under", "efter", "før", "mod", "hos", "uden", "mellem", "gennem",
-        "omkring", "ind", "ud",
-        // Pronouns and possessives
-        "jeg", "du", "han", "hun", "vi", "dig", "mig", "sig", "os", "jer",
-        "dem", "min", "mit", "din", "dit", "sin", "sit", "vores", "deres",
-        "hans", "hendes", "man", "der", "hvad", "hvem", "hvor", "hvilken",
-        // Auxiliary and copula verbs
-        "er", "var", "været", "har", "havde", "haft", "være", "blive",
-        "bliver", "blev", "blevet", "kan", "kunne", "skal", "skulle",
-        "vil", "ville", "må", "måtte", "bør"
-    ]
-}
-
 struct AdaptiveSentenceBridgeService {
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
@@ -127,8 +56,7 @@ struct AdaptiveSentenceBridgeService {
         focusOccurrence: Int = 0,
         stateForWord: (String) -> LanguageTransferState,
         wordLimit: Int = 20,
-        replacementLimit: Int? = nil,
-        glossesEveryWord: Bool = false
+        replacementLimit: Int? = nil
     ) -> AdaptiveSentenceBridge {
         let compact = danishSentence
             .replacingOccurrences(
@@ -152,15 +80,6 @@ struct AdaptiveSentenceBridgeService {
         let eligibleIndexes = matches.indices.filter { index in
             let key = normalized(matches[index].word)
             let state = stateForWord(key)
-            // The word under the pointer is always answerable, whatever class
-            // it belongs to: the reader is asking about that one. The
-            // exclusion applies to the rest of the line, which is where the
-            // budget gets spent on words nobody asked about.
-            guard glossesEveryWord
-                || key == normalizedFocus
-                || !DanishFunctionWords.contains(key) else {
-                return false
-            }
             guard state == .unknown || state == .learning,
                   let rawEnglish = englishByDanishWord[key],
                   let english = conciseEnglish(rawEnglish) else {
@@ -180,13 +99,23 @@ struct AdaptiveSentenceBridgeService {
             : focusIndexes[
                 min(max(0, focusOccurrence), focusIndexes.count - 1)
             ]
-        let budget = replacementLimit.map { max(0, $0) }
-            ?? AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
-                totalWordCount: matches.count,
-                wordsNeedingSupport: seenConcepts.count
-            )
+        // Every word the reader cannot read is replaced. A cap made sense
+        // while English was added beside the Danish: a few notes, and the
+        // Danish still there to read. Substituting only some of them leaves
+        // the rest stranded in a line that is no longer Danish either — the
+        // reader gets "the period of reflection på 6 months fra time", which
+        // is not readable in either language. What adapts is the profile:
+        // words the reader knows stay Danish, and more of them do over time.
+        let budget = replacementLimit.map { max(0, $0) } ?? eligibleIndexes.count
         var selectedIndexes = focusIndex.map { budget > 0 ? [$0] : [] } ?? []
-        let remaining = conceptIndexes
+        // Unlimited, every occurrence is replaced, not just the first of each
+        // word: leaving the second one Danish would put the same word on the
+        // line in both languages. A caller that asks for a fixed number is
+        // spending anchors instead, and spends them on distinct words.
+        let candidates = replacementLimit == nil
+            ? eligibleIndexes
+            : conceptIndexes
+        let remaining = candidates
             .filter { index in
                 guard let focusIndex else {
                     return true
@@ -234,7 +163,11 @@ struct AdaptiveSentenceBridgeService {
                 // through, in Danish word order, with the words they do know
                 // still in Danish.
                 replacement = markedEnglish(
-                    Self.matchingCase(of: english, to: match.word)
+                    Self.matchingCase(
+                        of: english,
+                        to: match.word,
+                        isSentenceStart: index == 0
+                    )
                 )
             case .testing, .known:
                 continue
@@ -333,13 +266,23 @@ struct AdaptiveSentenceBridgeService {
     /// a fragment. The Danish it replaces settles both, and Danish capitalises
     /// proper nouns and sentence openings only — which is what makes this safe
     /// here and would not make it safe for German.
-    static func matchingCase(of english: String, to danish: String) -> String {
+    static func matchingCase(
+        of english: String,
+        to danish: String,
+        isSentenceStart: Bool = false
+    ) -> String {
         guard let englishFirst = english.first,
               let danishFirst = danish.first else {
             return english
         }
-        if danishFirst.isUppercase, englishFirst.isLowercase {
-            return english.prefix(1).uppercased() + english.dropFirst()
+        // Only the opening word takes a capital from the Danish. Elsewhere a
+        // capitalised Danish word is a name or an acronym — "CPR-kontoret" —
+        // and its English often begins with an article, so borrowing the
+        // capital produced "The CPR office" in the middle of a line.
+        if isSentenceStart {
+            return danishFirst.isUppercase && englishFirst.isLowercase
+                ? english.prefix(1).uppercased() + english.dropFirst()
+                : english
         }
         if danishFirst.isLowercase, englishFirst.isUppercase {
             return english.prefix(1).lowercased() + english.dropFirst()

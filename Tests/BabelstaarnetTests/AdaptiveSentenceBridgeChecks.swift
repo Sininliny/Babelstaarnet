@@ -8,30 +8,9 @@ enum AdaptiveSentenceBridgeChecks {
         precondition(LanguageTransferState.forKnowledgeLevel(3) == .testing)
         precondition(LanguageTransferState.forKnowledgeLevel(4) == .known)
         precondition(LanguageTransferState.forKnowledgeLevel(5) == .known)
-        precondition(
-            AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
-                totalWordCount: 8,
-                wordsNeedingSupport: 0
-            ) == 0
-        )
-        precondition(
-            AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
-                totalWordCount: 8,
-                wordsNeedingSupport: 2
-            ) == 2
-        )
-        precondition(
-            AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
-                totalWordCount: 10,
-                wordsNeedingSupport: 4
-            ) == 3
-        )
-        precondition(
-            AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
-                totalWordCount: 8,
-                wordsNeedingSupport: 8
-            ) == 5
-        )
+        // The anchor budget is gone: every word the reader cannot read is
+        // replaced, because substituting only some of them leaves the rest
+        // stranded in a line that is no longer Danish either.
 
         let service = AdaptiveSentenceBridgeService()
         let sentence = "Hun tøvede, før hun svarede."
@@ -170,11 +149,10 @@ enum AdaptiveSentenceBridgeChecks {
             stateForWord: { _ in .unknown }
         )
         precondition(
-            manyUnknown.text
-                == "One two three four epsilon zeta eta eight.",
+            manyUnknown.text == "One two three four five six seven eight.",
             manyUnknown.text
         )
-        precondition(manyUnknown.englishTokenIndexes.count == 5)
+        precondition(manyUnknown.englishTokenIndexes.count == 8)
 
         let letters = Array("abcdefghijklmnopqrstuvwxyz")
         let longWords = (0..<30).map {
@@ -219,48 +197,39 @@ enum AdaptiveSentenceBridgeChecks {
         precondition(collision.text == "Et land blev called land.")
         precondition(collision.englishTokenIndexes == [3])
 
-        // The reported line. Two of three anchors went to "er" and "en", and
-        // "er" — Danish for "is" — came back from word-at-a-time translation
-        // as "no". Only "betingelse" is worth an anchor here.
-        let functionWords = service.bridge(
+        // The reported line, with a fresh profile: nothing is left in Danish
+        // that the reader cannot read. Whether "er" is answered as "is" or as
+        // "no" is TranslationQualityService's problem, not this one.
+        let wholeLine = service.bridge(
             danishSentence: "Det er en betingelse for, at CPR-kontoret kan tildele.",
             englishByDanishWord: [
-                "det": "that",
-                "er": "no",
-                "en": "a",
-                "betingelse": "condition",
-                "for": "for",
-                "at": "that",
-                "kan": "can",
-                "tildele": "allocate"
+                "det": "it", "er": "is", "en": "a", "betingelse": "condition",
+                "for": "for", "at": "that", "kan": "can",
+                "cpr-kontoret": "the CPR office", "tildele": "allocate"
             ],
             focusWord: "betingelse",
             stateForWord: { _ in .unknown }
         )
         precondition(
-            functionWords.text
-                == "Det er en condition for, at CPR-kontoret kan allocate.",
-            functionWords.text
-        )
-        // The focus word is exempt, so hovering "er" still answers.
-        let focusedFunctionWord = service.bridge(
-            danishSentence: "Det er en betingelse.",
-            englishByDanishWord: ["er": "is", "betingelse": "condition"],
-            focusWord: "er",
-            stateForWord: { _ in .unknown }
-        )
-        precondition(
-            focusedFunctionWord.text == "Det is en condition.",
-            "Pointing at a function word must still answer: "
-                + focusedFunctionWord.text
+            wholeLine.text
+                == "It is a condition for, that the CPR office can allocate.",
+            wholeLine.text
         )
 
-        for wasted in ["no", "that", "can"] {
-            precondition(
-                !functionWords.text.contains(wasted),
-                "A function word was replaced: \(functionWords.text)"
-            )
-        }
+        // A word the reader knows keeps its Danish, and it comes back word by
+        // word as the profile fills in.
+        let partlyKnown = service.bridge(
+            danishSentence: "Det er en betingelse.",
+            englishByDanishWord: [
+                "det": "it", "er": "is", "en": "a", "betingelse": "condition"
+            ],
+            focusWord: "betingelse",
+            stateForWord: { ["det", "er"].contains($0) ? .known : .unknown }
+        )
+        precondition(
+            partlyKnown.text == "Det er a condition.",
+            partlyKnown.text
+        )
 
         // Asking for all English is a request for the translation itself, so
         // the same line answers in full.
@@ -273,26 +242,13 @@ enum AdaptiveSentenceBridgeChecks {
                 "betingelse": "condition"
             ],
             focusWord: "betingelse",
-            stateForWord: { _ in .unknown },
-            replacementLimit: 10,
-            glossesEveryWord: true
+            stateForWord: { _ in .unknown }
         )
         precondition(
             everyWord.text == "That is a condition.",
             "All English skipped function words: \(everyWord.text)"
         )
 
-        // A content word must never be mistaken for a function word, however
-        // short or common it looks.
-        for content in ["hus", "barn", "tildele", "betingelse", "personnummer"] {
-            precondition(
-                !DanishFunctionWords.contains(content),
-                "\(content) is not a function word"
-            )
-        }
-        for function in ["er", "en", "at", "og", "på", "som", "kan", "der"] {
-            precondition(DanishFunctionWords.contains(function))
-        }
 
         // The English takes the Danish word's case, since a word translated
         // on its own always comes back as though it opened a sentence.
@@ -305,7 +261,8 @@ enum AdaptiveSentenceBridgeChecks {
         precondition(
             AdaptiveSentenceBridgeService.matchingCase(
                 of: "condition",
-                to: "Betingelsen"
+                to: "Betingelsen",
+                isSentenceStart: true
             ) == "Condition"
         )
         precondition(
@@ -313,6 +270,14 @@ enum AdaptiveSentenceBridgeChecks {
                 of: "Copenhagen",
                 to: "København"
             ) == "Copenhagen"
+        )
+        // A capitalised word inside a line is a name or an acronym, not a
+        // sentence opening, so its English keeps the case it came with.
+        precondition(
+            AdaptiveSentenceBridgeService.matchingCase(
+                of: "the CPR office",
+                to: "CPR-kontoret"
+            ) == "the CPR office"
         )
         precondition(
             AdaptiveSentenceBridgeService.matchingCase(

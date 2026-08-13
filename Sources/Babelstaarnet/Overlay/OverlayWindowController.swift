@@ -461,8 +461,7 @@ final class OverlayWindowController {
                 danishSentence: word.wordBridgeDanishText,
                 englishByDanishWord: word.wordBridgeTranslations,
                 focusWord: "",
-                stateForWord: stateForWord,
-                glossesEveryWord: showsAllEnglish
+                stateForWord: stateForWord
             )
         }
         if !word.wordBridgeText.isEmpty {
@@ -504,8 +503,7 @@ final class OverlayWindowController {
             englishByDanishWord: translations,
             focusWord: word.sourceText,
             focusOccurrence: focusOccurrence,
-            stateForWord: stateForWord,
-            glossesEveryWord: showsAllEnglish
+            stateForWord: stateForWord
         )
         guard !result.text.isEmpty else {
             return nil

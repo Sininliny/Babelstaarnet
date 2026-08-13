@@ -141,11 +141,22 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
   are replaced by their English in place, keeping the Danish word order around
-  them. The support budget adapts from one to five substitutions according to
-  how much of the sentence is unfamiliar. English set beneath the Danish rather
-  than in place of it was tried and removed: it left the reader assembling the
-  sentence from a Danish line and a row of footnotes, and a word someone cannot
-  read is not made readable by being left in place with a note attached.
+  them. Every word the reader cannot read is replaced, so the line is always
+  readable end to end; what adapts is the profile, and words return to Danish
+  one at a time as they are learned. A cap of one to five substitutions was
+  tried and removed — it left the unreplaced words stranded in a line that was
+  no longer Danish either, so the reader got "the period of reflection på 6
+  months fra time", readable in neither language. English set beneath the
+  Danish rather than in place of it was removed for the same reason: a word
+  someone cannot read is not made readable by being left in place with a note
+  attached.
+- Danish's closed classes — articles, pronouns, prepositions, conjunctions, and
+  the auxiliary and copula verbs — are translated from a table rather than by
+  the model. Handed a single word with no sentence around it, Argos returns
+  "no" for `er`, and once English stands in place of the Danish a wrong answer
+  is the only thing left. These classes are small and stable, so the citation
+  form is simply written down. A word with an explicit accepted set keeps it:
+  `for` may still come back as "too", because "for meget" is "too much"
 - Anchors are not spent on Danish's closed classes — articles, pronouns,
   prepositions, conjunctions, and the auxiliary and copula verbs. They are the
   first fifty words of the language, and they are also where word-at-a-time
