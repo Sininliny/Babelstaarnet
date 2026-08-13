@@ -212,6 +212,46 @@ enum BubbleViewSizingChecks {
         precondition(interlinear[1].english == "hesitated")
         precondition(interlinear.map(\.danish).compactMap { $0 }
             == ["Hun", "tøvede,", "før", "hun", "svarede."])
+
+        // Words are translated one at a time, so the translator answers each of
+        // them as though it opened a sentence. A capital under a lowercase
+        // Danish word reads as a name it is not.
+        precondition(
+            InterlinearBridgePresentation.matchingCase(
+                of: "Allocation",
+                to: "tildele"
+            ) == "allocation"
+        )
+        precondition(
+            InterlinearBridgePresentation.matchingCase(
+                of: "Copenhagen",
+                to: "København"
+            ) == "Copenhagen"
+        )
+        precondition(
+            InterlinearBridgePresentation.matchingCase(
+                of: "condition",
+                to: "betingelse"
+            ) == "condition"
+        )
+        precondition(
+            InterlinearBridgePresentation.matchingCase(
+                of: "CPR",
+                to: "cpr"
+            ) == "cPR",
+            "Only the first letter follows the Danish; an acronym's remaining "
+                + "capitals are not the translator's sentence case."
+        )
+        let cased = InterlinearBridgePresentation.units(
+            text: "at CPR-kontoret kan tildele Allocation.",
+            englishTokenIndexes: [4]
+        )
+        precondition(
+            cased.last?.english == "allocation",
+            "A gloss kept its sentence capital inside a line: "
+                + String(describing: cased.last?.english)
+        )
+        precondition(cased.last?.danish == "tildele.")
     }
 
     private static func measuredWordHeight(

@@ -1,5 +1,22 @@
 import SwiftUI
 
+/// When a bubble is allowed to animate.
+///
+/// The fade belongs to the bubble arriving and leaving. It was keyed to the
+/// whole card instead, so moving the pointer from one word to the next put the
+/// two cards in the same animated transaction and SwiftUI cross-faded their
+/// text: for 140 ms the bubble drew one word's explanation over the next one's,
+/// in a panel that was being moved and resized in the same instant. On a line
+/// of prose that is every word, and the result was an unreadable pile of two
+/// vocabularies rather than a translation.
+///
+/// Reading is a stream of replacements, not a sequence of arrivals. Changing
+/// which word is answered therefore has to be instant; only the bubble itself
+/// coming and going is worth animating.
+enum BubbleTransition {
+    static let appearance = Animation.easeOut(duration: 0.14)
+}
+
 struct WordBubbleView: View {
     @ObservedObject var state: OverlayState
 
@@ -12,7 +29,7 @@ struct WordBubbleView: View {
                 Color.clear
             }
         }
-        .animation(.easeOut(duration: 0.14), value: state.hoverCard)
+        .animation(BubbleTransition.appearance, value: state.hoverCard == nil)
     }
 
     @ViewBuilder
@@ -90,6 +107,9 @@ struct WordBubbleView: View {
         .padding(.vertical, 9)
         .frame(width: WordBubbleMetrics.width, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+        // Answering a different word is a replacement, never an interpolation,
+        // whatever transaction the change happens to arrive in.
+        .contentTransition(.identity)
         .liquidGlassBubble(tint: .primary.opacity(0.05), cornerRadius: 12)
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
@@ -120,7 +140,7 @@ struct SentenceBridgeBubbleView: View {
                 Color.clear
             }
         }
-        .animation(.easeOut(duration: 0.14), value: state.hoverCard)
+        .animation(BubbleTransition.appearance, value: state.hoverCard == nil)
     }
 
     @ViewBuilder
@@ -167,6 +187,7 @@ struct SentenceBridgeBubbleView: View {
             alignment: .topLeading
         )
         .fixedSize(horizontal: false, vertical: true)
+        .contentTransition(.identity)
         .liquidGlassBubble(tint: .primary.opacity(0.04), cornerRadius: 14)
         .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
@@ -305,7 +326,15 @@ private struct SentenceBridgeText: View {
             ForEach(Array(displayUnits.enumerated()), id: \.offset) {
                 _, unit in
                 if let danish = unit.danish {
-                    VStack(spacing: 1) {
+                    // Danish and its gloss share a column as wide as the wider
+                    // of the two, and the gloss is usually wider. Centring them
+                    // spent that difference on both sides, so every glossed
+                    // word was nudged right and the Danish line came out
+                    // ragged — the line a reader is meant to be reading. Left
+                    // alignment puts each Danish word where the previous one
+                    // ended and leaves the slack after it, which is also how
+                    // interlinear glosses are set.
+                    VStack(alignment: .leading, spacing: 1) {
                         EncouragedDanishWord(
                             text: danish,
                             font: .system(size: 12, design: .rounded),
@@ -320,6 +349,12 @@ private struct SentenceBridgeText: View {
                         )
 
                         if let english = unit.english {
+                            // A gloss is an annotation on the Danish above it,
+                            // so it is set apart by size, weight, and a wash of
+                            // tint. It used to carry a stroked outline as well,
+                            // which drew a box around every second word: a
+                            // short line came out looking like a row of form
+                            // fields rather than something to read through.
                             Text(english)
                                 .font(
                                     .system(
@@ -341,14 +376,7 @@ private struct SentenceBridgeText: View {
                                 .padding(.vertical, 1)
                                 .background {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(.primary.opacity(0.035))
-                                }
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(
-                                            .secondary.opacity(0.38),
-                                            lineWidth: 0.55
-                                        )
+                                        .fill(.primary.opacity(0.06))
                                 }
                         }
                     }
@@ -421,6 +449,7 @@ enum InterlinearBridgePresentation {
                 let split = splitTrailingPunctuation(from: english)
                 english = split.text
                 danish += split.punctuation
+                english = matchingCase(of: english, to: danish)
             }
             result.append(
                 BridgeDisplayUnit(
@@ -431,6 +460,26 @@ enum InterlinearBridgePresentation {
             )
         }
         return result
+    }
+
+    /// Lowers a gloss that only got its capital from being translated alone.
+    ///
+    /// Words are sent to the translator one at a time, so it answers each of
+    /// them as if it began a sentence: "tildele" comes back as "Allocation"
+    /// and sits under a lowercase Danish word in the middle of a line, where a
+    /// capital letter reads as a proper noun. The Danish above the gloss says
+    /// which it is — a word Danish itself does not capitalise is not a name —
+    /// so the gloss follows it. Danish capitalises proper nouns and nothing
+    /// else in running text, which is what makes this safe here and would not
+    /// make it safe for German.
+    static func matchingCase(of english: String, to danish: String) -> String {
+        guard let englishFirst = english.first,
+              englishFirst.isUppercase,
+              let danishFirst = danish.first,
+              danishFirst.isLowercase else {
+            return english
+        }
+        return english.prefix(1).lowercased() + english.dropFirst()
     }
 
     private static func splitTrailingPunctuation(
