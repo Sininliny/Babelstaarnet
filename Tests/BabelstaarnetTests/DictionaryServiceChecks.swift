@@ -4,7 +4,7 @@ import Foundation
 @main
 enum DictionaryServiceChecks {
     static func main() {
-        let adaptive = DictionaryService().adaptiveEnglishGloss(
+        let adaptive = DictionaryService(target: .english).adaptiveGloss(
             for: "natural resources",
             sourceWord: "naturressourcer"
         )

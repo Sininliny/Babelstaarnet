@@ -1,43 +1,34 @@
 import Foundation
 
-/// Where one Danish sentence stops and the next one starts.
+/// Where one sentence stops and the next one starts.
 ///
-/// A period is a weak signal in Danish. Ordinals carry one — "den 15.
-/// september" — dates and list numbers carry one, and the language abbreviates
-/// heavily: "bl.a.", "ca.", "kl.", "f.eks.". Splitting on periods alone cut
-/// "Der er ansøgningsfrist den 15." out of its own sentence.
+/// A period is a weak signal in many languages. Ordinals carry one — "den 15.
+/// september" — dates and list numbers carry one, and a language may
+/// abbreviate heavily: "bl.a.", "ca.", "kl.", "f.eks.". Splitting on periods
+/// alone cut "Der er ansøgningsfrist den 15." out of its own sentence.
 ///
-/// What settles it is mostly what follows. A Danish sentence opens with a
-/// capital, so a period followed by a lower-case word or by a digit is part of
+/// What settles it is mostly what follows. Where a sentence opens with a
+/// capital, a period followed by a lower-case word or by a digit is part of
 /// the sentence rather than the end of it. The word in front of the period
 /// decides the rest: a number is an ordinal, a known abbreviation is an
 /// abbreviation, and a single letter is an initial.
-enum DanishSentenceBoundary {
-    private static let stops: Set<Character> = [".", "!", "?", "…"]
-    private static let closers: Set<Character> = [
-        "\"", "'", "”", "’", "»", ")", "]", "}"
-    ]
-    private static let openers: Set<Character> = [
-        "\"", "'", "“", "‘", "«", "(", "[", "{", "–", "—", "-"
-    ]
-    private static let danishLocale = Locale(identifier: "da_DK")
+///
+/// The rules are supplied by the source language rather than written here,
+/// because the capital-letter signal — the strongest one this has — is simply
+/// unavailable in a script without case.
+public struct SentenceBoundary: Sendable {
+    private let rules: SentenceBoundaryRules
+    private let locale: Locale
 
-    /// Abbreviations whose period belongs to the word, not to the sentence.
-    /// Written down rather than inferred: the list is short, closed, and the
-    /// cost of guessing wrong is a sentence that stops in the middle.
-    private static let abbreviations: Set<String> = [
-        "adm", "afd", "alm", "ang", "bl", "bl.a", "ca", "cf", "d", "dvs",
-        "e.kr", "eftm", "ekskl", "el", "etc", "evt", "f", "f.eks", "f.kr",
-        "fhv", "fr", "fx", "hhv", "hr", "iflg", "ift", "inkl", "jf", "jf.fx",
-        "kl", "kr", "lign", "m.fl", "m.m", "maks", "mdr", "mht", "min",
-        "mio", "mia", "mfl", "mm", "nr", "osv", "pct", "pga", "pkt", "prof",
-        "red", "resp", "s", "sek", "st", "stk", "tlf", "th", "tv", "vedr"
-    ]
+    public init(rules: SentenceBoundaryRules, locale: Locale) {
+        self.rules = rules
+        self.locale = locale
+    }
 
     /// Where each sentence stop in `text` ends, as offsets into its UTF-16
     /// view. An offset is the first index *after* the stop and any closing
     /// quote or bracket that belongs to it.
-    static func stopLocations(in text: String) -> [Int] {
+    public func stopLocations(in text: String) -> [Int] {
         let source = text as NSString
         var locations: [Int] = []
         var index = 0
@@ -53,7 +44,7 @@ enum DanishSentenceBoundary {
     }
 
     /// Whether `text` runs all the way to a sentence stop.
-    static func endsSentence(_ text: String) -> Bool {
+    public func endsSentence(_ text: String) -> Bool {
         let source = text.trimmingCharacters(
             in: .whitespacesAndNewlines
         ) as NSString
@@ -63,7 +54,7 @@ enum DanishSentenceBoundary {
         var index = source.length - 1
         while index > 0,
               let closer = character(at: index, in: source),
-              closers.contains(closer) {
+              rules.closers.contains(closer) {
             index -= 1
         }
         return stopEnd(at: index, in: source) == source.length
@@ -72,13 +63,13 @@ enum DanishSentenceBoundary {
     /// Whether `text` stops somewhere other than at its own end, which is what
     /// tells a line walk that the sentence it is following ends inside this
     /// line and no further line is needed.
-    static func stopsBeforeEnd(_ text: String) -> Bool {
+    public func stopsBeforeEnd(_ text: String) -> Bool {
         let length = (text as NSString).length
         return stopLocations(in: text).contains { $0 < length }
     }
 
     /// The sentences in `text`, as ranges over its UTF-16 view.
-    static func sentenceRanges(in text: String) -> [NSRange] {
+    public func sentenceRanges(in text: String) -> [NSRange] {
         let source = text as NSString
         var ranges: [NSRange] = []
         var start = 0
@@ -102,7 +93,7 @@ enum DanishSentenceBoundary {
 
     /// The sentence `location` falls inside. Text that holds no stop at all is
     /// one sentence, which is the common case for a single OCR line.
-    static func sentenceRange(
+    public func sentenceRange(
         in text: String,
         containing location: Int
     ) -> NSRange {
@@ -120,16 +111,16 @@ enum DanishSentenceBoundary {
 
     /// The index just past a real sentence stop at `index`, or `nil` when the
     /// character there is not one, or is a period doing some other job.
-    private static func stopEnd(at index: Int, in source: NSString) -> Int? {
+    private func stopEnd(at index: Int, in source: NSString) -> Int? {
         guard let stop = character(at: index, in: source),
-              stops.contains(stop) else {
+              rules.stops.contains(stop) else {
             return nil
         }
 
         var end = index + 1
         while end < source.length,
               let next = character(at: end, in: source),
-              stops.contains(next) || closers.contains(next) {
+              rules.stops.contains(next) || rules.closers.contains(next) {
             end += 1
         }
 
@@ -143,14 +134,14 @@ enum DanishSentenceBoundary {
             var following = end
             while following < source.length,
                   let candidate = character(at: following, in: source),
-                  candidate.isWhitespace || openers.contains(candidate) {
+                  candidate.isWhitespace || rules.openers.contains(candidate) {
                 following += 1
             }
             if let next = character(at: following, in: source),
-               next.isLowercase || next.isNumber {
-                // Danish opens a sentence with a capital, so this period is
-                // an ordinal or an abbreviation the list below has not heard
-                // of — "den 15. september", "kl. 13".
+               next.isNumber || (rules.opensWithCapital && next.isLowercase) {
+                // A sentence here opens with a capital, so this period is an
+                // ordinal or an abbreviation the list below has not heard of —
+                // "den 15. september", "kl. 13".
                 return nil
             }
         }
@@ -159,17 +150,19 @@ enum DanishSentenceBoundary {
             return end
         }
         let stem = wordStem(before: index, in: source)
-            .lowercased(with: danishLocale)
+            .lowercased(with: locale)
         guard !stem.isEmpty else {
             return end
         }
         if stem.allSatisfy({ $0.isNumber || $0 == "." }) {
             return nil
         }
-        if abbreviations.contains(stem) {
+        if rules.abbreviations.contains(stem) {
             return nil
         }
-        if stem.count == 1, stem.first?.isLetter == true {
+        if rules.singleLetterIsInitial,
+           stem.count == 1,
+           stem.first?.isLetter == true {
             return nil
         }
         return end
@@ -177,7 +170,7 @@ enum DanishSentenceBoundary {
 
     /// The token in front of a period, interior periods included, so "bl.a."
     /// is read as one abbreviation rather than as the letter "a".
-    private static func wordStem(
+    private func wordStem(
         before index: Int,
         in source: NSString
     ) -> String {
@@ -200,7 +193,7 @@ enum DanishSentenceBoundary {
         ))
     }
 
-    private static func character(
+    private func character(
         at index: Int,
         in source: NSString
     ) -> Character? {
@@ -212,5 +205,12 @@ enum DanishSentenceBoundary {
             return nil
         }
         return Character(unicode)
+    }
+}
+
+public extension SourceLanguage {
+    /// This language's sentence boundary, ready to use.
+    var sentenceBoundary: SentenceBoundary {
+        SentenceBoundary(rules: sentenceRules, locale: locale)
     }
 }

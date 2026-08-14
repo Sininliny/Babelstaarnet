@@ -10,7 +10,7 @@ enum TesseractError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unavailable:
-            return "Tesseract with Danish language data is not installed."
+            return "Tesseract language data is not installed."
         case .imageEncodingFailed:
             return "The captured display could not be encoded for Tesseract."
         case let .executionFailed(message):
@@ -74,10 +74,17 @@ struct TesseractOCRService {
         executableURL != nil
     }
 
-    func isDanishReady() async -> Bool {
+    private let languageCode: String
+
+    init(languageCode: String) {
+        self.languageCode = languageCode
+    }
+
+    func isReady() async -> Bool {
         guard let executableURL else {
             return false
         }
+        let languageCode = self.languageCode
 
         return await Task.detached(priority: .utility) {
             let process = Process()
@@ -97,7 +104,7 @@ struct TesseractOCRService {
                 }
                 return text
                     .split(whereSeparator: \.isWhitespace)
-                    .contains("dan")
+                    .contains { $0 == languageCode }
             } catch {
                 return false
             }
@@ -111,6 +118,7 @@ struct TesseractOCRService {
         guard let executableURL else {
             throw TesseractError.unavailable
         }
+        let languageCode = self.languageCode
 
         let worker = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
@@ -129,6 +137,7 @@ struct TesseractOCRService {
 
             async let normalTSV = Self.runTesseract(
                 executableURL: executableURL,
+                languageCode: languageCode,
                 png: png,
                 automaticInversion: true,
                 pageSegmentationMode: primaryPageSegmentation
@@ -167,6 +176,7 @@ struct TesseractOCRService {
                 }
                 return try? await Self.runTesseract(
                     executableURL: executableURL,
+                    languageCode: languageCode,
                     png: separatedPNG,
                     automaticInversion: false,
                     pageSegmentationMode: primaryPageSegmentation
@@ -179,6 +189,7 @@ struct TesseractOCRService {
                 }
                 return try? await Self.runTesseract(
                     executableURL: executableURL,
+                    languageCode: languageCode,
                     png: separatedPNG,
                     automaticInversion: true,
                     pageSegmentationMode: 3
@@ -201,6 +212,7 @@ struct TesseractOCRService {
                 }
                 return try? await Self.runTesseract(
                     executableURL: executableURL,
+                    languageCode: languageCode,
                     png: eagerSmallImage.png,
                     automaticInversion: false,
                     pageSegmentationMode: 11,
@@ -263,6 +275,7 @@ struct TesseractOCRService {
                   ),
                   let smallTSV = try? await Self.runTesseract(
                       executableURL: executableURL,
+                      languageCode: languageCode,
                       png: smallImage.png,
                       automaticInversion: false,
                       pageSegmentationMode: 11,
@@ -299,6 +312,7 @@ struct TesseractOCRService {
 
     private static func runTesseract(
         executableURL: URL,
+        languageCode: String,
         png: Data,
         automaticInversion: Bool,
         pageSegmentationMode: Int,
@@ -308,6 +322,7 @@ struct TesseractOCRService {
         let worker = Task.detached(priority: .userInitiated) {
             try runTesseractSynchronously(
                 executableURL: executableURL,
+                languageCode: languageCode,
                 png: png,
                 automaticInversion: automaticInversion,
                 pageSegmentationMode: pageSegmentationMode,
@@ -334,6 +349,7 @@ struct TesseractOCRService {
 
     private static func runTesseractSynchronously(
         executableURL: URL,
+        languageCode: String,
         png: Data,
         automaticInversion: Bool,
         pageSegmentationMode: Int,
@@ -346,7 +362,7 @@ struct TesseractOCRService {
         process.arguments = [
             "stdin",
             "stdout",
-            "-l", "dan",
+            "-l", languageCode,
             "--oem", "1",
             "--psm", "\(pageSegmentationMode)",
             "--dpi", "\(dpi)",

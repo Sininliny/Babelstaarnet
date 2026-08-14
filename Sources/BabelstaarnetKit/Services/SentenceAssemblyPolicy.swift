@@ -10,15 +10,15 @@ import Foundation
 /// fragment that begins after the subject and stops before the verb, which
 /// teaches neither the grammar it was meant to preserve nor the meaning the
 /// reader was asking about. The lines above and below are therefore pulled in
-/// until an actual Danish sentence stop is reached.
+/// until an actual sentence stop is reached.
 ///
 /// The walk is skipped whenever the hovered line already stops on the right
 /// side of the word, so a sentence that fits on one line costs nothing extra —
 /// including the words sent for translation, which are exactly the words of
 /// the lines returned here.
-enum SentenceAssemblyPolicy {
-    struct AssembledSentence: Equatable {
-        /// The Danish sentence, with the line breaks closed up.
+struct SentenceAssemblyPolicy: Sendable {
+    struct AssembledSentence: Equatable, Sendable {
+        /// The sentence, with the line breaks closed up.
         let text: String
         /// Which occurrence of the hovered word inside `text` was pointed at.
         /// A sentence spanning lines can repeat a word, and the bridge has to
@@ -32,16 +32,23 @@ enum SentenceAssemblyPolicy {
     /// stop. A sentence needing more than this on either side is either very
     /// long or the stop was lost to OCR, and both are better served by a
     /// bounded fragment than by dragging a paragraph into the bubble.
-    static let maximumContinuationLines = 3
+    let maximumContinuationLines = 3
 
-    private static let danishLocale = Locale(identifier: "da_DK")
+    private let language: SourceLanguage
+    private let boundary: SentenceBoundary
+
+    init(language: SourceLanguage) {
+        self.language = language
+        self.boundary = language.sentenceBoundary
+    }
+
     private static let wordExpression = try! NSRegularExpression(
         pattern: #"[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*"#
     )
 
     /// The sentence around `word`, assembled across as many of `regions` as it
     /// is printed on.
-    static func sentence(
+    func sentence(
         containing word: WordRegion,
         in region: TextRegion,
         among regions: [TextRegion]
@@ -69,7 +76,7 @@ enum SentenceAssemblyPolicy {
         }
         let joined = texts.joined(separator: " ")
         let focusLocation = offset + focusRange.location
-        let sentenceRange = DanishSentenceBoundary.sentenceRange(
+        let sentenceRange = boundary.sentenceRange(
             in: joined,
             containing: focusLocation
         )
@@ -92,7 +99,7 @@ enum SentenceAssemblyPolicy {
     /// The lines the sentence around `word` is printed on. This is what the
     /// scan keeps and translates, so it stays deliberately in step with what
     /// `sentence(containing:in:among:)` will later read.
-    static func lines(
+    func lines(
         containing word: WordRegion,
         in region: TextRegion,
         among regions: [TextRegion]
@@ -110,13 +117,13 @@ enum SentenceAssemblyPolicy {
         )
     }
 
-    private static func lines(
+    private func lines(
         around region: TextRegion,
         focusRange: NSRange,
         hoveredText: String,
         in regions: [TextRegion]
     ) -> [TextRegion] {
-        let stops = DanishSentenceBoundary.stopLocations(in: hoveredText)
+        let stops = boundary.stopLocations(in: hoveredText)
         var lines = [region]
         var used: Set<UUID> = [region.id]
 
@@ -131,12 +138,12 @@ enum SentenceAssemblyPolicy {
                   ) {
                 used.insert(above.id)
                 let text = compact(above.sourceText)
-                guard !DanishSentenceBoundary.endsSentence(text) else {
+                guard !boundary.endsSentence(text) else {
                     break
                 }
                 lines.insert(above, at: 0)
                 added += 1
-                if DanishSentenceBoundary.stopsBeforeEnd(text) {
+                if boundary.stopsBeforeEnd(text) {
                     break
                 }
             }
@@ -146,7 +153,7 @@ enum SentenceAssemblyPolicy {
             var added = 0
             while added < maximumContinuationLines,
                   let last = lines.last,
-                  !DanishSentenceBoundary.endsSentence(
+                  !boundary.endsSentence(
                     compact(last.sourceText)
                   ),
                   let below = neighbour(
@@ -158,7 +165,7 @@ enum SentenceAssemblyPolicy {
                 used.insert(below.id)
                 lines.append(below)
                 added += 1
-                if DanishSentenceBoundary.stopsBeforeEnd(
+                if boundary.stopsBeforeEnd(
                     compact(below.sourceText)
                 ) {
                     break
@@ -170,7 +177,7 @@ enum SentenceAssemblyPolicy {
 
     /// The nearest line directly above or below `line` that reads as the same
     /// running text.
-    private static func neighbour(
+    private func neighbour(
         of line: TextRegion,
         above: Bool,
         in regions: [TextRegion],
@@ -202,7 +209,7 @@ enum SentenceAssemblyPolicy {
     /// gap no wider than a line, a column the text shares, and type of the same
     /// size. The last one is what keeps a heading out of the paragraph beneath
     /// it, where the first two alone would have accepted it.
-    private static func continuesLine(
+    private func continuesLine(
         upper: TextRegion,
         lower: TextRegion
     ) -> Bool {
@@ -234,7 +241,7 @@ enum SentenceAssemblyPolicy {
 
     /// Where `word` sits in its own line, counted by occurrence so a line
     /// repeating the word still resolves to the one under the pointer.
-    private static func range(
+    private func range(
         of word: WordRegion,
         in region: TextRegion,
         text: String
@@ -258,7 +265,7 @@ enum SentenceAssemblyPolicy {
         return matches[min(occurrence, matches.count - 1)]
     }
 
-    private static func occurrence(
+    private func occurrence(
         of word: String,
         in text: String,
         within sentence: NSRange,
@@ -276,21 +283,18 @@ enum SentenceAssemblyPolicy {
         }.count
     }
 
-    private static func wordMatches(in text: String) -> [NSRange] {
-        wordExpression.matches(
+    private func wordMatches(in text: String) -> [NSRange] {
+        Self.wordExpression.matches(
             in: text,
             range: NSRange(text.startIndex..., in: text)
         ).map(\.range)
     }
 
-    private static func normalized(_ word: String) -> String {
-        word.lowercased(with: danishLocale)
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines.union(.punctuationCharacters)
-            )
+    private func normalized(_ word: String) -> String {
+        language.normalized(word)
     }
 
-    private static func compact(_ text: String) -> String {
+    private func compact(_ text: String) -> String {
         text.replacingOccurrences(
             of: #"\s+"#,
             with: " ",

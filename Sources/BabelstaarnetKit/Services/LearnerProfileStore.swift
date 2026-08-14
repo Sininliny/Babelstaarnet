@@ -10,7 +10,7 @@ struct LearnerProfileArchive: Codable, Equatable, Sendable {
 
     init(
         schemaVersion: Int = Self.currentSchemaVersion,
-        sourceLanguage: String = "da",
+        sourceLanguage: String,
         exportedAt: Date,
         words: [LearnerWordProgress]
     ) {
@@ -41,7 +41,7 @@ enum LearnerProfileArchiveError: LocalizedError, Equatable {
         case let .unsupportedVersion(version):
             return "This learning profile uses unsupported format version \(version)."
         case let .unexpectedLanguage(language):
-            return "This profile is for “\(language)”, not Danish."
+            return "This profile is for “\(language)”, which is not the language being read."
         case let .tooManyWords(count):
             return "This profile contains too many word records (\(count))."
         case let .invalidWord(word):
@@ -118,20 +118,14 @@ enum AdaptiveKnowledgePolicy {
     }
 }
 
-enum DanishVocabularyPrior {
-    /// These high-frequency structural words preserve the Danish frame by
-    /// default. Explicit learner feedback always overrides this prior.
-    private static let structuralWords: Set<String> = [
-        "ad", "af", "at", "da", "de", "den", "der", "det", "du",
-        "eller", "en", "end", "er", "et", "for", "fordi", "fra",
-        "han", "har", "hun", "hvad", "hvem", "hvor", "hvis", "i",
-        "ikke", "jeg", "kan", "med", "men", "mod", "når", "og",
-        "om", "på", "sig", "sin", "sit", "skal", "som", "til",
-        "var", "ved", "vi", "vil"
-    ]
-
-    static func initialKnowledgeLevel(for normalizedWord: String) -> Int {
-        structuralWords.contains(normalizedWord)
+enum VocabularyPrior {
+    /// The words the pack says a reader already knows start out known, so the
+    /// frame of the sentence survives the first scan.
+    static func initialKnowledgeLevel(
+        for normalizedWord: String,
+        in language: SourceLanguage
+    ) -> Int {
+        language.structuralWords.contains(normalizedWord)
             ? AdaptiveKnowledgePolicy.knownLevel
             : 0
     }
@@ -351,7 +345,7 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
 
 final class LearnerProfileStore {
     static let maximumStoredWordCount = 100_000
-    private static let danishLocale = Locale(identifier: "da_DK")
+    private let language: SourceLanguage
     private static let keyTrimmingCharacters =
         CharacterSet.whitespacesAndNewlines
             .union(.punctuationCharacters)
@@ -370,9 +364,11 @@ final class LearnerProfileStore {
     private var lastSavedAt = Date.distantPast
 
     init(
+        language: SourceLanguage,
         defaults: UserDefaults = .standard,
         storageKey: String = "learnerProfile.words"
     ) {
+        self.language = language
         self.defaults = defaults
         self.storageKey = storageKey
         if let data = defaults.data(forKey: storageKey),
@@ -380,7 +376,9 @@ final class LearnerProfileStore {
                [String: LearnerWordProgress].self,
                from: data
            ) {
-            entries = decoded.filter { Self.isValid($0.value) }
+            entries = decoded.filter {
+                Self.isValid($0.value, locale: language.locale)
+            }
         } else {
             entries = [:]
         }
@@ -407,11 +405,12 @@ final class LearnerProfileStore {
         for word: String,
         at date: Date = Date()
     ) -> LearnerWordProgress {
-        let key = Self.normalizedKey(for: word)
+        let key = normalizedKey(for: word)
         return entries[key] ?? LearnerWordProgress(
             word: key,
-            knowledgeLevel: DanishVocabularyPrior.initialKnowledgeLevel(
-                for: key
+            knowledgeLevel: VocabularyPrior.initialKnowledgeLevel(
+                for: key,
+                in: language
             ),
             encounterCount: 0,
             moreEnglishCount: 0,
@@ -428,7 +427,7 @@ final class LearnerProfileStore {
         context: String? = nil,
         at date: Date = Date()
     ) -> Bool {
-        let key = Self.normalizedKey(for: word)
+        let key = normalizedKey(for: word)
         guard !key.isEmpty else {
             return false
         }
@@ -438,7 +437,7 @@ final class LearnerProfileStore {
         let previousLevel = entry.knowledgeLevel
         entry.encounterCount += 1
         entry.lastSeen = date
-        let contextSignature = Self.contextSignature(for: context)
+        let contextSignature = contextSignature(for: context)
         if AdaptiveKnowledgePolicy.shouldCreditEncounter(
             lastCreditedAt: entry.lastSpacedEncounterAt,
             lastContextSignature: entry.lastContextSignature,
@@ -468,7 +467,7 @@ final class LearnerProfileStore {
         for word: String,
         at date: Date = Date()
     ) {
-        let key = Self.normalizedKey(for: word)
+        let key = normalizedKey(for: word)
         guard !key.isEmpty else {
             return
         }
@@ -490,7 +489,7 @@ final class LearnerProfileStore {
         for word: String,
         at date: Date = Date()
     ) {
-        let key = Self.normalizedKey(for: word)
+        let key = normalizedKey(for: word)
         guard !key.isEmpty else {
             return
         }
@@ -518,6 +517,7 @@ final class LearnerProfileStore {
 
     func exportData(at date: Date = Date()) throws -> Data {
         let archive = LearnerProfileArchive(
+            sourceLanguage: language.code,
             exportedAt: date,
             words: entries.values.sorted { $0.word < $1.word }
         )
@@ -544,7 +544,7 @@ final class LearnerProfileStore {
         try validate(archive)
 
         for imported in archive.words {
-            let key = Self.normalizedKey(for: imported.word)
+            let key = normalizedKey(for: imported.word)
             let existing = entries[key]
             let preferredProgress = Self.progressWithNewestReview(
                 existing,
@@ -593,21 +593,28 @@ final class LearnerProfileStore {
         )
     }
 
-    static func normalizedKey(for word: String) -> String {
+    /// The stored form of a word. Takes a locale explicitly so it can be
+    /// used while a store is still being initialised, before its language is
+    /// reachable through `self`.
+    static func normalizedKey(for word: String, locale: Locale) -> String {
         word.precomposedStringWithCanonicalMapping
-            .lowercased(with: Self.danishLocale)
+            .lowercased(with: locale)
             .trimmingCharacters(
                 in: Self.keyTrimmingCharacters
             )
     }
 
-    static func contextSignature(for context: String?) -> String? {
+    func normalizedKey(for word: String) -> String {
+        Self.normalizedKey(for: word, locale: language.locale)
+    }
+
+    func contextSignature(for context: String?) -> String? {
         guard let context else {
             return nil
         }
         let compact = context
             .precomposedStringWithCanonicalMapping
-            .lowercased(with: danishLocale)
+            .lowercased(with: language.locale)
             .replacingOccurrences(
                 of: #"\s+"#,
                 with: " ",
@@ -698,8 +705,11 @@ final class LearnerProfileStore {
         }
     }
 
-    private static func isValid(_ word: LearnerWordProgress) -> Bool {
-        let key = normalizedKey(for: word.word)
+    private static func isValid(
+        _ word: LearnerWordProgress,
+        locale: Locale
+    ) -> Bool {
+        let key = normalizedKey(for: word.word, locale: locale)
         return !key.isEmpty
             && key.count <= 100
             && (0...LearnerWordProgress.maximumKnowledgeLevel).contains(
@@ -761,7 +771,7 @@ final class LearnerProfileStore {
                 archive.schemaVersion
             )
         }
-        guard archive.sourceLanguage == "da" else {
+        guard archive.sourceLanguage == language.code else {
             throw LearnerProfileArchiveError.unexpectedLanguage(
                 archive.sourceLanguage
             )
@@ -772,12 +782,12 @@ final class LearnerProfileStore {
             )
         }
         for word in archive.words {
-            let key = Self.normalizedKey(for: word.word)
+            let key = normalizedKey(for: word.word)
             guard !key.isEmpty,
                   key.count <= 100 else {
                 throw LearnerProfileArchiveError.invalidWord(word.word)
             }
-            guard Self.isValid(word) else {
+            guard Self.isValid(word, locale: language.locale) else {
                 throw LearnerProfileArchiveError.invalidProgress(word.word)
             }
         }

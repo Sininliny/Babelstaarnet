@@ -1,6 +1,12 @@
 import Foundation
 
-enum OCRTextQualityPolicy {
+struct OCRTextQualityPolicy: Sendable {
+    private let language: SourceLanguage
+
+    init(language: SourceLanguage) {
+        self.language = language
+    }
+
     /// Drops corrupted words and keeps the line they came from.
     ///
     /// A colour or contrast failure usually garbles one or two words in a line
@@ -8,7 +14,7 @@ enum OCRTextQualityPolicy {
     /// threw away the word under the pointer along with the noise. A line is
     /// only discarded when most of it is unreadable, which is the case the
     /// original rule was written for.
-    static func plausibleRegions(
+    func plausibleRegions(
         from regions: [TextRegion]
     ) -> [TextRegion] {
         regions.compactMap { region in
@@ -38,7 +44,7 @@ enum OCRTextQualityPolicy {
         }
     }
 
-    static func isPlausibleWord(_ value: String) -> Bool {
+    func isPlausibleWord(_ value: String) -> Bool {
         let letters = value.unicodeScalars.filter {
             CharacterSet.letters.contains($0)
         }
@@ -53,17 +59,18 @@ enum OCRTextQualityPolicy {
             return true
         }
 
-        // Long lowercase Danish words are often compounds, so length alone is
-        // not suspicious. A lowercase q that is not followed by u is a much
-        // stronger sign of a g/q OCR substitution in that setting. Keep short
-        // loanwords and capitalized names eligible for recognition.
+        // Long lowercase words are often compounds in a compounding
+        // language, so length alone is not suspicious. A lowercase q that is
+        // not followed by u is a much stronger sign of a g/q OCR substitution
+        // in that setting. Keep short loanwords and capitalized names
+        // eligible for recognition.
         let allLowercase = letters.allSatisfy {
             CharacterSet.lowercaseLetters.contains($0)
         }
-        if allLowercase, letters.count >= 10 {
+        if allLowercase,
+           letters.count >= language.ocr.compoundWordMinimumLength {
             let characters = Array(
-                value.lowercased(with: Locale(identifier: "da_DK"))
-                    .filter(\Character.isLetter)
+                language.lowercased(value).filter(\Character.isLetter)
             )
             for index in characters.indices where characters[index] == "q" {
                 let next = characters.index(after: index)
@@ -79,9 +86,10 @@ enum OCRTextQualityPolicy {
         // follows carries no sign of it — "nyL" reached the translator, came
         // back unchanged, was retried in lower case, and returned "kidney",
         // which was then presented as the meaning of a word that says "new".
-        // Danish does not end a word in a capital; the all-uppercase case that
-        // would is already accepted above.
-        if let last = letters.last,
+        // A language that cannot end a word in a capital makes this a safe
+        // rejection; the all-uppercase case that would is accepted above.
+        if !language.ocr.endsWordInCapital,
+           let last = letters.last,
            CharacterSet.uppercaseLetters.contains(last),
            letters.dropLast().contains(where: {
                CharacterSet.lowercaseLetters.contains($0)

@@ -8,9 +8,11 @@ final class OverlayWindowController {
         var screenFrame: CGRect
     }
 
-    private let dictionary = DictionaryService()
-    private let adaptiveExplanationService = AdaptiveExplanationService()
-    private let sentenceBridgeService = AdaptiveSentenceBridgeService()
+    private let languages: LanguagePair
+    private let dictionary: DictionaryService
+    private let adaptiveExplanationService: AdaptiveExplanationService
+    private let sentenceBridgeService: AdaptiveSentenceBridgeService
+    private let passiveWordMeaningPolicy: PassiveWordMeaningPolicy
     private let learnerProfile: LearnerProfileStore
     private let systemIdleMonitor = SystemIdleMonitor()
     private let bubbleState = OverlayState()
@@ -35,7 +37,7 @@ final class OverlayWindowController {
     private var hoverDelay = 0.7
     private var hotKeyConfiguration = HotKeyConfiguration.defaults
     private var bridgeConfiguration = LearningBridgeConfiguration.both
-    private let onSpeakDanish: (String) -> Void
+    private let onSpeakSourceWord: (String) -> Void
     private let onLearnerProfileChanged: (Bool) -> Void
     private lazy var bubbleHotKeyService = BubbleHotKeyService {
         [weak self] action in
@@ -55,12 +57,25 @@ final class OverlayWindowController {
     )
 
     init(
+        languages: LanguagePair,
         learnerProfile: LearnerProfileStore,
-        onSpeakDanish: @escaping (String) -> Void,
+        onSpeakSourceWord: @escaping (String) -> Void,
         onLearnerProfileChanged: @escaping (Bool) -> Void
     ) {
+        self.languages = languages
+        self.dictionary = DictionaryService(target: languages.target)
+        self.adaptiveExplanationService = AdaptiveExplanationService(
+            language: languages.source
+        )
+        self.sentenceBridgeService = AdaptiveSentenceBridgeService(
+            language: languages.source
+        )
+        self.passiveWordMeaningPolicy = PassiveWordMeaningPolicy(
+            language: languages.source,
+            target: languages.target
+        )
         self.learnerProfile = learnerProfile
-        self.onSpeakDanish = onSpeakDanish
+        self.onSpeakSourceWord = onSpeakSourceWord
         self.onLearnerProfileChanged = onLearnerProfileChanged
         bubbleState.onKnown = { [weak self] in
             self?.markCurrentWordKnown()
@@ -301,7 +316,7 @@ final class OverlayWindowController {
                 ) else {
                     return
                 }
-                self?.onSpeakDanish(match.word.sourceText)
+                self?.onSpeakSourceWord(match.word.sourceText)
             }
         }
         RunLoop.main.add(speechTimer, forMode: .common)
@@ -312,13 +327,13 @@ final class OverlayWindowController {
         for word: WordRegion,
         in region: TextRegion
     ) -> HoverCard {
-        let key = LearnerProfileStore.normalizedKey(for: word.sourceText)
+        let key = learnerProfile.normalizedKey(for: word.sourceText)
         let expanded = expandedEnglishWords.contains(key)
         let now = Date()
         var knowledgeLevelCache: [String: Int] = [:]
         let knowledgeLevelForWord: (String) -> Int = {
             [learnerProfile] candidate in
-            let normalized = LearnerProfileStore.normalizedKey(for: candidate)
+            let normalized = learnerProfile.normalizedKey(for: candidate)
             if let cached = knowledgeLevelCache[normalized] {
                 return cached
             }
@@ -344,17 +359,16 @@ final class OverlayWindowController {
             stateForWord: stateForWord
         )
         let wordKnowledgeLevel = knowledgeLevelForWord(word.sourceText)
-        let wordEnglishMeaning = PassiveWordMeaningPolicy
-            .directEnglishMeaning(
-                sourceWord: word.sourceText,
-                englishTranslation: word.translatedText,
-                knowledgeLevel: wordKnowledgeLevel
-            )
+        let wordEnglishMeaning = passiveWordMeaningPolicy.directMeaning(
+            sourceWord: word.sourceText,
+            translation: word.translatedText,
+            knowledgeLevel: wordKnowledgeLevel
+        )
         let explanation = adaptiveExplanationService.explanation(
             bridgeText: bridge?.text ?? fallbackBridge(for: word),
             englishMeaning: word.translatedText,
             expandedEnglish: expanded
-                ? dictionary.adaptiveEnglishGloss(
+                ? dictionary.adaptiveGloss(
                     for: word.translatedText,
                     sourceWord: word.sourceText
                 )
@@ -415,7 +429,7 @@ final class OverlayWindowController {
                     guard !englishIndexes.contains(index) else {
                         return nil
                     }
-                    let word = LearnerProfileStore.normalizedKey(
+                    let word = learnerProfile.normalizedKey(
                         for: String(token)
                     )
                     guard !word.isEmpty else {
@@ -431,7 +445,7 @@ final class OverlayWindowController {
         in text: String,
         excluding excludedIndexes: [Int]
     ) -> [Int] {
-        let target = LearnerProfileStore.normalizedKey(for: word)
+        let target = learnerProfile.normalizedKey(for: word)
         let excluded = Set(excludedIndexes)
         guard !target.isEmpty else {
             return []
@@ -441,7 +455,7 @@ final class OverlayWindowController {
             .enumerated()
             .compactMap { index, token in
                 guard !excluded.contains(index),
-                      LearnerProfileStore.normalizedKey(
+                      learnerProfile.normalizedKey(
                         for: String(token)
                       ) == target else {
                     return nil
@@ -489,7 +503,7 @@ final class OverlayWindowController {
         for word: WordRegion,
         in region: TextRegion
     ) -> CGRect {
-        SentenceAssemblyPolicy.lines(
+        SentenceAssemblyPolicy(language: languages.source).lines(
             containing: word,
             in: region,
             among: overlays[word.displayID]?.regions ?? [region]
@@ -505,7 +519,9 @@ final class OverlayWindowController {
         // occurrence of the hovered word come back from the same assembly, so
         // a word repeated across the line break still resolves to the one
         // under the pointer.
-        let sentence = SentenceAssemblyPolicy.sentence(
+        let sentence = SentenceAssemblyPolicy(
+            language: languages.source
+        ).sentence(
             containing: word,
             in: region,
             among: overlays[word.displayID]?.regions ?? [region]
@@ -513,7 +529,7 @@ final class OverlayWindowController {
         var translations: [String: String] = [:]
         for candidate in sentence.lines.flatMap(\.words) {
             translations[
-                LearnerProfileStore.normalizedKey(for: candidate.sourceText)
+                learnerProfile.normalizedKey(for: candidate.sourceText)
             ] = candidate.translatedText
         }
         let result = sentenceBridgeService.bridge(
@@ -629,7 +645,7 @@ final class OverlayWindowController {
         guard let currentWord else {
             return
         }
-        let key = LearnerProfileStore.normalizedKey(
+        let key = learnerProfile.normalizedKey(
             for: currentWord.sourceText
         )
         learnerProfile.recordUnknown(for: currentWord.sourceText)
@@ -651,7 +667,7 @@ final class OverlayWindowController {
         }
         learnerProfile.recordKnown(for: currentWord.sourceText)
         expandedEnglishWords.remove(
-            LearnerProfileStore.normalizedKey(for: currentWord.sourceText)
+            learnerProfile.normalizedKey(for: currentWord.sourceText)
         )
         onLearnerProfileChanged(true)
         remember(.markedKnown, for: currentWord.sourceText)
@@ -663,7 +679,7 @@ final class OverlayWindowController {
         _ action: BridgeFeedbackConfirmation,
         for word: String
     ) {
-        let key = LearnerProfileStore.normalizedKey(for: word)
+        let key = learnerProfile.normalizedKey(for: word)
         let now = Date()
         // Drop what has aged out before adding, so the table stays the size of
         // a reading session rather than growing with one.
@@ -682,7 +698,7 @@ final class OverlayWindowController {
     private func rememberedAction(
         for word: String
     ) -> BridgeFeedbackConfirmation? {
-        let key = LearnerProfileStore.normalizedKey(for: word)
+        let key = learnerProfile.normalizedKey(for: word)
         guard let record = rememberedActions[key] else {
             return nil
         }
@@ -777,8 +793,8 @@ final class OverlayWindowController {
             in: .whitespacesAndNewlines
         )
         if !meaning.isEmpty,
-           LearnerProfileStore.normalizedKey(for: meaning)
-            != LearnerProfileStore.normalizedKey(for: word.sourceText) {
+           learnerProfile.normalizedKey(for: meaning)
+            != learnerProfile.normalizedKey(for: word.sourceText) {
             return "\(word.sourceText) = \(meaning)."
         }
         return word.sourceText

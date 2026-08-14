@@ -14,10 +14,7 @@ public final class AppModel: ObservableObject {
     @Published var engineSetupMessage = "Checking local engines"
     @Published var openSourceEnginesReady = false
     @Published var isInstallingEngines = false
-    @Published var translationConfiguration = TranslationSession.Configuration(
-        source: Locale.Language(identifier: "da"),
-        target: Locale.Language(identifier: "en")
-    )
+    @Published var translationConfiguration: TranslationSession.Configuration
     @Published public var learningModeActive = false
     @Published private(set) var learnerTrackedWordCount = 0
     @Published private(set) var learnerFamiliarWordCount = 0
@@ -61,14 +58,32 @@ public final class AppModel: ObservableObject {
     @Published private(set) var bridgeConfiguration =
         LearningBridgeConfiguration.both
 
+    /// The one place a language is named. Everything below is handed this
+    /// pair rather than reaching for Danish itself, so a second language is a
+    /// second pack and this line.
+    private let languages = LanguagePair.danishToEnglish
+
     private let captureService = ScreenCaptureService()
-    private let ocrService = OCRService()
-    private let argosTranslationService = ArgosTranslationService()
-    private let wordBridgeTranslationService = ArgosTranslationService()
-    private let beginnerDanishService = BeginnerDanishService()
-    private let adaptiveWordBridgeService = AdaptiveSentenceBridgeService()
-    private let translationQualityService = TranslationQualityService()
-    private let learnerProfileStore = LearnerProfileStore()
+    private lazy var ocrService = OCRService(language: languages.source)
+    private lazy var argosTranslationService = ArgosTranslationService(
+        languages: languages
+    )
+    private lazy var wordBridgeTranslationService = ArgosTranslationService(
+        languages: languages
+    )
+    private lazy var beginnerGlossService = BeginnerGlossService(
+        language: languages.source
+    )
+    private lazy var adaptiveWordBridgeService =
+        AdaptiveSentenceBridgeService(language: languages.source)
+    private lazy var translationQualityService = TranslationQualityService(
+        language: languages.source
+    )
+    private lazy var focusedRegionSelectionPolicy =
+        FocusedRegionSelectionPolicy(language: languages.source)
+    private lazy var learnerProfileStore = LearnerProfileStore(
+        language: languages.source
+    )
     private let systemIdleMonitor = SystemIdleMonitor()
     private let engineInstallerService = EngineInstallerService()
     private let speechService = SpeechService()
@@ -78,9 +93,16 @@ public final class AppModel: ObservableObject {
         category: "PipelineLatency"
     )
     private lazy var overlayController = OverlayWindowController(
+        languages: languages,
         learnerProfile: learnerProfileStore,
-        onSpeakDanish: { [weak self] word in
-            self?.speechService.speak(word, language: "da-DK")
+        onSpeakSourceWord: { [weak self] word in
+            guard let self else {
+                return
+            }
+            self.speechService.speak(
+                word,
+                language: self.languages.source.speechVoice
+            )
         },
         onLearnerProfileChanged: { [weak self] masteryChanged in
             self?.refreshLearnerProfileSummary(
@@ -117,6 +139,10 @@ public final class AppModel: ObservableObject {
     )
 
     public init() {
+        translationConfiguration = TranslationSession.Configuration(
+            source: Locale.Language(identifier: languages.source.code),
+            target: Locale.Language(identifier: languages.target.code)
+        )
         let defaults = UserDefaults.standard
         screenPermissionWasRequested = defaults.bool(
             forKey: Keys.screenPermissionWasRequested
@@ -216,9 +242,11 @@ public final class AppModel: ObservableObject {
         case (false, false, _):
             engineSetupMessage = "Install Tesseract and Argos for the preferred local pipeline."
         case (false, true, _):
-            engineSetupMessage = "Argos is ready; Tesseract Danish OCR is missing."
+            engineSetupMessage =
+                "Argos is ready; Tesseract \(languages.source.displayName) OCR is missing."
         case (true, false, _):
-            engineSetupMessage = "Tesseract is ready; Argos Danish → English is missing."
+            engineSetupMessage =
+                "Tesseract is ready; Argos \(languages.source.displayName) → \(languages.target.displayName) is missing."
         case (true, true, false):
             engineSetupMessage = "Install the local adaptive word-bridge resources."
         }
@@ -649,7 +677,7 @@ public final class AppModel: ObservableObject {
             phase = .recognizing
 
             let recognitionStartedAt = latencyClock.now
-            var result = try await ocrService.recognizeDanishText(
+            var result = try await ocrService.recognizeText(
                 in: capture,
                 focusPoint: cursor
             )
@@ -665,7 +693,7 @@ public final class AppModel: ObservableObject {
                     velocity: velocity,
                     expansion: 1.65
                 )
-                let expandedResult = try await ocrService.recognizeDanishText(
+                let expandedResult = try await ocrService.recognizeText(
                     in: expandedCapture,
                     focusPoint: cursor
                 )
@@ -686,7 +714,7 @@ public final class AppModel: ObservableObject {
                 from: allRegions,
                 previous: estimatedTextHeight
             )
-            allRegions = FocusedRegionSelectionPolicy.foregroundRegions(
+            allRegions = focusedRegionSelectionPolicy.foregroundRegions(
                 from: allRegions,
                 at: cursor
             )
@@ -760,7 +788,7 @@ public final class AppModel: ObservableObject {
                         )
                     }
                 )
-                let focusedSourceKeys = FocusedRegionSelectionPolicy
+                let focusedSourceKeys = focusedRegionSelectionPolicy
                     .focusedSourceKeys(in: allRegions, at: cursor)
                 let focusedTranslations = focusedSourceKeys.isEmpty
                     ? sourceTranslations
@@ -951,7 +979,7 @@ public final class AppModel: ObservableObject {
         for source in sourceTranslations.keys {
             if let cached = beginnerExplanationCache[source] {
                 result[source] = cached
-            } else if let local = beginnerDanishService.localExplanation(
+            } else if let local = beginnerGlossService.localExplanation(
                 for: source
             ) {
                 result[source] = local
@@ -971,12 +999,12 @@ public final class AppModel: ObservableObject {
                 sourceTranslations[$0] ?? $0
             }
             let explanations = try await wordBridgeTranslationService
-                .explainEnglishWordsInDanish(englishWords)
+                .explainTargetWordsInSourceLanguage(englishWords)
             guard !Task.isCancelled else {
                 return result
             }
             for (source, explanation) in zip(missing, explanations) {
-                let cleaned = beginnerDanishService.clean(
+                let cleaned = beginnerGlossService.clean(
                     explanation: explanation
                 )
                 guard !cleaned.isEmpty else {
@@ -1323,10 +1351,7 @@ public final class AppModel: ObservableObject {
                 guard needsWordBridge else {
                     return
                 }
-                await self.wordBridgeTranslationService.warmUp(
-                    source: "en",
-                    target: "da"
-                )
+                await self.wordBridgeTranslationService.warmUpWordBridge()
             }()
             _ = await (
                 captureWarmUp,

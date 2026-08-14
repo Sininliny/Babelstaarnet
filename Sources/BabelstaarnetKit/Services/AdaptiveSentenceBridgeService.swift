@@ -38,7 +38,15 @@ enum LanguageTransferState: Equatable, Sendable {
     }
 }
 
-struct AdaptiveSentenceBridgeService {
+struct AdaptiveSentenceBridgeService: Sendable {
+    private let language: SourceLanguage
+    private let boundary: SentenceBoundary
+
+    init(language: SourceLanguage) {
+        self.language = language
+        self.boundary = language.sentenceBoundary
+    }
+
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
     // The word that was asked about is marked apart from the rest of the
@@ -46,7 +54,6 @@ struct AdaptiveSentenceBridgeService {
     // back at the word the panel above it is answering.
     private static let focusStart = "\u{E002}"
     private static let focusEnd = "\u{E003}"
-    private static let danishLocale = Locale(identifier: "da_DK")
     private static let wordTrimmingCharacters =
         CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
     private static let wordExpression = try! NSRegularExpression(
@@ -268,7 +275,7 @@ struct AdaptiveSentenceBridgeService {
         around focusWord: String,
         occurrence: Int
     ) -> String {
-        guard DanishSentenceBoundary.sentenceRanges(in: text).count > 1 else {
+        guard boundary.sentenceRanges(in: text).count > 1 else {
             return text
         }
         let matches = wordMatches(in: text)
@@ -282,7 +289,7 @@ struct AdaptiveSentenceBridgeService {
         let index = focusIndexes[
             min(max(0, occurrence), focusIndexes.count - 1)
         ]
-        let sentence = DanishSentenceBoundary.sentenceRange(
+        let sentence = boundary.sentenceRange(
             in: text,
             containing: matches[index].range.location
         )
@@ -348,7 +355,7 @@ struct AdaptiveSentenceBridgeService {
     }
 
     private func normalized(_ word: String) -> String {
-        word.lowercased(with: Self.danishLocale)
+        language.lowercased(word)
             .trimmingCharacters(
                 in: Self.wordTrimmingCharacters
             )

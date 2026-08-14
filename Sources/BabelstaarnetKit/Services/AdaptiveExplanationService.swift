@@ -4,12 +4,31 @@ struct AdaptiveExplanation: Equatable, Sendable {
     let primaryText: String
     let englishSupport: String?
     let englishIsExpanded: Bool
+
+    init(
+        primaryText: String,
+        englishSupport: String?,
+        englishIsExpanded: Bool
+    ) {
+        self.primaryText = primaryText
+        self.englishSupport = englishSupport
+        self.englishIsExpanded = englishIsExpanded
+    }
 }
 
-enum PassiveWordMeaningPolicy {
-    static func directEnglishMeaning(
+/// The meaning a hover is owed even while the reader is being quietly tested.
+struct PassiveWordMeaningPolicy: Sendable {
+    private let language: SourceLanguage
+    private let target: TargetLanguage
+
+    init(language: SourceLanguage, target: TargetLanguage) {
+        self.language = language
+        self.target = target
+    }
+
+    func directMeaning(
         sourceWord: String,
-        englishTranslation: String,
+        translation englishTranslation: String,
         knowledgeLevel: Int
     ) -> String? {
         // A focused hover is a request for meaning, even while the learner is
@@ -36,28 +55,26 @@ enum PassiveWordMeaningPolicy {
         // Prefer a complete, useful phrase over a chopped dictionary fragment.
         // Bubble text deliberately uses no ellipsis.
         var selected = Array(words.prefix(12))
-        let danglingEndings: Set<String> = [
-            "a", "am", "an", "and", "are", "as", "at", "be", "been",
-            "being", "by", "for", "from", "in", "is", "of", "or", "that",
-            "the", "to", "was", "were", "with"
-        ]
         while selected.count > 6,
               let last = selected.last,
-              danglingEndings.contains(normalized(String(last))) {
+              target.danglingWords.contains(normalized(String(last))) {
             selected.removeLast()
         }
         return selected.joined(separator: " ")
     }
 
-    private static func normalized(_ value: String) -> String {
-        value.lowercased(with: Locale(identifier: "da_DK"))
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines.union(.punctuationCharacters)
-            )
+    private func normalized(_ value: String) -> String {
+        language.normalized(value)
     }
 }
 
-struct AdaptiveExplanationService {
+struct AdaptiveExplanationService: Sendable {
+    private let language: SourceLanguage
+
+    init(language: SourceLanguage) {
+        self.language = language
+    }
+
     func explanation(
         bridgeText: String,
         englishMeaning: String,
@@ -80,7 +97,7 @@ struct AdaptiveExplanationService {
             return AdaptiveExplanation(
                 primaryText: meaning.isEmpty
                     ? "No local explanation found."
-                    : "Betyder “\(meaning)”.",
+                    : language.meansPhrase(meaning),
                 englishSupport: expandEnglish && !expanded.isEmpty
                     ? expanded
                     : nil,

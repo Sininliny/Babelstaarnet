@@ -2,7 +2,13 @@ import CoreServices
 import Foundation
 
 struct DictionaryService {
-    func adaptiveEnglishGloss(
+    private let target: TargetLanguage
+
+    init(target: TargetLanguage) {
+        self.target = target
+    }
+
+    func adaptiveGloss(
         for translatedWord: String,
         sourceWord: String
     ) -> String {
@@ -18,14 +24,14 @@ struct DictionaryService {
     ) -> String {
         let meaning = translatedWord.compacted
         guard !meaning.isEmpty else {
-            return "No English meaning found."
+            return "No \(target.displayName) meaning found."
         }
         let definition = fullDefinition(
             for: translatedWord,
             sourceWord: sourceWord
         )
         guard !definition.localizedCaseInsensitiveContains(
-            "English meaning of"
+            "\(target.displayName) meaning of"
         ) else {
             return "Means “\(meaning)”."
         }
@@ -44,7 +50,7 @@ struct DictionaryService {
     ) -> String {
         let candidates = dictionaryCandidates(for: translatedWord)
         guard !candidates.isEmpty else {
-            return "English translation of “\(sourceWord)”."
+            return "\(target.displayName) translation of “\(sourceWord)”."
         }
 
         for candidate in candidates {
@@ -58,7 +64,7 @@ struct DictionaryService {
             }
         }
 
-        return "“\(translatedWord)” is the English meaning of “\(sourceWord)”."
+        return "“\(translatedWord)” is the \(target.displayName) meaning of “\(sourceWord)”."
     }
 
     private func dictionaryCandidates(for translatedWord: String) -> [String] {

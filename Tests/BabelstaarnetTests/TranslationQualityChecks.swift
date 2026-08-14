@@ -4,7 +4,7 @@ import Foundation
 @main
 enum TranslationQualityChecks {
     static func main() {
-        let service = TranslationQualityService()
+        let service = TranslationQualityService(language: .danish)
         precondition(
             service.needsRetry(
                 source: "Webarkitektur",

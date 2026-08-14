@@ -28,7 +28,7 @@ enum SentenceAssemblyChecks {
         )
         let page = [first, second, third, next]
 
-        let assembled = SentenceAssemblyPolicy.sentence(
+        let assembled = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("digitale", in: second),
             in: second,
             among: page
@@ -45,7 +45,7 @@ enum SentenceAssemblyChecks {
 
         // The sentence after it stands on its own line and pulls in nothing:
         // the line it is printed on already stops on both sides of the word.
-        let standalone = SentenceAssemblyPolicy.sentence(
+        let standalone = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("emner", in: next),
             in: next,
             among: page
@@ -60,7 +60,7 @@ enum SentenceAssemblyChecks {
         // gives up only the half the pointer is in.
         let opening = line("Fristen er fast. Emnerne kan spænde", top: 300)
         let closing = line("bredt over mange fag.", top: 270)
-        let mixed = SentenceAssemblyPolicy.sentence(
+        let mixed = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("spænde", in: opening),
             in: opening,
             among: [opening, closing]
@@ -71,7 +71,7 @@ enum SentenceAssemblyChecks {
         )
         precondition(mixed.lines == [opening, closing])
 
-        let ending = SentenceAssemblyPolicy.sentence(
+        let ending = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("Fristen", in: opening),
             in: opening,
             among: [opening, closing]
@@ -83,7 +83,7 @@ enum SentenceAssemblyChecks {
         // spacing, and is kept out of it by its type size alone.
         let heading = line("Kom til infomøde", top: 200, height: 44)
         let body = line("Du kan høre mere om", top: 160)
-        let underHeading = SentenceAssemblyPolicy.sentence(
+        let underHeading = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("høre", in: body),
             in: body,
             among: [heading, body]
@@ -101,7 +101,7 @@ enum SentenceAssemblyChecks {
             top: 370,
             left: 900
         )
-        let columns = SentenceAssemblyPolicy.sentence(
+        let columns = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("spænde", in: leftColumn),
             in: leftColumn,
             among: [leftColumn, rightColumn]
@@ -116,14 +116,14 @@ enum SentenceAssemblyChecks {
                 top: 800 - CGFloat(index) * 30
             )
         }
-        let bounded = SentenceAssemblyPolicy.sentence(
+        let bounded = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("uden", in: runOn[4]),
             in: runOn[4],
             among: runOn
         )
         precondition(
             bounded.lines.count
-                <= SentenceAssemblyPolicy.maximumContinuationLines * 2 + 1,
+                <= SentenceAssemblyPolicy(language: .danish).maximumContinuationLines * 2 + 1,
             "\(bounded.lines.count)"
         )
 
@@ -131,7 +131,7 @@ enum SentenceAssemblyChecks {
         // under the pointer, so the bridge answers about that occurrence.
         let repeatedFirst = line("Et land og et andet", top: 100)
         let repeatedSecond = line("land blev nævnt.", top: 70)
-        let repeated = SentenceAssemblyPolicy.sentence(
+        let repeated = SentenceAssemblyPolicy(language: .danish).sentence(
             containing: word("land", in: repeatedSecond),
             in: repeatedSecond,
             among: [repeatedFirst, repeatedSecond]

@@ -4,7 +4,7 @@ import Foundation
 @main
 enum ArgosServiceCheck {
     static func main() async throws {
-        let service = ArgosTranslationService()
+        let service = ArgosTranslationService(languages: .danishToEnglish)
         let ready = await service.isReady()
         precondition(
             ready,
@@ -39,14 +39,14 @@ enum ArgosServiceCheck {
                 + " s"
         )
 
-        let wordBridgeService = ArgosTranslationService()
+        let wordBridgeService = ArgosTranslationService(languages: .danishToEnglish)
         let wordBridgeReady = await wordBridgeService.isWordBridgeReady()
         precondition(
             wordBridgeReady,
             "Adaptive word-bridge resources are not installed"
         )
         let explanations = try await wordBridgeService
-            .explainEnglishWordsInDanish([
+            .explainTargetWordsInSourceLanguage([
                 "study accommodation",
                 "learn"
         ])

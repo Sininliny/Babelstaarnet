@@ -1,8 +1,14 @@
 import CoreGraphics
 import Foundation
 
-enum FocusedRegionSelectionPolicy {
-    static func foregroundRegions(
+struct FocusedRegionSelectionPolicy: Sendable {
+    private let language: SourceLanguage
+
+    init(language: SourceLanguage) {
+        self.language = language
+    }
+
+    func foregroundRegions(
         from regions: [TextRegion],
         at focusPoint: CGPoint
     ) -> [TextRegion] {
@@ -31,14 +37,14 @@ enum FocusedRegionSelectionPolicy {
         // show the fragment the column happened to wrap — and the words on the
         // continuation lines were dropped before translation, so nothing later
         // in the pipeline could recover them.
-        return SentenceAssemblyPolicy.lines(
+        return SentenceAssemblyPolicy(language: language).lines(
             containing: match.1,
             in: match.0,
             among: regions
         )
     }
 
-    static func focusedSourceKeys(
+    func focusedSourceKeys(
         in regions: [TextRegion],
         at focusPoint: CGPoint
     ) -> Set<String> {
@@ -50,15 +56,11 @@ enum FocusedRegionSelectionPolicy {
                         .insetBy(dx: -4, dy: -5)
                         .contains(focusPoint)
                 }
-                .map {
-                    $0.sourceText.lowercased(
-                        with: Locale(identifier: "da_DK")
-                    )
-                }
+                .map { language.lowercased($0.sourceText) }
         )
     }
 
-    private static func distance(
+    private func distance(
         from lhs: CGPoint,
         to rhs: CGPoint
     ) -> CGFloat {

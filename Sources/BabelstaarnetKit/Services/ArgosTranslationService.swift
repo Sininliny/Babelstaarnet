@@ -18,6 +18,12 @@ enum ArgosTranslationError: LocalizedError {
 }
 
 actor ArgosTranslationService {
+    private let languages: LanguagePair
+
+    init(languages: LanguagePair) {
+        self.languages = languages
+    }
+
     private var process: Process?
     private var input: FileHandle?
     private var output: FileHandle?
@@ -25,11 +31,9 @@ actor ArgosTranslationService {
     private var responseBuffer = Data()
     private var activeLanguagePair: (source: String, target: String)?
 
-    func isReady(
-        source: String = "da",
-        target: String = "en",
-        keepWarm: Bool = true
-    ) async -> Bool {
+    func isReady(keepWarm: Bool = true) async -> Bool {
+        let source = languages.source.code
+        let target = languages.target.code
         do {
             _ = try request(
                 texts: [],
@@ -46,11 +50,12 @@ actor ArgosTranslationService {
         }
     }
 
-    func warmUp(
-        source: String = "da",
-        target: String = "en"
-    ) async {
-        _ = try? request(texts: [], source: source, target: target)
+    func warmUp() async {
+        _ = try? request(
+            texts: [],
+            source: languages.source.code,
+            target: languages.target.code
+        )
     }
 
     func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
@@ -66,7 +71,18 @@ actor ArgosTranslationService {
         }
     }
 
-    func explainEnglishWordsInDanish(
+    /// Warms the reverse direction, which is the one the word bridge asks in.
+    func warmUpWordBridge() async {
+        _ = try? request(
+            texts: [],
+            source: languages.target.code,
+            target: languages.source.code
+        )
+    }
+
+    /// Explains words of the target language in the language being learned,
+    /// which is the reverse of the reading direction.
+    func explainTargetWordsInSourceLanguage(
         _ words: [String]
     ) async throws -> [String] {
         guard !words.isEmpty else {
@@ -80,14 +96,12 @@ actor ArgosTranslationService {
         }
     }
 
-    func translate(
-        _ texts: [String],
-        source: String = "da",
-        target: String = "en"
-    ) async throws -> [String] {
+    func translate(_ texts: [String]) async throws -> [String] {
         guard !texts.isEmpty else {
             return []
         }
+        let source = languages.source.code
+        let target = languages.target.code
 
         do {
             return try request(
@@ -136,7 +150,10 @@ actor ArgosTranslationService {
     }
 
     private func requestDefinitions(words: [String]) throws -> [String] {
-        try ensureServer(source: "en", target: "da")
+        try ensureServer(
+            source: languages.target.code,
+            target: languages.source.code
+        )
         guard let input, let output else {
             throw ArgosTranslationError.unavailable
         }

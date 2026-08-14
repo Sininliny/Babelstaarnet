@@ -15,7 +15,7 @@ enum OCRTextQualityPolicyChecks {
             "qigong",
             "Qeqertarsuaq"
         ] {
-            precondition(OCRTextQualityPolicy.isPlausibleWord(valid))
+            precondition(OCRTextQualityPolicy(language: .danish).isPlausibleWord(valid))
         }
 
         for corrupted in [
@@ -23,7 +23,7 @@ enum OCRTextQualityPolicyChecks {
             "kaDOJ",
             "lorsfinqsgruppen"
         ] {
-            precondition(!OCRTextQualityPolicy.isPlausibleWord(corrupted))
+            precondition(!OCRTextQualityPolicy(language: .danish).isPlausibleWord(corrupted))
         }
 
         let screen = CGRect(x: 0, y: 0, width: 800, height: 600)
@@ -38,7 +38,7 @@ enum OCRTextQualityPolicyChecks {
             screen: screen
         )
         precondition(
-            OCRTextQualityPolicy.plausibleRegions(
+            OCRTextQualityPolicy(language: .danish).plausibleRegions(
                 from: [clean, broken]
             ) == [clean]
         )
@@ -51,7 +51,7 @@ enum OCRTextQualityPolicyChecks {
             y: 180,
             screen: screen
         )
-        let salvaged = OCRTextQualityPolicy.plausibleRegions(
+        let salvaged = OCRTextQualityPolicy(language: .danish).plausibleRegions(
             from: [mostlyReadable]
         )
         precondition(salvaged.count == 1)
@@ -76,7 +76,7 @@ enum OCRTextQualityPolicyChecks {
             y: 260,
             screen: screen
         )
-        let trimmed = OCRTextQualityPolicy.plausibleRegions(
+        let trimmed = OCRTextQualityPolicy(language: .danish).plausibleRegions(
             from: [trailingNoise]
         )
         precondition(trimmed.count == 1)
@@ -91,7 +91,7 @@ enum OCRTextQualityPolicyChecks {
             screen: screen
         )
         precondition(
-            OCRTextQualityPolicy.plausibleRegions(
+            OCRTextQualityPolicy(language: .danish).plausibleRegions(
                 from: [halfBroken]
             ).isEmpty
         )
@@ -100,16 +100,16 @@ enum OCRTextQualityPolicyChecks {
         // read "nyt" as "nyL". A stray capital at the end of a lowercase word
         // is an ascender misread, and the wrong answer that follows it carries
         // no sign of being wrong.
-        precondition(!OCRTextQualityPolicy.isPlausibleWord("nyL"))
-        precondition(!OCRTextQualityPolicy.isPlausibleWord("ansøgningL"))
-        precondition(!OCRTextQualityPolicy.isPlausibleWord("aB"))
+        precondition(!OCRTextQualityPolicy(language: .danish).isPlausibleWord("nyL"))
+        precondition(!OCRTextQualityPolicy(language: .danish).isPlausibleWord("ansøgningL"))
+        precondition(!OCRTextQualityPolicy(language: .danish).isPlausibleWord("aB"))
         // Acronyms and names are untouched: all-uppercase is accepted above,
         // and a capital belongs at the front of a name, not the end.
-        precondition(OCRTextQualityPolicy.isPlausibleWord("CPR"))
-        precondition(OCRTextQualityPolicy.isPlausibleWord("CPR-kontoret"))
-        precondition(OCRTextQualityPolicy.isPlausibleWord("København"))
-        precondition(OCRTextQualityPolicy.isPlausibleWord("nyt"))
-        precondition(OCRTextQualityPolicy.isPlausibleWord("iPhone"))
+        precondition(OCRTextQualityPolicy(language: .danish).isPlausibleWord("CPR"))
+        precondition(OCRTextQualityPolicy(language: .danish).isPlausibleWord("CPR-kontoret"))
+        precondition(OCRTextQualityPolicy(language: .danish).isPlausibleWord("København"))
+        precondition(OCRTextQualityPolicy(language: .danish).isPlausibleWord("nyt"))
+        precondition(OCRTextQualityPolicy(language: .danish).isPlausibleWord("iPhone"))
 
         print("Corrupted OCR text quality checks passed")
     }

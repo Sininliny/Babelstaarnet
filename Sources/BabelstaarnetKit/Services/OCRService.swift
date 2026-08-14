@@ -34,17 +34,29 @@ actor OCRService {
         let confidenceByRegionID: [UUID: Float]
     }
 
-    private let tesseract = TesseractOCRService()
+    private let language: SourceLanguage
+    private let languagePolicy: OCRLanguagePolicy
+    private let textQualityPolicy: OCRTextQualityPolicy
+    private let tesseract: TesseractOCRService
+
+    init(language: SourceLanguage) {
+        self.language = language
+        self.languagePolicy = OCRLanguagePolicy(language: language)
+        self.textQualityPolicy = OCRTextQualityPolicy(language: language)
+        self.tesseract = TesseractOCRService(
+            languageCode: language.ocr.tesseractCode
+        )
+    }
     private let resultCache = BoundedCache<CacheKey, CachedResult>(
         capacity: 12
     )
-    /// Whether the installed Tesseract can actually read Danish, remembered
-    /// because answering it costs a process launch.
-    private var tesseractReadsDanish: Bool?
+    /// Whether the installed Tesseract can actually read this language,
+    /// remembered because answering it costs a process launch.
+    private var tesseractReadsLanguage: Bool?
 
     func isOpenSourceEngineReady() async -> Bool {
-        let ready = await tesseract.isDanishReady()
-        tesseractReadsDanish = ready
+        let ready = await tesseract.isReady()
+        tesseractReadsLanguage = ready
         return ready
     }
 
@@ -52,12 +64,12 @@ actor OCRService {
     /// alone sent every scan through four processes that opened, failed to find
     /// dan.traineddata, and exited — after the capture had been encoded as PNG
     /// for each of them — before the reading fell back to Vision anyway.
-    private func tesseractCanReadDanish() async -> Bool {
-        if let tesseractReadsDanish {
-            return tesseractReadsDanish
+    private func tesseractCanReadLanguage() async -> Bool {
+        if let tesseractReadsLanguage {
+            return tesseractReadsLanguage
         }
-        let ready = await tesseract.isDanishReady()
-        tesseractReadsDanish = ready
+        let ready = await tesseract.isReady()
+        tesseractReadsLanguage = ready
         return ready
     }
 
@@ -68,10 +80,12 @@ actor OCRService {
     /// activation, alongside capture metadata and the translation workers,
     /// keeps it out of the reading path.
     func warmUp() async {
-        _ = try? await Self.warmUpVision()
+        _ = try? await Self.warmUpVision(
+            recognitionLanguages: language.ocr.recognitionLanguages
+        )
     }
 
-    func recognizeDanishText(
+    func recognizeText(
         in capture: CapturedDisplay,
         focusPoint: CGPoint? = nil
     ) async throws -> (regions: [TextRegion], engine: String) {
@@ -107,12 +121,15 @@ actor OCRService {
            let vision = try? await Self.recognizeWithVision(
                image: capture.image,
                in: capture,
-               recognitionLevel: .accurate
+               recognitionLevel: .accurate,
+               language: language
            ) {
             try Task.checkCancellation()
-            let regions = Self.danishRegions(
+            let regions = Self.candidateRegions(
                 from: vision,
-                focusPoint: focusPoint
+                focusPoint: focusPoint,
+                languagePolicy: languagePolicy,
+                textQualityPolicy: textQualityPolicy
             )
             rawRegions = regions
             if OCRRoutingPolicy.canUseAccurateFocusedVision(
@@ -153,12 +170,15 @@ actor OCRService {
            let vision = try? await Self.recognizeWithVision(
                image: prepared,
                in: capture,
-               recognitionLevel: .accurate
+               recognitionLevel: .accurate,
+               language: language
            ) {
             try Task.checkCancellation()
-            let regions = Self.danishRegions(
+            let regions = Self.candidateRegions(
                 from: vision,
-                focusPoint: focusPoint
+                focusPoint: focusPoint,
+                languagePolicy: languagePolicy,
+                textQualityPolicy: textQualityPolicy
             )
             contrastRegions = regions
             if OCRRoutingPolicy.canUseAccurateFocusedVision(
@@ -178,17 +198,17 @@ actor OCRService {
 
         try Task.checkCancellation()
         if tesseract.isAvailable,
-           await tesseractCanReadDanish(),
+           await tesseractCanReadLanguage(),
            let tesseractRegions = try? await tesseract.recognize(
                in: capture,
                prefersSmallText: prefersSmallTextRecovery
            ),
            !tesseractRegions.isEmpty {
             try Task.checkCancellation()
-            let plausible = OCRTextQualityPolicy.plausibleRegions(
+            let plausible = textQualityPolicy.plausibleRegions(
                 from: tesseractRegions
             )
-            let regions = OCRLanguagePolicy.danishCandidates(
+            let regions = languagePolicy.candidates(
                 from: plausible,
                 focusPoint: focusPoint
             )
@@ -239,11 +259,14 @@ actor OCRService {
             let vision = try await Self.recognizeWithVision(
                 image: capture.image,
                 in: capture,
-                recognitionLevel: .accurate
+                recognitionLevel: .accurate,
+                language: language
             )
-            regions = Self.danishRegions(
+            regions = Self.candidateRegions(
                 from: vision,
-                focusPoint: focusPoint
+                focusPoint: focusPoint,
+                languagePolicy: languagePolicy,
+                textQualityPolicy: textQualityPolicy
             )
         }
 
@@ -264,12 +287,15 @@ actor OCRService {
                   let contrastVision = try? await Self.recognizeWithVision(
                       image: prepared,
                       in: capture,
-                      recognitionLevel: .accurate
+                      recognitionLevel: .accurate,
+                      language: language
                   ) {
             try Task.checkCancellation()
-            recovered = Self.danishRegions(
+            recovered = Self.candidateRegions(
                 from: contrastVision,
-                focusPoint: focusPoint
+                focusPoint: focusPoint,
+                languagePolicy: languagePolicy,
+                textQualityPolicy: textQualityPolicy
             )
         } else {
             return store(
@@ -334,14 +360,17 @@ actor OCRService {
                   displayFrame: window.globalFrame,
                   screenFrame: capture.screenFrame,
                   displayID: capture.displayID,
-                  recognitionLevel: .accurate
+                  recognitionLevel: .accurate,
+                  language: language
               ) else {
             return nil
         }
         try Task.checkCancellation()
-        let refined = Self.danishRegions(
+        let refined = Self.candidateRegions(
             from: vision,
-            focusPoint: focusPoint
+            focusPoint: focusPoint,
+            languagePolicy: languagePolicy,
+            textQualityPolicy: textQualityPolicy
         )
         guard OCRRoutingPolicy.canUseAccurateFocusedVision(
             regions: refined,
@@ -505,12 +534,14 @@ actor OCRService {
         return (result.regions, result.engine)
     }
 
-    private nonisolated static func danishRegions(
+    private nonisolated static func candidateRegions(
         from vision: VisionResult,
-        focusPoint: CGPoint?
+        focusPoint: CGPoint?,
+        languagePolicy: OCRLanguagePolicy,
+        textQualityPolicy: OCRTextQualityPolicy
     ) -> [TextRegion] {
-        OCRLanguagePolicy.danishCandidates(
-            from: OCRTextQualityPolicy.plausibleRegions(from: vision.regions),
+        languagePolicy.candidates(
+            from: textQualityPolicy.plausibleRegions(from: vision.regions),
             focusPoint: focusPoint
         )
     }
@@ -547,7 +578,9 @@ actor OCRService {
 
     /// Runs one accurate recognition on a throwaway crop so the model load is
     /// paid before a learner is waiting on it.
-    private nonisolated static func warmUpVision() async throws {
+    private nonisolated static func warmUpVision(
+        recognitionLanguages: [String]
+    ) async throws {
         let worker = Task.detached(priority: .utility) {
             let width = 64
             let height = 32
@@ -568,7 +601,8 @@ actor OCRService {
             }
             let request = Self.textRequest(
                 recognitionLevel: .accurate,
-                imageHeight: height
+                imageHeight: height,
+                recognitionLanguages: recognitionLanguages
             )
             try? VNImageRequestHandler(
                 cgImage: image,
@@ -599,11 +633,12 @@ actor OCRService {
 
     private nonisolated static func textRequest(
         recognitionLevel: VNRequestTextRecognitionLevel,
-        imageHeight: Int
+        imageHeight: Int,
+        recognitionLanguages: [String]
     ) -> VNRecognizeTextRequest {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = recognitionLevel
-        request.recognitionLanguages = ["da-DK", "da"]
+        request.recognitionLanguages = recognitionLanguages
         // Language correction is what keeps æ, ø, and å attached to the word.
         // It belongs to the accurate level only; on the fast level the same
         // flag measurably replaced those letters with a, o, and noise.
@@ -635,14 +670,16 @@ actor OCRService {
     private nonisolated static func recognizeWithVision(
         image: CGImage,
         in capture: CapturedDisplay,
-        recognitionLevel: VNRequestTextRecognitionLevel
+        recognitionLevel: VNRequestTextRecognitionLevel,
+        language: SourceLanguage
     ) async throws -> VisionResult {
         try await recognizeWithVision(
             image: image,
             displayFrame: capture.frame,
             screenFrame: capture.screenFrame,
             displayID: capture.displayID,
-            recognitionLevel: recognitionLevel
+            recognitionLevel: recognitionLevel,
+            language: language
         )
     }
 
@@ -657,13 +694,15 @@ actor OCRService {
         displayFrame: CGRect,
         screenFrame: CGRect,
         displayID: CGDirectDisplayID,
-        recognitionLevel: VNRequestTextRecognitionLevel
+        recognitionLevel: VNRequestTextRecognitionLevel,
+        language: SourceLanguage
     ) async throws -> VisionResult {
         let worker = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
             let request = Self.textRequest(
                 recognitionLevel: recognitionLevel,
-                imageHeight: image.height
+                imageHeight: image.height,
+                recognitionLanguages: language.ocr.recognitionLanguages
             )
 
             let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
@@ -693,7 +732,8 @@ actor OCRService {
                     in: candidate,
                     displayFrame: displayFrame,
                     screenFrame: screenFrame,
-                    displayID: displayID
+                    displayID: displayID,
+                    naturalLanguage: language.naturalLanguage
                 )
                 let region = TextRegion(
                     sourceText: source,
@@ -762,12 +802,13 @@ actor OCRService {
         in recognizedText: VNRecognizedText,
         displayFrame: CGRect,
         screenFrame: CGRect,
-        displayID: CGDirectDisplayID
+        displayID: CGDirectDisplayID,
+        naturalLanguage: NLLanguage
     ) -> [WordRegion] {
         let source = recognizedText.string
         let tokenizer = NLTokenizer(unit: .word)
         tokenizer.string = source
-        tokenizer.setLanguage(.danish)
+        tokenizer.setLanguage(naturalLanguage)
 
         var regions: [WordRegion] = []
         tokenizer.enumerateTokens(

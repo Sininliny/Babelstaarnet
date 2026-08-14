@@ -15,7 +15,7 @@ enum OCRLanguagePolicyChecks {
         let focus = CGPoint(x: 175, y: 112)
 
         precondition(
-            OCRLanguagePolicy.danishCandidates(
+            OCRLanguagePolicy(language: .danish).candidates(
                 from: [ambiguousDanish],
                 focusPoint: focus
             ) == [ambiguousDanish]
@@ -40,7 +40,7 @@ enum OCRLanguagePolicyChecks {
             screen: screen
         )
         precondition(
-            OCRLanguagePolicy.danishCandidates(
+            OCRLanguagePolicy(language: .danish).candidates(
                 from: [nordicDanish],
                 focusPoint: CGPoint(x: 135, y: 142)
             ) == [nordicDanish]
@@ -56,7 +56,7 @@ enum OCRLanguagePolicyChecks {
             screen: screen
         )
         precondition(
-            OCRLanguagePolicy.danishCandidates(
+            OCRLanguagePolicy(language: .danish).candidates(
                 from: [clearDanish],
                 focusPoint: nil
             ) == [clearDanish]
@@ -69,7 +69,7 @@ enum OCRLanguagePolicyChecks {
             screen: screen
         )
         precondition(
-            OCRLanguagePolicy.danishCandidates(
+            OCRLanguagePolicy(language: .danish).candidates(
                 from: [clearEnglish],
                 focusPoint: CGPoint(x: 135, y: 232)
             ).isEmpty
@@ -83,11 +83,11 @@ enum OCRLanguagePolicyChecks {
         _ region: TextRegion,
         at focusPoint: CGPoint
     ) -> Bool {
-        let background = OCRLanguagePolicy.danishCandidates(
+        let background = OCRLanguagePolicy(language: .danish).candidates(
             from: [region],
             focusPoint: nil
         )
-        let focused = OCRLanguagePolicy.danishCandidates(
+        let focused = OCRLanguagePolicy(language: .danish).candidates(
             from: [region],
             focusPoint: focusPoint
         )

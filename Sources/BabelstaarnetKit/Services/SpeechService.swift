@@ -4,7 +4,7 @@ import AVFoundation
 final class SpeechService {
     private let synthesizer = AVSpeechSynthesizer()
 
-    func speak(_ text: String, language: String = "en-GB") {
+    func speak(_ text: String, language: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
