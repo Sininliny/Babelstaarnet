@@ -17,15 +17,16 @@ baseline="$output_dir/baseline.json"
 mkdir -p "$output_dir"
 
 cd "$project_dir"
-swift build -c release -Xswiftc -enable-testing --target BabelstaarnetKit
-module="$(swift build -c release --show-bin-path)/BabelstaarnetKit.o"
+swift build -c release -Xswiftc -enable-testing
+bin_dir="$(swift build -c release --show-bin-path)"
+module_objects=("$bin_dir"/*.o(N))
 
 swiftc \
     -O \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    -I "$(dirname "$module")" \
-    "$module" \
+    -I "$bin_dir" \
+    "${module_objects[@]}" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatFixtures.swift" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatBenchmark.swift" \
     -o "$output_dir/OCRColorFormatBenchmark"

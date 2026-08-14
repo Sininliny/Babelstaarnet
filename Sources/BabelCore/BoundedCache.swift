@@ -2,7 +2,7 @@ import Foundation
 
 /// A small least-recently-used cache that prevents long reading sessions from
 /// retaining every word ever seen. Trimming in batches keeps insertions cheap.
-final class BoundedCache<Key: Hashable, Value> {
+public final class BoundedCache<Key: Hashable, Value> {
     private struct Entry {
         var value: Value
         var lastAccess: UInt64
@@ -13,18 +13,18 @@ final class BoundedCache<Key: Hashable, Value> {
     private var entries: [Key: Entry] = [:]
     private var accessClock: UInt64 = 0
 
-    init(capacity: Int) {
+    public init(capacity: Int) {
         precondition(capacity > 0)
         self.capacity = capacity
         trimTarget = max(Int(Double(capacity) * 0.9), 1)
         entries.reserveCapacity(capacity)
     }
 
-    var count: Int {
+    public var count: Int {
         entries.count
     }
 
-    subscript(key: Key) -> Value? {
+    public subscript(key: Key) -> Value? {
         get {
             guard var entry = entries[key] else {
                 return nil
@@ -46,7 +46,7 @@ final class BoundedCache<Key: Hashable, Value> {
         }
     }
 
-    func removeAll(keepingCapacity: Bool = true) {
+    public func removeAll(keepingCapacity: Bool = true) {
         entries.removeAll(keepingCapacity: keepingCapacity)
     }
 

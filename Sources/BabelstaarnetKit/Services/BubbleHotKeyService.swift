@@ -1,5 +1,11 @@
 import AppKit
 import Carbon
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 enum BubbleHotKeyAction: UInt32, CaseIterable {
     case known = 1

@@ -1,10 +1,12 @@
 import AVFoundation
 
 @MainActor
-final class SpeechService {
+public final class SpeechService {
     private let synthesizer = AVSpeechSynthesizer()
 
-    func speak(_ text: String, language: String) {
+    public init() {}
+
+    public func speak(_ text: String, language: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
@@ -16,7 +18,7 @@ final class SpeechService {
         synthesizer.speak(utterance)
     }
 
-    func stop() {
+    public func stop() {
         synthesizer.stopSpeaking(at: .immediate)
     }
 }

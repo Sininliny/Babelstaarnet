@@ -35,15 +35,16 @@ swiftc \
 # the library's internals; it also keeps a little more of the module alive
 # through optimization, so timings recorded before this became a module build
 # are not comparable with timings recorded after it.
-swift build -c release -Xswiftc -enable-testing --target BabelstaarnetKit
-release_module="$(swift build -c release --show-bin-path)/BabelstaarnetKit.o"
+swift build -c release -Xswiftc -enable-testing
+release_bin="$(swift build -c release --show-bin-path)"
+release_objects=("$release_bin"/*.o(N))
 
 swiftc \
     -O \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    -I "$(dirname "$release_module")" \
-    "$release_module" \
+    -I "$release_bin" \
+    "${release_objects[@]}" \
     "$project_dir/Tests/RuntimeChecks/OCRServiceCheck.swift" \
     -o "$output_dir/OCRServiceCheck"
 "$output_dir/OCRServiceCheck" "$fixture"
@@ -52,14 +53,15 @@ swiftc \
 # checkout: a build with no bundle to read it from locates it relative to the
 # working directory, and that development-only path is gated on DEBUG — which
 # a debug build of the library is what defines.
-swift build --target BabelstaarnetKit
-debug_module="$(swift build --show-bin-path)/BabelstaarnetKit.o"
+swift build
+debug_bin="$(swift build --show-bin-path)"
+debug_objects=("$debug_bin"/*.o(N))
 
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    -I "$(dirname "$debug_module")" \
-    "$debug_module" \
+    -I "$debug_bin" \
+    "${debug_objects[@]}" \
     "$project_dir/Tests/RuntimeChecks/ArgosServiceCheck.swift" \
     -o "$output_dir/ArgosServiceCheck"
 "$output_dir/ArgosServiceCheck"

@@ -1,4 +1,5 @@
 import Foundation
+import BabelCore
 
 public extension SourceLanguage {
     /// Danish, as data.

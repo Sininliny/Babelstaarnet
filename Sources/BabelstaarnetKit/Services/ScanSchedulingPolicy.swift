@@ -1,5 +1,11 @@
 import CoreGraphics
 import Foundation
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 enum ScanSchedulingPolicy {
     static func shouldReplaceActiveScan(

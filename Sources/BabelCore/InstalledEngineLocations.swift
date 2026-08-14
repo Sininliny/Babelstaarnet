@@ -17,7 +17,7 @@ import Foundation
 /// rather than guessed at, and leaves reading on Apple's Vision and
 /// Translation — and in exchange nothing outside this file can extend what the
 /// app is willing to run.
-enum InstalledEngineLocations {
+public enum InstalledEngineLocations {
     /// Homebrew on Apple silicon, Homebrew on Intel, MacPorts, and the system.
     /// `/usr/local/bin` is group-writable by admins wherever Homebrew created
     /// it, so it is not a trust boundary on its own; it is here because
@@ -30,14 +30,14 @@ enum InstalledEngineLocations {
         "/usr/bin",
     ]
 
-    static var tesseract: [String] {
+    public static var tesseract: [String] {
         let bundled = Bundle.main.resourceURL?
             .appendingPathComponent("LocalEngines/tesseract").path
         return [bundled].compactMap { $0 }
             + packageManagerDirectories.map { $0 + "/tesseract" }
     }
 
-    static var python: [String] {
+    public static var python: [String] {
         let managed = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(
                 "Library/Application Support/Babelstaarnet/argos-venv/bin/python3"

@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import NaturalLanguage
+import BabelCore
 
 /// Which recognized regions are plausibly in the language being learned.
 ///

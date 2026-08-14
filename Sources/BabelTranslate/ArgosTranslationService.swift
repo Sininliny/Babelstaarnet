@@ -1,11 +1,12 @@
 import Foundation
+import BabelCore
 
-enum ArgosTranslationError: LocalizedError {
+public enum ArgosTranslationError: LocalizedError {
     case unavailable
     case executionFailed(String)
     case invalidResponse
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unavailable:
             return "Argos Translate or the required local language model is not installed."
@@ -17,10 +18,10 @@ enum ArgosTranslationError: LocalizedError {
     }
 }
 
-actor ArgosTranslationService {
+public actor ArgosTranslationService {
     private let languages: LanguagePair
 
-    init(languages: LanguagePair) {
+    public init(languages: LanguagePair) {
         self.languages = languages
     }
 
@@ -31,7 +32,7 @@ actor ArgosTranslationService {
     private var responseBuffer = Data()
     private var activeLanguagePair: (source: String, target: String)?
 
-    func isReady(keepWarm: Bool = true) async -> Bool {
+    public func isReady(keepWarm: Bool = true) async -> Bool {
         let source = languages.source.code
         let target = languages.target.code
         do {
@@ -50,7 +51,7 @@ actor ArgosTranslationService {
         }
     }
 
-    func warmUp() async {
+    public func warmUp() async {
         _ = try? request(
             texts: [],
             source: languages.source.code,
@@ -58,7 +59,7 @@ actor ArgosTranslationService {
         )
     }
 
-    func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
+    public func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
         do {
             _ = try requestDefinitions(words: [])
             if !keepWarm {
@@ -72,7 +73,7 @@ actor ArgosTranslationService {
     }
 
     /// Warms the reverse direction, which is the one the word bridge asks in.
-    func warmUpWordBridge() async {
+    public func warmUpWordBridge() async {
         _ = try? request(
             texts: [],
             source: languages.target.code,
@@ -82,7 +83,7 @@ actor ArgosTranslationService {
 
     /// Explains words of the target language in the language being learned,
     /// which is the reverse of the reading direction.
-    func explainTargetWordsInSourceLanguage(
+    public func explainTargetWordsInSourceLanguage(
         _ words: [String]
     ) async throws -> [String] {
         guard !words.isEmpty else {
@@ -96,7 +97,7 @@ actor ArgosTranslationService {
         }
     }
 
-    func translate(_ texts: [String]) async throws -> [String] {
+    public func translate(_ texts: [String]) async throws -> [String] {
         guard !texts.isEmpty else {
             return []
         }
@@ -119,7 +120,7 @@ actor ArgosTranslationService {
         }
     }
 
-    func shutdown() {
+    public func shutdown() {
         resetServer()
     }
 
@@ -323,15 +324,15 @@ actor ArgosTranslationService {
 }
 
 private struct BatchRequest: Encodable {
-    let texts: [String]
+    public let texts: [String]
 }
 
 private struct BatchResponse: Decodable {
-    let translations: [String]
+    public let translations: [String]
 }
 
 private struct WordBridgeRequest: Encodable {
-    let defineWords: [String]
+    public let defineWords: [String]
 
     enum CodingKeys: String, CodingKey {
         case defineWords = "define_words"

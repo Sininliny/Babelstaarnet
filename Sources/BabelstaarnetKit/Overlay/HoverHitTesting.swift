@@ -1,5 +1,11 @@
 import CoreGraphics
 import Foundation
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 enum HoverHitTesting {
     /// A previous word, addressed the way a match looks it up: same display,

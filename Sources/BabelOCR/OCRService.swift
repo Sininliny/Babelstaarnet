@@ -1,16 +1,17 @@
 import Foundation
 import NaturalLanguage
 import Vision
+import BabelCore
 
 enum OCRError: LocalizedError {
     case requestFailed
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         "The on-device OCR request failed."
     }
 }
 
-actor OCRService {
+public actor OCRService {
     private struct CacheKey: Hashable {
         let displayID: CGDirectDisplayID
         let frameX: Int
@@ -39,7 +40,7 @@ actor OCRService {
     private let textQualityPolicy: OCRTextQualityPolicy
     private let tesseract: TesseractOCRService
 
-    init(language: SourceLanguage) {
+    public init(language: SourceLanguage) {
         self.language = language
         self.languagePolicy = OCRLanguagePolicy(language: language)
         self.textQualityPolicy = OCRTextQualityPolicy(language: language)
@@ -54,7 +55,7 @@ actor OCRService {
     /// remembered because answering it costs a process launch.
     private var tesseractReadsLanguage: Bool?
 
-    func isOpenSourceEngineReady() async -> Bool {
+    public func isOpenSourceEngineReady() async -> Bool {
         let ready = await tesseract.isReady()
         tesseractReadsLanguage = ready
         return ready
@@ -79,13 +80,13 @@ actor OCRService {
     /// was measured at tens of seconds on a cold system. Paying it during
     /// activation, alongside capture metadata and the translation workers,
     /// keeps it out of the reading path.
-    func warmUp() async {
+    public func warmUp() async {
         _ = try? await Self.warmUpVision(
             recognitionLanguages: language.ocr.recognitionLanguages
         )
     }
 
-    func recognizeText(
+    public func recognizeText(
         in capture: CapturedDisplay,
         focusPoint: CGPoint? = nil
     ) async throws -> (regions: [TextRegion], engine: String) {
@@ -418,7 +419,7 @@ actor OCRService {
     /// mixing a headline with a fine-print table would otherwise pay for the
     /// extra pass on every hover, including hovers over text that was already
     /// read correctly.
-    static func focusedRegionIndex(
+    public static func focusedRegionIndex(
         in regions: [TextRegion],
         at focusPoint: CGPoint
     ) -> Int? {
@@ -431,7 +432,7 @@ actor OCRService {
 
     /// Average glyph width in points, which is how a line's type size is
     /// measured here. Returns `nil` when the line carries no measurable text.
-    static func glyphAdvance(in region: TextRegion) -> CGFloat? {
+    public static func glyphAdvance(in region: TextRegion) -> CGFloat? {
         let width = region.words.reduce(0) { $0 + $1.frame.width }
         let characters = region.words.reduce(0) { $0 + $1.sourceText.count }
         guard characters > 0, width > 0 else {
@@ -443,7 +444,7 @@ actor OCRService {
     /// Letters recovered in a line. A restored diacritic lengthens the word, so
     /// this separates "Månedlig" from "Mnedlig" where word counts and
     /// confidences are identical.
-    static func letterCount(in region: TextRegion) -> Int {
+    public static func letterCount(in region: TextRegion) -> Int {
         region.sourceText.unicodeScalars.filter {
             CharacterSet.letters.contains($0)
         }.count
@@ -652,7 +653,7 @@ actor OCRService {
         return request
     }
 
-    static func minimumTextHeight(
+    public static func minimumTextHeight(
         recognitionLevel: VNRequestTextRecognitionLevel,
         imageHeight: Int
     ) -> CGFloat {
@@ -789,7 +790,7 @@ actor OCRService {
         )
     }
 
-    static func globalRect(_ normalizedRect: CGRect, displayFrame: CGRect) -> CGRect {
+    public static func globalRect(_ normalizedRect: CGRect, displayFrame: CGRect) -> CGRect {
         CGRect(
             x: displayFrame.minX + (normalizedRect.minX * displayFrame.width),
             y: displayFrame.minY + (normalizedRect.minY * displayFrame.height),

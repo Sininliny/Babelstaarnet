@@ -1,4 +1,10 @@
 import CoreGraphics
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 struct LearningBubbleCenters: Equatable {
     let word: CGPoint

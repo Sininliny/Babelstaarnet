@@ -1,4 +1,10 @@
 import Foundation
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 /// Explanations of common words, written in the language being learned.
 ///

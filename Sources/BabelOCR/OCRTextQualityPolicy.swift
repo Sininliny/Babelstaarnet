@@ -1,4 +1,5 @@
 import Foundation
+import BabelCore
 
 struct OCRTextQualityPolicy: Sendable {
     private let language: SourceLanguage

@@ -1,13 +1,13 @@
 import CoreGraphics
 import Foundation
 
-struct CapturedDisplay: @unchecked Sendable {
-    let displayID: CGDirectDisplayID
-    let image: CGImage
-    let frame: CGRect
-    let screenFrame: CGRect
+public struct CapturedDisplay: @unchecked Sendable {
+    public let displayID: CGDirectDisplayID
+    public let image: CGImage
+    public let frame: CGRect
+    public let screenFrame: CGRect
 
-    init(
+    public init(
         displayID: CGDirectDisplayID,
         image: CGImage,
         frame: CGRect,
@@ -20,19 +20,19 @@ struct CapturedDisplay: @unchecked Sendable {
     }
 }
 
-struct WordRegion: Identifiable, Hashable, Sendable {
-    let id: UUID
-    let sourceText: String
-    var translatedText: String
-    var wordBridgeDanishText: String
-    var wordBridgeTranslations: [String: String]
-    var wordBridgeText: String
-    var wordBridgeEnglishTokenIndexes: [Int]
-    let frame: CGRect
-    let screenFrame: CGRect
-    let displayID: CGDirectDisplayID
+public struct WordRegion: Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let sourceText: String
+    public var translatedText: String
+    public var wordBridgeDanishText: String
+    public var wordBridgeTranslations: [String: String]
+    public var wordBridgeText: String
+    public var wordBridgeEnglishTokenIndexes: [Int]
+    public let frame: CGRect
+    public let screenFrame: CGRect
+    public let displayID: CGDirectDisplayID
 
-    init(
+    public init(
         id: UUID = UUID(),
         sourceText: String,
         translatedText: String = "",
@@ -57,15 +57,15 @@ struct WordRegion: Identifiable, Hashable, Sendable {
     }
 }
 
-struct TextRegion: Identifiable, Hashable, Sendable {
-    let id: UUID
-    let sourceText: String
-    let frame: CGRect
-    let screenFrame: CGRect
-    let displayID: CGDirectDisplayID
-    var words: [WordRegion]
+public struct TextRegion: Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let sourceText: String
+    public let frame: CGRect
+    public let screenFrame: CGRect
+    public let displayID: CGDirectDisplayID
+    public var words: [WordRegion]
 
-    init(
+    public init(
         id: UUID = UUID(),
         sourceText: String,
         frame: CGRect,
@@ -82,37 +82,37 @@ struct TextRegion: Identifiable, Hashable, Sendable {
     }
 }
 
-struct HoverCard: Equatable, Sendable {
-    let word: WordRegion
-    let wordKnowledgeLevel: Int
-    let wordEnglishMeaning: String?
-    let wordBridgeText: String
-    let wordBridgeEnglishTokenIndexes: [Int]
-    let wordBridgeKnowledgeLevels: [Int: Int]
-    let learningText: String
-    let englishSupport: String?
-    let englishIsExpanded: Bool
-    let adaptiveEnglishTokenIndexes: [Int]
-    let sentenceBridgeKnowledgeLevels: [Int: Int]
-    let sentenceFocusTokenIndexes: [Int]
+public struct HoverCard: Equatable, Sendable {
+    public let word: WordRegion
+    public let wordKnowledgeLevel: Int
+    public let wordEnglishMeaning: String?
+    public let wordBridgeText: String
+    public let wordBridgeEnglishTokenIndexes: [Int]
+    public let wordBridgeKnowledgeLevels: [Int: Int]
+    public let learningText: String
+    public let englishSupport: String?
+    public let englishIsExpanded: Bool
+    public let adaptiveEnglishTokenIndexes: [Int]
+    public let sentenceBridgeKnowledgeLevels: [Int: Int]
+    public let sentenceFocusTokenIndexes: [Int]
     /// Whether the sentence panel is the only panel on screen, because the
     /// reader switched the word panel off. It decides what the sentence panel
     /// has to carry on its own — the focused meaning, the English support, and
     /// the confirmation that a shortcut did something — rather than naming any
     /// one of them.
-    let sentencePanelStandsAlone: Bool
-    let speaksOnHover: Bool
-    let knownShortcutLabel: String
-    let dontKnowShortcutLabel: String
-    let pinShortcutLabel: String
+    public let sentencePanelStandsAlone: Bool
+    public let speaksOnHover: Bool
+    public let knownShortcutLabel: String
+    public let dontKnowShortcutLabel: String
+    public let pinShortcutLabel: String
 
     /// Whether the profile counts this word as learned, which is what decides
     /// that the panel has no English to offer for it.
-    var wordIsKnown: Bool {
+    public var wordIsKnown: Bool {
         wordKnowledgeLevel >= 4
     }
 
-    init(
+    public init(
         word: WordRegion,
         wordKnowledgeLevel: Int = 0,
         wordEnglishMeaning: String? = nil,
@@ -153,21 +153,21 @@ struct HoverCard: Equatable, Sendable {
     }
 }
 
-struct LearningBridgeConfiguration: Codable, Equatable, Sendable {
-    var showsWordBridge: Bool
-    var showsSentenceBridge: Bool
+public struct LearningBridgeConfiguration: Codable, Equatable, Sendable {
+    public var showsWordBridge: Bool
+    public var showsSentenceBridge: Bool
 
-    static let both = Self(
+    public static let both = Self(
         showsWordBridge: true,
         showsSentenceBridge: true
     )
 
-    var hasVisibleBridge: Bool {
+    public var hasVisibleBridge: Bool {
         showsWordBridge || showsSentenceBridge
     }
 }
 
-enum ScanPhase: Equatable {
+public enum ScanPhase: Equatable {
     case idle
     case capturing
     case recognizing
@@ -175,7 +175,7 @@ enum ScanPhase: Equatable {
     case showing(regionCount: Int)
     case failed(message: String)
 
-    var label: String {
+    public var label: String {
         switch self {
         case .idle:
             return "Ready"
@@ -192,7 +192,7 @@ enum ScanPhase: Equatable {
         }
     }
 
-    var isWorking: Bool {
+    public var isWorking: Bool {
         switch self {
         case .capturing, .recognizing, .translating:
             return true

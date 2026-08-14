@@ -1,5 +1,11 @@
 import CoreGraphics
 import Foundation
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 struct SystemIdleMonitor {
     func idleDuration() -> TimeInterval {

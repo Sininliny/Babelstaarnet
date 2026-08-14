@@ -3,6 +3,12 @@ import Combine
 import OSLog
 import Translation
 import UniformTypeIdentifiers
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 @MainActor
 public final class AppModel: ObservableObject {

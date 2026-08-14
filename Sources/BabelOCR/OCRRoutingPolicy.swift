@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import BabelCore
 
 enum OCRRoutingPolicy {
     static let minimumAccurateFocusedConfidence: Float = 0.35

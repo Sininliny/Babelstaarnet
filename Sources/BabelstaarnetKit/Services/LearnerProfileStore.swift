@@ -1,4 +1,10 @@
 import Foundation
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 struct LearnerProfileArchive: Codable, Equatable, Sendable {
     static let currentSchemaVersion = 1

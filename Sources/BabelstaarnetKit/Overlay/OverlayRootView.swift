@@ -1,4 +1,10 @@
 import SwiftUI
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 /// When a bubble is allowed to animate.
 ///

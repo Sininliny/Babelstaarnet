@@ -1,4 +1,10 @@
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
 @testable import BabelstaarnetKit
 
 /// Proof that the services read their rules from the pack rather than from

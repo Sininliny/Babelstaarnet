@@ -1,4 +1,10 @@
 import AppKit
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 public enum BabelstaarnetIcon {
     public static let inactiveMenuBarImage = makeMenuBarImage(active: false)

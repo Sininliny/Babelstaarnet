@@ -1,5 +1,11 @@
 import CoreGraphics
 import Foundation
+import BabelCore
+import BabelLexicon
+import BabelOCR
+import BabelSpeech
+import BabelTranslate
+import LanguageDanish
 
 /// The feedback controls are a fixed row at the top of the word panel and are
 /// never conditional, so the policy that used to decide when to reveal them is

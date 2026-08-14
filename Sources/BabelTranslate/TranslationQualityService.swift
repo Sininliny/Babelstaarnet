@@ -1,18 +1,19 @@
 import Foundation
+import BabelCore
 
 /// Whether a translation is good enough to stand in place of the word it
 /// replaced, and what to show instead when it is not.
 ///
 /// Every table this consults belongs to the source language, so the judgement
 /// is the same in any language and only the evidence changes.
-struct TranslationQualityService: Sendable {
+public struct TranslationQualityService: Sendable {
     private let language: SourceLanguage
 
-    init(language: SourceLanguage) {
+    public init(language: SourceLanguage) {
         self.language = language
     }
 
-    func needsRetry(source: String, translation: String) -> Bool {
+    public func needsRetry(source: String, translation: String) -> Bool {
         let sourceKey = language.folded(source)
         let translationKey = language.folded(translation)
         if translationKey.isEmpty || sourceKey == translationKey {
@@ -25,7 +26,7 @@ struct TranslationQualityService: Sendable {
         return false
     }
 
-    func bestTranslation(
+    public func bestTranslation(
         source: String,
         primary: String,
         lowercaseRetry: String? = nil
@@ -60,7 +61,7 @@ struct TranslationQualityService: Sendable {
         return cleaned(primary)
     }
 
-    func localFallback(for source: String) -> String? {
+    public func localFallback(for source: String) -> String? {
         let key = language.folded(source)
         if let exact = language.exactGlosses[key] {
             return exact

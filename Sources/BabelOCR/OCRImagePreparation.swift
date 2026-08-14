@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import BabelCore
 
 /// Rewrites a captured crop into the dark-text-on-light-background form every
 /// recognizer reads most reliably, whatever colours the source used.

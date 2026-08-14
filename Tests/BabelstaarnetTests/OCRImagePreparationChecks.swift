@@ -1,6 +1,12 @@
 import AppKit
 import CoreGraphics
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
 @testable import BabelstaarnetKit
 
 /// Covers the properties the OCR passes depend on: whatever colours a crop
