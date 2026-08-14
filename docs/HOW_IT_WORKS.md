@@ -336,7 +336,7 @@ make readme-images
 ```
 
 `make run` builds and ad-hoc signs `dist/Babelstaarnet.app`, then launches it.
-`make release` produces a drag-to-Applications DMG and checksum under `dist/`.
+`make release` produces `Babelstaarnet.app.zip` and its checksum under `dist/`.
 
 `make test-runtime` renders a Retina-scale cursor crop containing dark, light,
 and colored Danish text. It verifies the focused Vision response, that the

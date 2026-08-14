@@ -1,6 +1,6 @@
 BABELSTÅRNET — START HERE
 
-1. Drag Babelstaarnet.app onto the Applications folder in this window.
+1. Drag Babelstaarnet.app into your Applications folder.
 2. Open Babelstaarnet from Applications.
 3. Click “Set up Babelstårnet”.
 4. In System Settings, enable Babelstårnet under Screen Recording.

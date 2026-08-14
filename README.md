@@ -39,9 +39,11 @@ is sent to a remote service.
 
 ## Install
 
-Requires macOS 15 or newer. Download the latest DMG from
+Requires macOS 15 or newer. Download the latest ZIP from
 [Releases](https://github.com/Sininliny/Babelstaarnet/releases), open it, and
-drag **Babelstaarnet.app** to **Applications**. Then:
+drag **Babelstaarnet.app** to **Applications**. The app is ad-hoc signed rather
+than notarized, so the first launch is a Control-click on it, then **Open**.
+Then:
 
 1. Click **Set up Babelstårnet**.
 2. Enable Babelstårnet in the System Settings page that opens — it needs Screen
