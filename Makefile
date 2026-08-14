@@ -1,4 +1,4 @@
-.PHONY: build test test-runtime benchmark-ocr app release run install-engines clean
+.PHONY: build test test-runtime benchmark-ocr app release run install-engines readme-images clean
 
 build:
 	swift build
@@ -23,6 +23,9 @@ run: app
 
 install-engines:
 	./Scripts/install-local-engines.sh
+
+readme-images:
+	swift ./Scripts/generate-readme-images.swift ./docs/images
 
 clean:
 	swift package clean
