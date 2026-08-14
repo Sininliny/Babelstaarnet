@@ -79,6 +79,21 @@ struct WordBubbleView: View {
                 }
 
                 Spacer(minLength: 0)
+
+                // A word the profile counts as known has no English to show —
+                // withholding it is the whole point of counting it as known.
+                // The panel still has to answer: pointing at a familiar word
+                // was returning a box containing three buttons and the word
+                // itself, sitting on top of the line being read. Saying which
+                // state the word is in is an answer, and the control above it
+                // already offers the way back. It sits at the far edge of the
+                // row, away from the Danish, so it reads as the word's state
+                // rather than as the word's meaning.
+                if card.wordEnglishMeaning == nil, card.wordIsKnown {
+                    Text("Known")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .foregroundStyle(.secondary)
 
@@ -353,7 +368,7 @@ private struct SentenceBridgeText: View {
         // beside them — a substitution the reader reads, not a note they
         // consult. A faint tint is the only thing marking which words were
         // swapped, so the swap stays visible without costing legibility.
-        InlineTokenLayout(spacing: 4, lineSpacing: 4) {
+        InlineTokenLayout(spacing: 5, lineSpacing: 5) {
             ForEach(Array(displayUnits.enumerated()), id: \.offset) {
                 _, unit in
                 if let danish = unit.danish {
@@ -363,13 +378,12 @@ private struct SentenceBridgeText: View {
                         opacity: KnowledgeTone.opacity(
                             for: knowledgeLevels[unit.sourceIndex] ?? 0
                         ),
-                        animationTrigger: focusTokenIndexes.contains(
-                            unit.sourceIndex
-                        )
+                        animationTrigger: unit.isFocus
                             ? knownAnimationTrigger
                             : 0
                     )
                     .fixedSize(horizontal: true, vertical: true)
+                    .pointedAt(unit.isFocus)
                 } else if let english = unit.english {
                     Text(english)
                         .font(
@@ -380,23 +394,49 @@ private struct SentenceBridgeText: View {
                             )
                         )
                         .foregroundStyle(.primary)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
                         .background {
+                            // The tint is painted outside the token's own box.
+                            // Padding it inside made every substituted run six
+                            // points wider than the words beside it, so a line
+                            // of running text was set with two different word
+                            // spaces: the eye read a row of chips rather than a
+                            // sentence, and the wider the reader's English, the
+                            // more of the line was chips.
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(.primary.opacity(0.07))
+                                .fill(.primary.opacity(marksSwaps ? 0.06 : 0))
+                                .padding(.horizontal, -3)
+                                .padding(.vertical, -1.5)
                         }
                         .fixedSize(horizontal: true, vertical: true)
+                        .pointedAt(unit.isFocus)
                 }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// Whether marking the swapped words is worth anything on this line.
+    ///
+    /// The tint means "this word was swapped for you". Said about nearly every
+    /// word — which is where every reader starts, and where they stay for a
+    /// long while — it stops being a mark and becomes the background: a line of
+    /// highlighter with two Danish words floating outside it, harder to read
+    /// than the plain sentence underneath. So the mark is drawn only while
+    /// substitutions are still the exception on the line, and it leaves the
+    /// design on its own as the profile fills in and the Danish comes back.
+    private var marksSwaps: Bool {
+        let tokens = text.split(whereSeparator: \Character.isWhitespace).count
+        guard tokens > 0 else {
+            return false
+        }
+        return Double(englishTokenIndexes.count) / Double(tokens) <= 0.66
+    }
+
     private var displayUnits: [BridgeDisplayUnit] {
         InterlinearBridgePresentation.units(
             text: text,
-            englishTokenIndexes: englishTokenIndexes
+            englishTokenIndexes: englishTokenIndexes,
+            focusTokenIndexes: focusTokenIndexes
         )
     }
 }
@@ -405,6 +445,20 @@ struct BridgeDisplayUnit: Equatable {
     let sourceIndex: Int
     let danish: String?
     let english: String?
+    /// Whether this unit is the word the pointer is resting on.
+    let isFocus: Bool
+
+    init(
+        sourceIndex: Int,
+        danish: String?,
+        english: String?,
+        isFocus: Bool = false
+    ) {
+        self.sourceIndex = sourceIndex
+        self.danish = danish
+        self.english = english
+        self.isFocus = isFocus
+    }
 }
 
 enum InterlinearBridgePresentation {
@@ -418,20 +472,30 @@ enum InterlinearBridgePresentation {
     /// four words are one substitution, not four.
     static func units(
         text: String,
-        englishTokenIndexes: [Int]
+        englishTokenIndexes: [Int],
+        focusTokenIndexes: [Int] = []
     ) -> [BridgeDisplayUnit] {
         let tokens = text
             .split(whereSeparator: \Character.isWhitespace)
             .map(String.init)
         let englishIndexes = Set(englishTokenIndexes)
+        let focusIndexes = Set(focusTokenIndexes)
         var result: [BridgeDisplayUnit] = []
         var index = 0
         while index < tokens.count {
             let start = index
             if englishIndexes.contains(index) {
+                // A run also ends where the pointed-at word's English begins or
+                // ends. Grouping adjacent English is about reading one Danish
+                // word's answer as one thing, and the word being asked about is
+                // exactly that: run it together with its neighbours and the
+                // answer to the reader's question disappears into the middle of
+                // a line with nothing marking it.
+                let isFocus = focusIndexes.contains(index)
                 var english: [String] = []
                 while index < tokens.count,
-                      englishIndexes.contains(index) {
+                      englishIndexes.contains(index),
+                      focusIndexes.contains(index) == isFocus {
                     english.append(tokens[index])
                     index += 1
                 }
@@ -439,7 +503,8 @@ enum InterlinearBridgePresentation {
                     BridgeDisplayUnit(
                         sourceIndex: start,
                         danish: nil,
-                        english: english.joined(separator: " ")
+                        english: english.joined(separator: " "),
+                        isFocus: isFocus
                     )
                 )
                 continue
@@ -448,12 +513,38 @@ enum InterlinearBridgePresentation {
                 BridgeDisplayUnit(
                     sourceIndex: start,
                     danish: tokens[index],
-                    english: nil
+                    english: nil,
+                    isFocus: focusIndexes.contains(index)
                 )
             )
             index += 1
         }
         return result
+    }
+}
+
+private extension View {
+    /// Marks the word the pointer is resting on.
+    ///
+    /// The two panels answer the same question and had nothing tying them
+    /// together: the sentence below repeated the word among thirty others, or
+    /// replaced it with English somewhere in the middle of a line, and the
+    /// reader had to find it before the answer meant anything. A rule under the
+    /// word is enough to say "this one", and it is the only mark in the bubble
+    /// that uses the accent colour, so nothing else competes with it.
+    @ViewBuilder
+    func pointedAt(_ isFocused: Bool) -> some View {
+        if isFocused {
+            overlay(alignment: .bottom) {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.62))
+                    .frame(height: 1.5)
+                    .padding(.horizontal, -1)
+                    .offset(y: 2.5)
+            }
+        } else {
+            self
+        }
     }
 }
 
@@ -568,43 +659,113 @@ private struct InlineTokenLayout: Layout {
         }
     }
 
+    /// Words are placed on a shared baseline, not on a shared top edge.
+    ///
+    /// Aligning tops is only the same thing while every token is the same
+    /// height, and they are not: a tinted English run and a plain Danish word
+    /// measure differently, so the sentence was set with its words sitting a
+    /// point or two above and below one another. At twelve points that is not
+    /// subtle — it is the difference between a line of text and a row of
+    /// separate labels — and it fell on exactly the words the reader was being
+    /// asked to read as one sentence.
     private func measure(
         proposal: ProposedViewSize,
         subviews: Subviews
     ) -> (size: CGSize, origins: [CGPoint]) {
         let availableWidth = proposal.width ?? .greatestFiniteMagnitude
-        var origins: [CGPoint] = []
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let baselines = subviews.indices.map { index in
+            let dimensions = subviews[index].dimensions(in: .unspecified)
+            let baseline = dimensions[.firstTextBaseline]
+            // A subview with no text reports its own height here, which is the
+            // right thing to sit on the baseline anyway.
+            return baseline.isFinite ? baseline : sizes[index].height
+        }
+
+        var origins: [CGPoint] = Array(
+            repeating: .zero,
+            count: subviews.count
+        )
+        var row: [Int] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
         var usedWidth: CGFloat = 0
 
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > availableWidth {
-                x = 0
-                y += rowHeight + lineSpacing
-                rowHeight = 0
+        func placeRow() {
+            guard let baseline = row.map({ baselines[$0] }).max() else {
+                return
             }
-            origins.append(CGPoint(x: x, y: y))
+            for index in row {
+                origins[index].y = y + baseline - baselines[index]
+            }
+            let depth = row
+                .map { sizes[$0].height - baselines[$0] }
+                .max() ?? 0
+            y += baseline + depth
+            row = []
+        }
+
+        for index in subviews.indices {
+            let size = sizes[index]
+            if x > 0, x + size.width > availableWidth {
+                placeRow()
+                y += lineSpacing
+                x = 0
+            }
+            origins[index].x = x
+            row.append(index)
             x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
             usedWidth = max(usedWidth, x - spacing)
         }
+        placeRow()
 
         return (
             CGSize(
                 width: proposal.width ?? usedWidth,
-                height: subviews.isEmpty ? 0 : y + rowHeight
+                height: subviews.isEmpty ? 0 : y
             ),
             origins
         )
     }
 }
 
+/// How solid the ground under the bubble text is.
+///
+/// A panel that has to be read is read over whatever the page behind it
+/// happens to be, and the hardest case is the ordinary one: a white article
+/// under a system running in dark appearance. There the material alone put
+/// grey text on grey, with the page's own black text showing through the panel
+/// and interleaving with the sentence — two texts occupying the same rectangle.
+///
+/// So the text is given its own ground, painted inside the material rather than
+/// instead of it: the glass still frames the panel and still belongs to the
+/// desktop, while the words sit on the panel's own background colour, which is
+/// dark under dark appearance and light under light. This is the one number to
+/// turn if the panels ever want more of the page showing through them.
+private enum BubbleGround {
+    static let opacity: Double = 0.62
+}
+
 private extension View {
-    @ViewBuilder
     func liquidGlassBubble(
+        tint: Color,
+        cornerRadius: CGFloat
+    ) -> some View {
+        background {
+            RoundedRectangle(
+                cornerRadius: cornerRadius,
+                style: .continuous
+            )
+            .fill(
+                Color(nsColor: .windowBackgroundColor)
+                    .opacity(BubbleGround.opacity)
+            )
+        }
+        .bubbleMaterial(tint: tint, cornerRadius: cornerRadius)
+    }
+
+    @ViewBuilder
+    private func bubbleMaterial(
         tint: Color,
         cornerRadius: CGFloat
     ) -> some View {
@@ -626,8 +787,11 @@ private extension View {
     }
 
     private func materialBubble(cornerRadius: CGFloat) -> some View {
+        // Regular rather than ultra-thin: this panel carries the text the
+        // reader came for, and ultra-thin is a wash for chrome sitting over
+        // content, not a surface to set a sentence on.
         background(
-            .ultraThinMaterial,
+            .regularMaterial,
             in: RoundedRectangle(
                 cornerRadius: cornerRadius,
                 style: .continuous

@@ -58,9 +58,9 @@ The two panels serve different reading problems and can be used separately:
 - **Word meaning**, above the pointer: what the word means, plus a concise
   Danish explanation with English standing in for the concepts you do not yet
   know.
-- **Whole sentence**, below the pointer: the Danish line in its own word order
-  and grammar, with one or two English anchors when the sentence is mostly
-  familiar, growing to five when the text is genuinely difficult.
+- **Whole sentence**, below the pointer: the whole Danish sentence in its own
+  word order and grammar, gathered from however many wrapped lines it is
+  printed across, with English standing in for the words you cannot read yet.
 
 Both use one frozen OCR snapshot, so the answer does not keep changing after the
 pointer stops. `1` is **Knew**, `2` is **Don’t know**, and `3` pins the
@@ -137,12 +137,55 @@ bubbles.
   fade of the *English* gloss, which is the part meant to go away; the Danish
   stays inside one perceptual step of full strength at every level so that
   knowing a word never makes it harder to read.
+- The word under the pointer is marked in the sentence below, by a rule in the
+  accent colour and nothing else in either panel uses that colour. The two
+  panels answer the same question and had nothing tying them together: the
+  sentence repeated the word among thirty others, or replaced it with English
+  somewhere mid-line, and the reader had to find it before the answer meant
+  anything. Where the word was replaced, the mark goes on the English standing
+  in for it — which is also why adjacent English is no longer run together
+  across it.
+- The swap tint is drawn only while swaps are the exception. A faint tint marks
+  the words English stands in for, but said about nearly every word on the line
+  — where every reader starts, and stays for a long while — it stops being a
+  mark and becomes the background: a line of highlighter with two Danish words
+  floating outside it. Past about two thirds of the line the tint is dropped and
+  the sentence is set plain, so the mark leaves the design on its own as the
+  profile fills in and the Danish returns.
+- Words sit on a shared baseline, not a shared top edge, and the tint is painted
+  outside each word's own box. Both were costing the sentence its rhythm:
+  substituted runs measured six points wider than the words beside them, so a
+  line of running text was set with two different word spaces and read as a row
+  of chips rather than as a sentence.
+- The bubble text has its own ground inside the material. A panel is read over
+  whatever the page behind it happens to be, and the hardest case is the
+  ordinary one — a white article under a system running in dark appearance —
+  where the material alone put grey text on grey with the page's own black text
+  showing through and interleaving with the sentence. The glass still frames the
+  panel; the words sit on the panel's own background colour.
+- Pointing at a word the profile counts as known answers **Known** rather than
+  nothing. Withholding the English is the whole point of counting a word as
+  known, but the panel that appears still has to say something: it was returning
+  a box holding three buttons and the Danish word, on top of the line being
+  read.
+- The bridge runs over the sentence, not over the line. Vision hands back one
+  visual line at a time, and a line is wherever the column happened to wrap:
+  bridging it alone produced "Ability i digital learning environments,
+  including." — a fragment beginning after the subject and stopping before the
+  verb, which teaches neither the word order it exists to preserve nor the
+  meaning that was asked about. The lines above and below the pointer are
+  therefore joined until a real Danish sentence stop is found. A period is a
+  weak signal in the language — "den 15. september", "bl.a.", "kl. 13" — so a
+  stop counts only when what follows opens a sentence, which in Danish means a
+  capital. The walk is skipped entirely when the hovered line already stops on
+  both sides of the word, so a sentence that fits on one line costs nothing:
+  the lines kept for translation are exactly the lines the sentence occupies.
 - The adaptive sentence bridge preserves Danish word order and grammar across
-  the visible source line. Established words remain Danish, learning words
+  that sentence. Established words remain Danish, learning words
   are replaced by their English in place, keeping the Danish word order around
-  them. Every word the reader cannot read is replaced, so the line is always
-  readable end to end; what adapts is the profile, and words return to Danish
-  one at a time as they are learned. A cap of one to five substitutions was
+  them. Every word the reader cannot read is replaced, so the sentence is
+  always readable end to end; what adapts is the profile, and words return to
+  Danish one at a time as they are learned. A cap of one to five substitutions was
   tried and removed — it left the unreplaced words stranded in a line that was
   no longer Danish either, so the reader got "the period of reflection på 6
   months fra time", readable in neither language. English set beneath the
@@ -198,6 +241,9 @@ bubbles.
 - Optional extra English help from the local macOS Dictionary after **Don’t
   know** feedback
 - Danish pronunciation through the local AVSpeechSynthesizer voice
+- Bubbles keep clear of every line the sentence is printed on, not only the line
+  under the pointer, so the panel explaining a wrapped sentence no longer lands
+  on the rest of it
 - Guaranteed meaning placement on dense pages; speech never runs without a
   visible learning result
 - Native Liquid Glass on macOS 26+, with a material-glass fallback on macOS 15
@@ -206,8 +252,9 @@ bubbles.
 - Movement-driven refresh with a low-frequency stationary fallback for scrolling
   and screen changes
 - Latest-pointer scheduling cancels obsolete OCR processes, translates the
-  focused source line needed by the current bubble, and reuses exact unchanged
-  captures without allowing an older result to replace the current bubble
+  lines the focused sentence is printed on and nothing else, and reuses exact
+  unchanged captures without allowing an older result to replace the current
+  bubble
 - Adaptive power saving: OCR refreshes back off while the pointer is still,
   stop while a bubble is held, and suspend after five seconds without input
 - Capture metadata and required Argos workers warm in parallel before the first
@@ -241,7 +288,7 @@ cursor movement → adaptive local crop → accurate Vision OCR
                                              ▼
                                   contrast-adaptive Tesseract
                                              │
-                                  focused source-line bounds
+                                   focused sentence bounds
                                              │
                               cached warmed Argos translation
                                              │

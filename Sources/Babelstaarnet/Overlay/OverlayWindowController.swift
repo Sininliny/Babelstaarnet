@@ -282,7 +282,7 @@ final class OverlayWindowController {
         showBubbles(
             card,
             near: match.word,
-            sourceFrame: match.region.frame
+            sourceFrame: sentenceFrame(for: match.word, in: match.region)
         )
 
         guard targetChanged,
@@ -383,11 +383,15 @@ final class OverlayWindowController {
                 englishTokenIndexes: bridge?.englishTokenIndexes ?? [],
                 knowledgeLevelForWord: knowledgeLevelForWord
             ),
+            // Both the Danish the word kept and the English standing in for it
+            // count as the word being pointed at: whichever of the two the
+            // sentence ended up showing is the one the panel above is
+            // answering about.
             sentenceFocusTokenIndexes: tokenIndexes(
                 of: word.sourceText,
                 in: explanation.primaryText,
                 excluding: bridge?.englishTokenIndexes ?? []
-            ),
+            ) + (bridge?.focusEnglishTokenIndexes ?? []),
             sentencePanelStandsAlone:
                 !bridgeConfiguration.showsWordBridge,
             speaksOnHover: autoSpeak,
@@ -475,28 +479,48 @@ final class OverlayWindowController {
         )
     }
 
+    /// What the bubbles must not cover: every line the sentence in the panel is
+    /// printed on, rather than only the one under the pointer.
+    ///
+    /// A wrapped sentence is still being read on all of its lines, and the
+    /// panel explaining it was landing on the rest of it — so the reader could
+    /// have the bridge or the Danish it was bridging, but not both.
+    private func sentenceFrame(
+        for word: WordRegion,
+        in region: TextRegion
+    ) -> CGRect {
+        SentenceAssemblyPolicy.lines(
+            containing: word,
+            in: region,
+            among: overlays[word.displayID]?.regions ?? [region]
+        ).reduce(region.frame) { $0.union($1.frame) }
+    }
+
     private func adaptiveSentenceBridge(
         for word: WordRegion,
         in region: TextRegion,
         stateForWord: (String) -> LanguageTransferState
     ) -> AdaptiveSentenceBridge? {
+        // The sentence, not the line it wrapped on. Both the text and the
+        // occurrence of the hovered word come back from the same assembly, so
+        // a word repeated across the line break still resolves to the one
+        // under the pointer.
+        let sentence = SentenceAssemblyPolicy.sentence(
+            containing: word,
+            in: region,
+            among: overlays[word.displayID]?.regions ?? [region]
+        )
         var translations: [String: String] = [:]
-        for candidate in region.words {
+        for candidate in sentence.lines.flatMap(\.words) {
             translations[
                 LearnerProfileStore.normalizedKey(for: candidate.sourceText)
             ] = candidate.translatedText
         }
-        let focusKey = LearnerProfileStore.normalizedKey(for: word.sourceText)
-        let focusIndex = region.words.firstIndex(where: { $0.id == word.id })
-            ?? 0
-        let focusOccurrence = region.words[..<focusIndex].filter {
-            LearnerProfileStore.normalizedKey(for: $0.sourceText) == focusKey
-        }.count
         let result = sentenceBridgeService.bridge(
-            danishSentence: region.sourceText,
+            danishSentence: sentence.text,
             englishByDanishWord: translations,
             focusWord: word.sourceText,
-            focusOccurrence: focusOccurrence,
+            focusOccurrence: sentence.focusOccurrence,
             stateForWord: stateForWord
         )
         guard !result.text.isEmpty else {
@@ -680,7 +704,10 @@ final class OverlayWindowController {
         )
         if preservePosition, bubblesAreVisible {
             let sizes = prepareBubbles(card)
-            let sourceFrame = currentRegion.frame
+            let sourceFrame = sentenceFrame(
+                for: currentWord,
+                in: currentRegion
+            )
             if bridgeConfiguration.showsWordBridge {
                 let wordFrame = BubbleInteractionPolicy.preservedFrame(
                     oldFrame: wordBubblePanel.frame,
@@ -716,7 +743,10 @@ final class OverlayWindowController {
             showBubbles(
                 card,
                 near: currentWord,
-                sourceFrame: currentRegion.frame
+                sourceFrame: sentenceFrame(
+                    for: currentWord,
+                    in: currentRegion
+                )
             )
         }
     }

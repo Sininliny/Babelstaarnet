@@ -106,6 +106,12 @@ struct HoverCard: Equatable, Sendable {
     let dontKnowShortcutLabel: String
     let pinShortcutLabel: String
 
+    /// Whether the profile counts this word as learned, which is what decides
+    /// that the panel has no English to offer for it.
+    var wordIsKnown: Bool {
+        wordKnowledgeLevel >= 4
+    }
+
     init(
         word: WordRegion,
         wordKnowledgeLevel: Int = 0,
