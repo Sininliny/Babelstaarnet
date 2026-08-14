@@ -21,34 +21,6 @@ enum LanguageTransferState: Equatable, Sendable {
     }
 }
 
-enum AdaptiveMeaningCoveragePolicy {
-    /// Add only the English needed to keep the Danish sentence usable. Easy
-    /// text stays nearly Danish-only; unfamiliar text receives more anchors
-    /// without ever becoming a parallel English sentence.
-    static func englishAnchorLimit(
-        totalWordCount: Int,
-        wordsNeedingSupport: Int
-    ) -> Int {
-        let total = max(1, totalWordCount)
-        let unfamiliar = max(0, wordsNeedingSupport)
-        guard unfamiliar > 0 else {
-            return 0
-        }
-        if unfamiliar <= 2 {
-            return unfamiliar
-        }
-
-        let unfamiliarShare = Double(unfamiliar) / Double(total)
-        if unfamiliarShare <= 0.25 {
-            return 2
-        }
-        if unfamiliarShare <= 0.50 {
-            return min(3, unfamiliar)
-        }
-        return min(5, unfamiliar)
-    }
-}
-
 struct AdaptiveSentenceBridgeService {
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
@@ -127,13 +99,23 @@ struct AdaptiveSentenceBridgeService {
             : focusIndexes[
                 min(max(0, focusOccurrence), focusIndexes.count - 1)
             ]
-        let budget = replacementLimit.map { max(0, $0) }
-            ?? AdaptiveMeaningCoveragePolicy.englishAnchorLimit(
-                totalWordCount: matches.count,
-                wordsNeedingSupport: seenConcepts.count
-            )
+        // Every word the reader cannot read is replaced. A cap made sense
+        // while English was added beside the Danish: a few notes, and the
+        // Danish still there to read. Substituting only some of them leaves
+        // the rest stranded in a line that is no longer Danish either — the
+        // reader gets "the period of reflection på 6 months fra time", which
+        // is not readable in either language. What adapts is the profile:
+        // words the reader knows stay Danish, and more of them do over time.
+        let budget = replacementLimit.map { max(0, $0) } ?? eligibleIndexes.count
         var selectedIndexes = focusIndex.map { budget > 0 ? [$0] : [] } ?? []
-        let remaining = conceptIndexes
+        // Unlimited, every occurrence is replaced, not just the first of each
+        // word: leaving the second one Danish would put the same word on the
+        // line in both languages. A caller that asks for a fixed number is
+        // spending anchors instead, and spends them on distinct words.
+        let candidates = replacementLimit == nil
+            ? eligibleIndexes
+            : conceptIndexes
+        let remaining = candidates
             .filter { index in
                 guard let focusIndex else {
                     return true
@@ -172,7 +154,21 @@ struct AdaptiveSentenceBridgeService {
             let replacement: String
             switch stateForWord(key) {
             case .unknown, .learning:
-                replacement = "\(match.word) \(markedEnglish(english))"
+                // The English takes the word's place rather than being hung
+                // underneath it. Keeping both meant the reader assembled the
+                // sentence from two texts at once, reading a Danish line and a
+                // row of footnotes against it; a word they cannot read is not
+                // made readable by being left in place with a note attached.
+                // Substituting gives them one line they can read straight
+                // through, in Danish word order, with the words they do know
+                // still in Danish.
+                replacement = markedEnglish(
+                    Self.matchingCase(
+                        of: english,
+                        to: match.word,
+                        isSentenceStart: index == 0
+                    )
+                )
             case .testing, .known:
                 continue
             }
@@ -260,6 +256,38 @@ struct AdaptiveSentenceBridgeService {
 
     private func markedEnglish(_ value: String) -> String {
         Self.englishStart + value + Self.englishEnd
+    }
+
+    /// Gives the English the case of the Danish it stands in for.
+    ///
+    /// Words are translated one at a time, so each comes back as though it
+    /// opened a sentence. Standing in the middle of a line, a capital reads as
+    /// a proper noun; standing at the start of one, a lower-case word reads as
+    /// a fragment. The Danish it replaces settles both, and Danish capitalises
+    /// proper nouns and sentence openings only — which is what makes this safe
+    /// here and would not make it safe for German.
+    static func matchingCase(
+        of english: String,
+        to danish: String,
+        isSentenceStart: Bool = false
+    ) -> String {
+        guard let englishFirst = english.first,
+              let danishFirst = danish.first else {
+            return english
+        }
+        // Only the opening word takes a capital from the Danish. Elsewhere a
+        // capitalised Danish word is a name or an acronym — "CPR-kontoret" —
+        // and its English often begins with an article, so borrowing the
+        // capital produced "The CPR office" in the middle of a line.
+        if isSentenceStart {
+            return danishFirst.isUppercase && englishFirst.isLowercase
+                ? english.prefix(1).uppercased() + english.dropFirst()
+                : english
+        }
+        if danishFirst.isLowercase, englishFirst.isUppercase {
+            return english.prefix(1).lowercased() + english.dropFirst()
+        }
+        return english
     }
 
     private func annotatedBridge(from markedText: String) -> AdaptiveSentenceBridge {

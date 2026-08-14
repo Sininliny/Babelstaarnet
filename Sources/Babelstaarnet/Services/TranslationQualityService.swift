@@ -19,6 +19,23 @@ struct TranslationQualityService {
         primary: String,
         lowercaseRetry: String? = nil
     ) -> String {
+        // A closed-class word is answered from the table rather than by the
+        // translator. Asked on its own, "er" comes back as "no" — and once
+        // English stands in place of the Danish rather than beside it, a wrong
+        // answer is not a wrong note next to a readable word, it is the only
+        // thing left. These classes are small, closed, and stable, so the
+        // citation form can simply be written down.
+        if let curated = Self.closedClassTranslations[normalized(source)] {
+            // Where a word has an explicit accepted set, that set still wins:
+            // it records the readings a translator may legitimately return, and
+            // "for meget" really is "too much". The curated form is what the
+            // word falls back to, not what it is pinned to.
+            if let accepted = Self.acceptedTranslations[normalized(source)],
+               accepted.contains(normalized(primary)) {
+                return cleaned(primary)
+            }
+            return curated
+        }
         if let lowercaseRetry,
            !needsRetry(source: source, translation: lowercaseRetry) {
             return cleaned(lowercaseRetry)
@@ -78,6 +95,46 @@ struct TranslationQualityService {
         }
         return value
     }
+
+    /// Danish's closed classes, in the folded ASCII form `normalized` produces.
+    ///
+    /// A preposition has no single English equivalent — "på" is on, at, or in
+    /// depending on what follows — so these are citation forms, right often
+    /// rather than always. That is still a different order of accuracy from
+    /// what a sentence-trained model returns for a word handed to it alone.
+    private static let closedClassTranslations: [String: String] = [
+        // Copula, auxiliaries, and modals
+        "er": "is", "var": "was", "vaeret": "been", "vaere": "be",
+        "har": "has", "havde": "had", "haft": "had",
+        "blive": "become", "bliver": "becomes", "blev": "became",
+        "blevet": "become", "kan": "can", "kunne": "could",
+        "skal": "must", "skulle": "should", "vil": "will",
+        "ville": "would", "maa": "may", "maatte": "had to", "boer": "should",
+        // Articles and determiners
+        "en": "a", "et": "a", "den": "the", "det": "it", "de": "they",
+        "denne": "this", "dette": "this", "disse": "these",
+        // Conjunctions and subordinators
+        "og": "and", "eller": "or", "men": "but", "som": "which",
+        "at": "that", "naar": "when", "da": "when", "hvis": "if",
+        "fordi": "because", "mens": "while", "end": "than",
+        "baade": "both", "samt": "and",
+        // Prepositions
+        "i": "in", "paa": "on", "til": "to", "af": "of", "for": "for",
+        "med": "with", "om": "about", "ved": "at", "fra": "from",
+        "over": "over", "under": "under", "efter": "after",
+        "foer": "before", "mod": "towards", "hos": "with",
+        "uden": "without", "mellem": "between", "gennem": "through",
+        "omkring": "around", "ind": "in", "ud": "out",
+        // Pronouns and possessives
+        "jeg": "I", "du": "you", "han": "he", "hun": "she", "vi": "we",
+        "dig": "you", "mig": "me", "sig": "itself", "os": "us",
+        "jer": "you", "dem": "them", "min": "my", "mit": "my",
+        "din": "your", "dit": "your", "sin": "its", "sit": "its",
+        "vores": "our", "deres": "their", "hans": "his",
+        "hendes": "her", "man": "one", "der": "there", "hvad": "what",
+        "hvem": "who", "hvor": "where", "hvilken": "which",
+        "ikke": "not"
+    ]
 
     private static let exactTranslations: [String: String] = [
         "avanceret": "advanced",

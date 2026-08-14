@@ -73,6 +73,22 @@ enum OCRTextQualityPolicy {
             }
         }
 
+        // A capital at the end of an otherwise lowercase word is a misread
+        // ascender, not a spelling: "nyt" came back as "nyL". One stray letter
+        // is enough to change which word gets looked up, and the answer that
+        // follows carries no sign of it — "nyL" reached the translator, came
+        // back unchanged, was retried in lower case, and returned "kidney",
+        // which was then presented as the meaning of a word that says "new".
+        // Danish does not end a word in a capital; the all-uppercase case that
+        // would is already accepted above.
+        if let last = letters.last,
+           CharacterSet.uppercaseLetters.contains(last),
+           letters.dropLast().contains(where: {
+               CharacterSet.lowercaseLetters.contains($0)
+           }) {
+            return false
+        }
+
         var hasSeenLowercase = false
         var uppercaseAfterLowercase = 0
         for scalar in letters {

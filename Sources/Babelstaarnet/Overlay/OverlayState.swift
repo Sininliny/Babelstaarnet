@@ -16,27 +16,26 @@ final class OverlayState: ObservableObject {
     var onDontKnow: () -> Void = {}
     var onTogglePin: () -> Void = {}
     var onShowAllEnglish: () -> Void = {}
-    private var feedbackClearTask: Task<Void, Never>?
 
+    /// Records an action the reader has just taken. It stays until the word
+    /// under the pointer changes; nothing clears it on a timer, because it
+    /// describes the word rather than the keypress. The controller decides
+    /// which word it belongs to and how long it survives — see
+    /// `BridgeFeedbackMemory`.
     func showFeedback(_ confirmation: BridgeFeedbackConfirmation) {
-        feedbackClearTask?.cancel()
         feedbackConfirmation = confirmation
         if confirmation == .markedKnown {
             knownAnimationID &+= 1
         }
-        feedbackClearTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            guard !Task.isCancelled else {
-                return
-            }
-            self?.feedbackConfirmation = nil
-            self?.feedbackClearTask = nil
-        }
+    }
+
+    /// Shows what the reader did to this word previously, without replaying the
+    /// lift and glow that answered the press itself.
+    func restoreFeedback(_ confirmation: BridgeFeedbackConfirmation?) {
+        feedbackConfirmation = confirmation
     }
 
     func clearFeedback() {
-        feedbackClearTask?.cancel()
-        feedbackClearTask = nil
         feedbackConfirmation = nil
     }
 }

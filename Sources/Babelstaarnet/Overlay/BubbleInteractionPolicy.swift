@@ -1,16 +1,45 @@
 import CoreGraphics
 import Foundation
 
-/// Reading is the task; rating vocabulary is not. The bridge therefore asks
-/// nothing while the pointer is passing over text, and offers its controls only
-/// once the learner has deliberately settled on a word — by pinning, holding
-/// the modifier, or resting long enough that the bubble holds itself.
+/// The feedback controls are a fixed row at the top of the word panel and are
+/// never conditional, so the policy that used to decide when to reveal them is
+/// gone rather than left answering a question nothing asks.
 ///
-/// The shortcuts stay live the whole time, so nothing is slower for someone who
-/// already knows them; the buttons are a discovery aid, not a prompt.
-enum BridgeAttentionPolicy {
-    static func showsFeedbackControls(bubbleIsHeld: Bool) -> Bool {
-        bubbleIsHeld
+/// It existed because the buttons were once drawn on every hover and read as a
+/// demand; hiding them until the reader settled on a word was the answer. That
+/// cure had its own fault. Settling was derived from the temporary hold, and
+/// the hold is released by *any* system input — a keystroke, a scroll, a
+/// fingertip resting on a trackpad — then re-earned only after another three
+/// quarters of a second of complete stillness. Reading a page with the pointer
+/// parked produces that pattern about once a second, so the row appeared and
+/// vanished under a reader who had never left the word.
+///
+/// Position now does the work that hiding was doing: the row sits above the
+/// answer, behind a rule, outside the column the meaning is read in. A fixed
+/// row cannot flicker, and there is no state left to get wrong.
+/// How long the bubble remembers that the reader acted on a word.
+///
+/// The confirmation began as a flash: a tick for 1.4 seconds and then nothing,
+/// which made it a receipt for the keypress rather than a fact about the word.
+/// It is a fact about the word. Coming back to a word and being told again that
+/// you have already marked it is the point — otherwise the reader has to
+/// remember, and remembering is the thing the app is supposed to be doing.
+///
+/// So nothing expires on a clock while the bubble is open, and returning to a
+/// word inside the retention window finds the same answer still there. Only a
+/// word met again after the window has passed comes back clean, which is long
+/// enough that a reading session is one continuous state and short enough that
+/// tomorrow's reading does not open covered in yesterday's ticks.
+enum BridgeFeedbackMemory {
+    static let retention: TimeInterval = 5 * 60
+
+    /// Kept small deliberately: this is what the reader did minutes ago, not a
+    /// history. The learner profile is where lasting knowledge lives.
+    static let capacity = 256
+
+    static func isRemembered(recordedAt: Date, now: Date = Date()) -> Bool {
+        let age = now.timeIntervalSince(recordedAt)
+        return age >= 0 && age < retention
     }
 }
 

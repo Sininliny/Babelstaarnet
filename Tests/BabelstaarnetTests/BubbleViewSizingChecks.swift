@@ -75,8 +75,7 @@ enum BubbleViewSizingChecks {
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
-            adaptiveEnglishTokenIndexes: [4],
-            showsControlsInWordBridge: true
+            adaptiveEnglishTokenIndexes: [4]
         )
         let wordOnlyHeight = measuredWordHeight(
             wordOnlyCard,
@@ -90,8 +89,7 @@ enum BubbleViewSizingChecks {
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
             adaptiveEnglishTokenIndexes: [4],
-            showsControlsInSentenceBridge: true,
-            showsEnglishSupportInSentenceBridge: true
+            sentencePanelStandsAlone: true
         )
         let sentenceOnlyHeight = measuredSentenceHeight(
             sentenceOnlyCard,
@@ -103,8 +101,7 @@ enum BubbleViewSizingChecks {
             wordKnowledgeLevel: 3,
             wordEnglishMeaning: "student accommodation",
             learningText: "Mange studieboliger står tomme.",
-            showsControlsInSentenceBridge: true,
-            showsEnglishSupportInSentenceBridge: true
+            sentencePanelStandsAlone: true
         )
         let testingSentenceOnlyHeight = measuredSentenceHeight(
             testingSentenceOnlyCard,
@@ -112,8 +109,11 @@ enum BubbleViewSizingChecks {
             hostingView: sentenceHostingView
         )
 
-        // Passive reading must be quieter than a deliberate hold: the same word
-        // gains the feedback row only once the learner settles on it.
+        // The feedback row is fixed above the answer, so a hover that is only
+        // passing over a word and one the reader has settled on are the same
+        // bubble at the same size. That equality is the whole point: a row
+        // that never comes or goes cannot flicker, and the answer underneath
+        // it never reflows.
         let passiveCard = HoverCard(
             word: word,
             wordEnglishMeaning: "student accommodation",
@@ -121,8 +121,7 @@ enum BubbleViewSizingChecks {
             wordBridgeEnglishTokenIndexes: [3],
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
-            adaptiveEnglishTokenIndexes: [4],
-            showsControlsInWordBridge: false
+            adaptiveEnglishTokenIndexes: [4]
         )
         let passiveHeight = measuredWordHeight(
             passiveCard,
@@ -130,8 +129,9 @@ enum BubbleViewSizingChecks {
             hostingView: wordHostingView
         )
         precondition(
-            passiveHeight < wordOnlyHeight,
-            "A passing hover should not carry the feedback controls"
+            passiveHeight == wordOnlyHeight,
+            "The feedback row must not change the bubble between a passing "
+                + "hover and a settled one"
         )
 
         // Requesting all English keeps the bubble in the same shape; it changes
@@ -157,16 +157,51 @@ enum BubbleViewSizingChecks {
         precondition(directMeaningOnlyHeight < wordHeight)
         precondition(translatedWordHeight > wordHeight)
         precondition(translatedWordHeight < 170)
-        precondition(wordOnlyHeight > translatedWordHeight)
+        precondition(wordOnlyHeight == translatedWordHeight)
         precondition(wordOnlyHeight < 230)
         precondition(compactHeight >= 76)
         precondition(compactHeight < 140)
         precondition(supportedHeight == compactHeight)
         precondition(supportedHeight < 180)
-        precondition(sentenceOnlyHeight > compactHeight)
         precondition(sentenceOnlyHeight < 200)
-        precondition(testingSentenceOnlyHeight > compactHeight)
         precondition(testingSentenceOnlyHeight < 200)
+
+        // English support still has to earn its room. Measured on a line long
+        // enough to clear the panel's minimum height, since below that floor
+        // every difference is clamped away and nothing is being tested.
+        let longLine = String(
+            repeating: "Mange studieboliger står tomme fordi de ligger langt "
+                + "fra byen og fra de uddannelsessteder de blev bygget til. ",
+            count: 4
+        )
+        let plainSentence = HoverCard(
+            word: word,
+            learningText: longLine
+        )
+        let supportedSentence = HoverCard(
+            word: word,
+            learningText: longLine,
+            englishSupport: "Relating to Earth or belonging to the planet.",
+            sentencePanelStandsAlone: true
+        )
+        let plainSentenceHeight = measuredSentenceHeight(
+            plainSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        let supportedSentenceHeight = measuredSentenceHeight(
+            supportedSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        precondition(
+            plainSentenceHeight > SentenceBubbleMetrics.fittedSize(.zero).height,
+            "The fixture is still clamped to the panel minimum"
+        )
+        precondition(
+            supportedSentenceHeight > plainSentenceHeight,
+            "English support did not add a row to the sentence panel"
+        )
         print(
             "Two-bubble content sizing checks passed "
                 + "(word \(translatedWordHeight), sentence \(compactHeight), "
@@ -190,6 +225,95 @@ enum BubbleViewSizingChecks {
             ) == wordOnly
         )
 
+        // The reported fault: pressing Knew swapped "1  Knew" for "Marked
+        // known", more than doubling that button, and the row wrapped onto a
+        // second line — acting on the bubble resized it. Confirmation lands on
+        // the capsule now, so no control ever changes width.
+        let restingHeight = measuredWordHeight(
+            compact,
+            state: state,
+            hostingView: wordHostingView
+        )
+        state.showFeedback(.markedKnown)
+        let confirmedHeight = measuredWordHeight(
+            compact,
+            state: state,
+            hostingView: wordHostingView
+        )
+        precondition(
+            confirmedHeight == restingHeight,
+            "Confirming Knew changed the bubble height: "
+                + "\(restingHeight) -> \(confirmedHeight)"
+        )
+        state.showFeedback(.englishRestored)
+        precondition(
+            measuredWordHeight(
+                compact,
+                state: state,
+                hostingView: wordHostingView
+            ) == restingHeight,
+            "Confirming Don’t know changed the bubble height"
+        )
+        state.clearFeedback()
+        state.isPinned = true
+        precondition(
+            measuredWordHeight(
+                compact,
+                state: state,
+                hostingView: wordHostingView
+            ) == restingHeight,
+            "Pinning changed the bubble height"
+        )
+        state.isPinned = false
+
+        // Knew and Don't know are about the word, so the sentence panel says
+        // nothing about them while the word panel is on screen to answer. It
+        // was printing "Marked known" under a sentence at the same moment the
+        // word panel confirmed the same press.
+        let pairedSentence = HoverCard(
+            word: word,
+            learningText: longLine
+        )
+        let pairedResting = measuredSentenceHeight(
+            pairedSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        state.showFeedback(.markedKnown)
+        precondition(
+            measuredSentenceHeight(
+                pairedSentence,
+                state: state,
+                hostingView: sentenceHostingView
+            ) == pairedResting,
+            "The sentence panel confirmed a word action while the word panel "
+                + "was on screen"
+        )
+
+        // With the word panel switched off there is no button anywhere, so the
+        // sentence panel has to answer.
+        let loneSentence = HoverCard(
+            word: word,
+            learningText: longLine,
+            sentencePanelStandsAlone: true
+        )
+        state.clearFeedback()
+        let loneResting = measuredSentenceHeight(
+            loneSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        state.showFeedback(.markedKnown)
+        precondition(
+            measuredSentenceHeight(
+                loneSentence,
+                state: state,
+                hostingView: sentenceHostingView
+            ) > loneResting,
+            "The only panel on screen did not confirm the press"
+        )
+        state.clearFeedback()
+
         let initialAnimationID = state.knownAnimationID
         state.showFeedback(.markedKnown)
         precondition(state.feedbackConfirmation == .markedKnown)
@@ -204,14 +328,26 @@ enum BubbleViewSizingChecks {
         precondition(opacities == opacities.sorted(by: >))
         precondition(opacities[0] - opacities[5] < 0.30)
 
-        let interlinear = InterlinearBridgePresentation.units(
-            text: "Hun tøvede hesitated, før hun svarede.",
-            englishTokenIndexes: [2]
+        // English stands in the line instead of under it, so every token
+        // belongs to one language and nothing is paired. A Danish word worth
+        // several English ones stays a single substitution.
+        let substituted = InterlinearBridgePresentation.units(
+            text: "Hun the period of reflection, før hun svarede.",
+            englishTokenIndexes: [1, 2, 3, 4]
         )
-        precondition(interlinear[1].danish == "tøvede,")
-        precondition(interlinear[1].english == "hesitated")
-        precondition(interlinear.map(\.danish).compactMap { $0 }
-            == ["Hun", "tøvede,", "før", "hun", "svarede."])
+        precondition(substituted.count == 5)
+        precondition(substituted[0].danish == "Hun")
+        precondition(substituted[0].english == nil)
+        precondition(substituted[1].danish == nil)
+        precondition(
+            substituted[1].english == "the period of reflection,",
+            "One substitution split into several: "
+                + String(describing: substituted[1].english)
+        )
+        precondition(
+            substituted.compactMap(\.danish)
+                == ["Hun", "før", "hun", "svarede."]
+        )
     }
 
     private static func measuredWordHeight(

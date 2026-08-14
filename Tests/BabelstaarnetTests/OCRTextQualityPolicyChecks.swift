@@ -95,6 +95,21 @@ enum OCRTextQualityPolicyChecks {
             ).isEmpty
         )
 
+        // The misread that produced "kidney" for a word meaning "new": OCR
+        // read "nyt" as "nyL". A stray capital at the end of a lowercase word
+        // is an ascender misread, and the wrong answer that follows it carries
+        // no sign of being wrong.
+        precondition(!OCRTextQualityPolicy.isPlausibleWord("nyL"))
+        precondition(!OCRTextQualityPolicy.isPlausibleWord("ansøgningL"))
+        precondition(!OCRTextQualityPolicy.isPlausibleWord("aB"))
+        // Acronyms and names are untouched: all-uppercase is accepted above,
+        // and a capital belongs at the front of a name, not the end.
+        precondition(OCRTextQualityPolicy.isPlausibleWord("CPR"))
+        precondition(OCRTextQualityPolicy.isPlausibleWord("CPR-kontoret"))
+        precondition(OCRTextQualityPolicy.isPlausibleWord("København"))
+        precondition(OCRTextQualityPolicy.isPlausibleWord("nyt"))
+        precondition(OCRTextQualityPolicy.isPlausibleWord("iPhone"))
+
         print("Corrupted OCR text quality checks passed")
     }
 

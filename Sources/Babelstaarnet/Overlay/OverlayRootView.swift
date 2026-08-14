@@ -1,5 +1,22 @@
 import SwiftUI
 
+/// When a bubble is allowed to animate.
+///
+/// The fade belongs to the bubble arriving and leaving. It was keyed to the
+/// whole card instead, so moving the pointer from one word to the next put the
+/// two cards in the same animated transaction and SwiftUI cross-faded their
+/// text: for 140 ms the bubble drew one word's explanation over the next one's,
+/// in a panel that was being moved and resized in the same instant. On a line
+/// of prose that is every word, and the result was an unreadable pile of two
+/// vocabularies rather than a translation.
+///
+/// Reading is a stream of replacements, not a sequence of arrivals. Changing
+/// which word is answered therefore has to be instant; only the bubble itself
+/// coming and going is worth animating.
+enum BubbleTransition {
+    static let appearance = Animation.easeOut(duration: 0.14)
+}
+
 struct WordBubbleView: View {
     @ObservedObject var state: OverlayState
 
@@ -12,7 +29,7 @@ struct WordBubbleView: View {
                 Color.clear
             }
         }
-        .animation(.easeOut(duration: 0.14), value: state.hoverCard)
+        .animation(BubbleTransition.appearance, value: state.hoverCard == nil)
     }
 
     @ViewBuilder
@@ -24,6 +41,15 @@ struct WordBubbleView: View {
         let danishLeads = card.wordEnglishMeaning == nil
 
         VStack(alignment: .leading, spacing: 6) {
+            // The controls sit above the answer and never leave. They used to
+            // be earned by settling on a word and dropped again the moment the
+            // machine saw any input, which made them flicker under a reader who
+            // had not moved. A fixed row cannot flicker, and keeping it out of
+            // the answer's own column — above it, behind a rule — is what stops
+            // it from being read as part of the meaning.
+            BridgeFeedbackControls(state: state, card: card)
+            Divider()
+
             if let wordEnglishMeaning = card.wordEnglishMeaning {
                 Text(LearnerDisplayText.clean(wordEnglishMeaning))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -52,10 +78,6 @@ struct WordBubbleView: View {
                         .foregroundStyle(.tertiary)
                 }
 
-                if card.showsAllEnglish {
-                    AllEnglishIndicator()
-                }
-
                 Spacer(minLength: 0)
             }
             .foregroundStyle(.secondary)
@@ -79,32 +101,16 @@ struct WordBubbleView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            BridgeFooter(
-                state: state,
-                card: card,
-                showsControls: card.showsControlsInWordBridge
-            )
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
         .frame(width: WordBubbleMetrics.width, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+        // Answering a different word is a replacement, never an interpolation,
+        // whatever transaction the change happens to arrive in.
+        .contentTransition(.identity)
         .liquidGlassBubble(tint: .primary.opacity(0.05), cornerRadius: 12)
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-    }
-}
-
-private struct AllEnglishIndicator: View {
-    var body: some View {
-        Text("All English")
-            .font(.system(size: 8, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background {
-                Capsule().fill(.primary.opacity(0.06))
-            }
     }
 }
 
@@ -120,7 +126,7 @@ struct SentenceBridgeBubbleView: View {
                 Color.clear
             }
         }
-        .animation(.easeOut(duration: 0.14), value: state.hoverCard)
+        .animation(BubbleTransition.appearance, value: state.hoverCard == nil)
     }
 
     @ViewBuilder
@@ -133,12 +139,12 @@ struct SentenceBridgeBubbleView: View {
                 englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
                 knowledgeLevels: card.sentenceBridgeKnowledgeLevels,
                 focusTokenIndexes: card.sentenceFocusTokenIndexes,
-                knownAnimationTrigger: card.showsControlsInSentenceBridge
+                knownAnimationTrigger: card.sentencePanelStandsAlone
                     ? state.knownAnimationID
                     : 0
             )
 
-            if card.showsEnglishSupportInSentenceBridge,
+            if card.sentencePanelStandsAlone,
                card.wordKnowledgeLevel == 3,
                let wordEnglishMeaning = card.wordEnglishMeaning {
                 Text(LearnerDisplayText.clean(wordEnglishMeaning))
@@ -147,7 +153,7 @@ struct SentenceBridgeBubbleView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if card.showsEnglishSupportInSentenceBridge,
+            if card.sentencePanelStandsAlone,
                let englishSupport = card.englishSupport {
                 Text(LearnerDisplayText.clean(englishSupport))
                     .font(.system(size: 11, design: .rounded))
@@ -155,11 +161,16 @@ struct SentenceBridgeBubbleView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            BridgeFooter(
-                state: state,
-                card: card,
-                showsControls: card.showsControlsInSentenceBridge
-            )
+            // No controls here — they live permanently in the word panel, and
+            // Knew and Don't know are about the word, not the sentence. The
+            // confirmation appears here only when the word panel is switched
+            // off: the shortcuts stay live in that configuration and there is
+            // no button anywhere else to answer back. With both panels on it
+            // was saying "Marked known" under a sentence while the word panel
+            // was already confirming the same press.
+            if card.sentencePanelStandsAlone {
+                BridgeConfirmation(state: state)
+            }
         }
         .padding(12)
         .frame(
@@ -167,25 +178,21 @@ struct SentenceBridgeBubbleView: View {
             alignment: .topLeading
         )
         .fixedSize(horizontal: false, vertical: true)
+        .contentTransition(.identity)
         .liquidGlassBubble(tint: .primary.opacity(0.04), cornerRadius: 14)
         .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 
 }
 
-/// The bubble never asks the learner for anything while they are reading, but
-/// acting on it always answers back. So the controls and the confirmation are
-/// separate: the buttons appear only once the learner has settled on a word,
-/// while a confirmation shows up on its own whenever a shortcut was used.
-private struct BridgeFooter: View {
+/// Acting on the bubble always answers back, including where no button exists
+/// to answer with — the shortcuts stay live whether or not the word panel that
+/// carries the buttons is switched on.
+private struct BridgeConfirmation: View {
     @ObservedObject var state: OverlayState
-    let card: HoverCard
-    let showsControls: Bool
 
     var body: some View {
-        if showsControls {
-            BridgeFeedbackControls(state: state, card: card)
-        } else if let confirmation = state.feedbackConfirmation {
+        if let confirmation = state.feedbackConfirmation {
             Label(
                 confirmation == .markedKnown
                     ? "Marked known"
@@ -204,56 +211,76 @@ private struct BridgeFeedbackControls: View {
     let card: HoverCard
 
     var body: some View {
-        Divider().opacity(0.45)
-
         // The narrow word bubble cannot fit four controls on one line, and a
         // button that wraps mid-label reads as a layout accident.
         InlineTokenLayout(spacing: 6, lineSpacing: 5) {
+            // No control ever changes width. The confirmation replaces the
+            // shortcut key with a tick inside a slot that holds both at once,
+            // so the button is the same size whether or not it is confirming:
+            // swapping the whole label for "Marked known" more than doubled
+            // this button and wrapped the row onto a second line, so acting on
+            // the bubble resized it.
             Button {
                 state.onKnown()
             } label: {
-                if state.feedbackConfirmation == .markedKnown {
-                    Label("Marked known", systemImage: "checkmark")
-                } else {
-                    Text("\(card.knownShortcutLabel)  Knew")
-                }
+                BridgeControlLabel(
+                    shortcut: card.knownShortcutLabel,
+                    title: "Knew",
+                    isConfirming: state.feedbackConfirmation == .markedKnown
+                )
             }
+            .buttonStyle(
+                BridgeFeedbackButtonStyle(
+                    isOn: state.feedbackConfirmation == .markedKnown
+                )
+            )
 
             Button {
                 state.onDontKnow()
             } label: {
-                if state.feedbackConfirmation == .englishRestored {
-                    Label("English restored", systemImage: "checkmark")
-                } else {
-                    Text("\(card.dontKnowShortcutLabel)  Don’t know")
-                }
-            }
-
-            Button {
-                state.onShowAllEnglish()
-            } label: {
-                Text(
-                    card.showsAllEnglish
-                        ? "\(card.showAllEnglishShortcutLabel)  Less English"
-                        : "\(card.showAllEnglishShortcutLabel)  All English"
+                BridgeControlLabel(
+                    shortcut: card.dontKnowShortcutLabel,
+                    title: "Don’t know",
+                    isConfirming:
+                        state.feedbackConfirmation == .englishRestored
                 )
             }
-            .help(
-                card.showsAllEnglish
-                    ? "Return to adaptive support"
-                    : "Translate every word on this line"
+            .buttonStyle(
+                BridgeFeedbackButtonStyle(
+                    isOn: state.feedbackConfirmation == .englishRestored
+                )
             )
 
             Button {
                 state.onTogglePin()
             } label: {
-                Text(
-                    state.isPinned
-                        ? "\(card.pinShortcutLabel)  Unpin"
-                        : "\(card.pinShortcutLabel)  Pin"
+                BridgeControlLabel(
+                    shortcut: card.pinShortcutLabel,
+                    title: "Pin"
                 )
             }
+            .buttonStyle(BridgeFeedbackButtonStyle(isOn: state.isPinned))
             .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
+
+            // The label stays put and the capsule carries the state instead.
+            // Swapping "All English" for "Less English" made the button wider
+            // exactly when it was pressed, which was enough to wrap the row
+            // onto a second line and jump the bubble 24 points taller on a
+            // mode toggle.
+            Button {
+                state.onShowAllEnglish()
+            } label: {
+                BridgeControlLabel(
+                    shortcut: card.showAllEnglishShortcutLabel,
+                    title: "All ENG"
+                )
+            }
+            .buttonStyle(BridgeFeedbackButtonStyle(isOn: card.showsAllEnglish))
+            .help(
+                card.showsAllEnglish
+                    ? "Return to adaptive support"
+                    : "Translate every word on this line"
+            )
         }
         .buttonStyle(BridgeFeedbackButtonStyle())
         .font(.system(size: 10, weight: .regular, design: .rounded))
@@ -267,18 +294,58 @@ private struct BridgeFeedbackControls: View {
     }
 }
 
+/// A capsule filled at 4.5% of the foreground colour disappeared completely on
+/// a Liquid Glass panel, which is already a light wash over whatever is behind
+/// it: the row read as four pieces of grey text with nothing to say they could
+/// be clicked. The hierarchical fills resolve against the material the bubble
+/// is actually drawn on rather than against an assumed background, which is
+/// what keeps the capsule visible over a dark page and a light one alike.
+/// A control's shortcut key and its name, with the key able to become a tick
+/// without the control changing size.
+///
+/// Both the key and the tick are always laid out, one of them invisible, so the
+/// slot they share is as wide as the wider of the two whatever the state is. A
+/// row of four of these in a 280-point panel has no room to absorb a control
+/// that grows when it is used.
+private struct BridgeControlLabel: View {
+    let shortcut: String
+    let title: String
+    var isConfirming = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ZStack {
+                Text(shortcut)
+                    .opacity(isConfirming ? 0 : 1)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .opacity(isConfirming ? 1 : 0)
+            }
+            Text(title)
+        }
+    }
+}
+
 private struct BridgeFeedbackButtonStyle: ButtonStyle {
+    /// Set on a control that is currently switched on, so its state shows in
+    /// the capsule rather than in a label whose width would change with it.
+    var isOn = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
             .background {
-                Capsule()
-                    .fill(
-                        .primary.opacity(configuration.isPressed ? 0.10 : 0.045)
-                    )
+                Capsule().fill(fill(pressed: configuration.isPressed))
             }
             .contentShape(Capsule())
+    }
+
+    private func fill(pressed: Bool) -> HierarchicalShapeStyle {
+        if pressed {
+            return .secondary
+        }
+        return isOn ? .tertiary : .quaternary
     }
 }
 
@@ -301,62 +368,45 @@ private struct SentenceBridgeText: View {
     let knownAnimationTrigger: Int
 
     var body: some View {
-        InlineTokenLayout(spacing: 3, lineSpacing: 3) {
+        // One line of running text, set at one size. English words stand in
+        // the sentence rather than under it, so they are typed like the words
+        // beside them — a substitution the reader reads, not a note they
+        // consult. A faint tint is the only thing marking which words were
+        // swapped, so the swap stays visible without costing legibility.
+        InlineTokenLayout(spacing: 4, lineSpacing: 4) {
             ForEach(Array(displayUnits.enumerated()), id: \.offset) {
                 _, unit in
                 if let danish = unit.danish {
-                    VStack(spacing: 1) {
-                        EncouragedDanishWord(
-                            text: danish,
-                            font: .system(size: 12, design: .rounded),
-                            opacity: KnowledgeTone.opacity(
-                                for: knowledgeLevels[unit.sourceIndex] ?? 0
-                            ),
-                            animationTrigger: focusTokenIndexes.contains(
-                                unit.sourceIndex
-                            )
-                                ? knownAnimationTrigger
-                                : 0
+                    EncouragedDanishWord(
+                        text: danish,
+                        font: .system(size: 12, design: .rounded),
+                        opacity: KnowledgeTone.opacity(
+                            for: knowledgeLevels[unit.sourceIndex] ?? 0
+                        ),
+                        animationTrigger: focusTokenIndexes.contains(
+                            unit.sourceIndex
                         )
-
-                        if let english = unit.english {
-                            Text(english)
-                                .font(
-                                    .system(
-                                        size: 9,
-                                        weight: .medium,
-                                        design: .rounded
-                                    )
-                                )
-                                .foregroundStyle(
-                                    .primary.opacity(
-                                        EnglishGlossTone.opacity(
-                                            for: knowledgeLevels[
-                                                unit.sourceIndex
-                                            ] ?? 0
-                                        )
-                                    )
-                                )
-                                .padding(.horizontal, 3)
-                                .padding(.vertical, 1)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(.primary.opacity(0.035))
-                                }
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(
-                                            .secondary.opacity(0.38),
-                                            lineWidth: 0.55
-                                        )
-                                }
-                        }
-                    }
+                            ? knownAnimationTrigger
+                            : 0
+                    )
                     .fixedSize(horizontal: true, vertical: true)
                 } else if let english = unit.english {
                     Text(english)
-                        .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.primary.opacity(0.9))
+                        .font(
+                            .system(
+                                size: 12,
+                                weight: .medium,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.primary.opacity(0.07))
+                        }
+                        .fixedSize(horizontal: true, vertical: true)
                 }
             }
         }
@@ -378,6 +428,14 @@ struct BridgeDisplayUnit: Equatable {
 }
 
 enum InterlinearBridgePresentation {
+    /// Splits the bridge into the run of words it is read as.
+    ///
+    /// English stands in place of the Danish it replaced rather than beneath
+    /// it, so there is nothing to pair: every token belongs to one language or
+    /// the other and the line reads straight through. Consecutive English
+    /// tokens are grouped, because one Danish word is often several English
+    /// ones — "refleksionsperioden" is "the period of reflection" — and those
+    /// four words are one substitution, not four.
     static func units(
         text: String,
         englishTokenIndexes: [Int]
@@ -389,9 +447,9 @@ enum InterlinearBridgePresentation {
         var result: [BridgeDisplayUnit] = []
         var index = 0
         while index < tokens.count {
+            let start = index
             if englishIndexes.contains(index) {
                 var english: [String] = []
-                let start = index
                 while index < tokens.count,
                       englishIndexes.contains(index) {
                     english.append(tokens[index])
@@ -406,51 +464,16 @@ enum InterlinearBridgePresentation {
                 )
                 continue
             }
-
-            let sourceIndex = index
-            var danish = tokens[index]
-            index += 1
-            var glossTokens: [String] = []
-            while index < tokens.count,
-                  englishIndexes.contains(index) {
-                glossTokens.append(tokens[index])
-                index += 1
-            }
-            var english = glossTokens.joined(separator: " ")
-            if !english.isEmpty {
-                let split = splitTrailingPunctuation(from: english)
-                english = split.text
-                danish += split.punctuation
-            }
             result.append(
                 BridgeDisplayUnit(
-                    sourceIndex: sourceIndex,
-                    danish: danish,
-                    english: english.isEmpty ? nil : english
+                    sourceIndex: start,
+                    danish: tokens[index],
+                    english: nil
                 )
             )
+            index += 1
         }
         return result
-    }
-
-    private static func splitTrailingPunctuation(
-        from value: String
-    ) -> (text: String, punctuation: String) {
-        var boundary = value.endIndex
-        while boundary > value.startIndex {
-            let candidate = value.index(before: boundary)
-            let character = value[candidate]
-            guard character.unicodeScalars.allSatisfy(
-                CharacterSet.punctuationCharacters.contains
-            ) else {
-                break
-            }
-            boundary = candidate
-        }
-        return (
-            String(value[..<boundary]),
-            String(value[boundary...])
-        )
     }
 }
 

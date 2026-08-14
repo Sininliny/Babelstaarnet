@@ -8,9 +8,9 @@ meaning appears where you are already looking. Nothing to select, paste, or
 submit.
 
 It is a translator first. What makes it different is what it does *while* you
-use it: because the Danish stays in place beside the English, and because the
-app quietly remembers which words keep coming back to you, ordinary use turns
-into ordinary learning. That part runs in the background and never asks you for
+use it: because every Danish word you can already read stays Danish, and because
+the app quietly remembers which words keep coming back to you, ordinary use
+turns into ordinary learning. That part runs in the background and never asks you for
 anything.
 
 ## Translation first
@@ -24,23 +24,31 @@ The bubble answers before it teaches:
   on the line is translated, regardless of what the app thinks you know. Press
   it again to go back. It is a reading mode, so it stays on until you turn it
   off.
-- **Nothing is asked of you.** While you read, the bubble has no buttons. The
-  **Knew** / **Don’t know** controls appear only once you deliberately settle on
-  a word — pin it, hold Option, or rest on it. Their shortcuts stay live the
-  whole time either way, and the menu-bar popover lists them.
-- **Acting always answers back.** The bubble never prompts, but pressing a
-  shortcut confirms itself inline.
+- **Nothing is asked of you.** The **Knew** / **Don’t know** controls sit in a
+  fixed row above the answer, behind a rule, so the meaning is still the first
+  thing you read inside the bubble. They are a permanent tool rather than a
+  question: nothing about them changes as you read, and ignoring them for a
+  whole session costs nothing. Their shortcuts stay live either way, and the
+  menu-bar popover lists them.
+- **Acting always answers back, and keeps answering.** Pressing a shortcut
+  turns that control's key into a tick, and the tick stays as long as the word
+  is on screen. Come back to the same word within five minutes and it is still
+  there: what you did to a word is a fact about the word, not a receipt for the
+  keypress. A word met again after that comes back clean.
 
 ## Learning, without being a lesson
 
 Four rules keep the learning underneath the translation:
 
-1. **Danish never disappears.** The source word and Danish sentence structure
-   remain visible next to every answer.
+1. **Danish carries the sentence.** Word order and grammar stay Danish, and
+   every word the reader knows stays Danish with it. Only the words they cannot
+   read are swapped for English, in place, so what is left is one line to read
+   rather than two texts to reconcile. The word being pointed at is still shown
+   in Danish in the word panel, under its meaning.
 2. **English is scaffolding, not the product.** Babelstårnet adds a few concise
    English anchors rather than translating everything by default, and the
-   anchors are what fade as a word becomes familiar. The Danish itself stays
-   fully legible at every level.
+   anchors are what fade as a word becomes familiar, giving the Danish back one
+   word at a time. Whatever Danish remains is fully legible at every level.
 3. **Help follows the reader.** Unknown words receive support; familiar words
    need less; well-known words stay Danish-only. Reading is what moves this —
    spaced encounters in different contexts count, repeated hovering does not.
@@ -50,7 +58,8 @@ Four rules keep the learning underneath the translation:
 The two panels serve different reading problems and can be used separately:
 
 - **Word meaning**, above the pointer: what the word means, plus a concise
-  Danish explanation with English only under concepts you do not yet know.
+  Danish explanation with English standing in for the concepts you do not yet
+  know.
 - **Whole sentence**, below the pointer: the Danish line in its own word order
   and grammar, with one or two English anchors when the sentence is mostly
   familiar, growing to five when the text is genuinely difficult.
@@ -118,23 +127,49 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   different contexts gradually reduce support through the learning levels,
   while repeated hovering on the same text contributes no knowledge. Passive
   learning stops before mastery, and a later explicit confirmation can make a
-  known word stable. Danish always remains visible: levels 0–2 attach a concise
-  English gloss beneath selected Danish words, level 3 quietly tests
-  comprehension without a gloss, and levels 4–5 remain Danish-only. Internal
+  known word stable. Levels 0–2 put a concise English word in place of the
+  Danish one, level 3 quietly tests comprehension with no help at all, and
+  levels 4–5 stay Danish. A word therefore returns to Danish as it is learned,
+  which is the only progress signal the reader ever sees. Internal
   levels are intentionally absent from the reading bubbles. A testing-level
   word keeps a faint direct meaning in the focused word panel so passive
   learning never becomes a barrier to translation. Sentence-only mode carries
   the same focused safety meaning instead of silently removing it. Feedback
-  briefly confirms **Marked known** or **English restored** in the active
-  bubble whether or not the controls are on screen. Marking a word known also
-  gives that Danish word a short lift and glow. Confidence shows as a restrained
+  answers **Marked known** or **English restored** on the control that was
+  pressed, and holds that answer for five minutes per word rather than flashing
+  it for a second and a half. Marking a word known also gives that Danish word
+  a short lift and glow. Confidence shows as a restrained
   fade of the *English* gloss, which is the part meant to go away; the Danish
   stays inside one perceptual step of full strength at every level so that
   knowing a word never makes it harder to read.
 - The adaptive sentence bridge preserves Danish word order and grammar across
   the visible source line. Established words remain Danish, learning words
-  receive a small interlinear English gloss. The support budget adapts from one
-  to five anchors according to how much of the sentence is unfamiliar.
+  are replaced by their English in place, keeping the Danish word order around
+  them. Every word the reader cannot read is replaced, so the line is always
+  readable end to end; what adapts is the profile, and words return to Danish
+  one at a time as they are learned. A cap of one to five substitutions was
+  tried and removed — it left the unreplaced words stranded in a line that was
+  no longer Danish either, so the reader got "the period of reflection på 6
+  months fra time", readable in neither language. English set beneath the
+  Danish rather than in place of it was removed for the same reason: a word
+  someone cannot read is not made readable by being left in place with a note
+  attached.
+- Danish's closed classes — articles, pronouns, prepositions, conjunctions, and
+  the auxiliary and copula verbs — are translated from a table rather than by
+  the model. Handed a single word with no sentence around it, Argos returns
+  "no" for `er`, and once English stands in place of the Danish a wrong answer
+  is the only thing left. These classes are small and stable, so the citation
+  form is simply written down. A word with an explicit accepted set keeps it:
+  `for` may still come back as "too", because "for meget" is "too much"
+- Anchors are not spent on Danish's closed classes — articles, pronouns,
+  prepositions, conjunctions, and the auxiliary and copula verbs. They are the
+  first fifty words of the language, and they are also where word-at-a-time
+  translation is least trustworthy, because their English equivalent is decided
+  by the construction around them: asked on its own, `er` came back as `no`. A
+  line reading "Det er en betingelse for, at CPR-kontoret kan tildele" spent two
+  of three anchors on `er` and `en`. Pointing at one of these words is still a
+  question about it and is answered in full, as is asking for all English; the
+  rule only withholds anchors from the rest of the line
 - Two coordinated bubbles with no headings on either: a compact word panel above
   the hovered word and a wider sentence panel below it. The word panel leads
   with the English meaning, keeps the Danish word beneath it, and adds a concise
@@ -148,11 +183,18 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   0.75 seconds without input, they are held temporarily; any pointer or keyboard
   input releases that temporary hold. Every shortcut and the hold modifier can
   be changed in Settings; bubble shortcuts exist only while a bubble is visible.
-- Feedback controls that stay out of the reading path. While the pointer is
-  passing over text the bubble shows no buttons at all; they appear only once
-  the bubble is held — pinned, Option-held, or rested on — and disappear again
-  when it is released. The shortcuts work throughout, and the menu-bar popover
-  lists them so hiding the buttons costs no discoverability.
+- Feedback controls in a fixed row at the top of the word panel, above the
+  answer and separated from it by a rule. They are never conditional, so they
+  cannot flicker and the answer under them never reflows. Revealing them on
+  demand was tried first and removed: it derived from the temporary bubble hold,
+  which any system input releases — a keystroke, a scroll, a fingertip settling
+  on a trackpad — after which it is re-earned only following another 0.75 s of
+  complete stillness. Reading a page with the pointer parked produces that
+  pattern roughly once a second, so the row appeared and vanished under a reader
+  who had never left the word. Position, not visibility, now keeps them out of
+  the reading path. The sentence panel carries no controls; it still confirms a
+  shortcut inline, because the shortcuts work whether or not the word panel is
+  switched on
 - Versioned local JSON export/import for backing up or moving the adaptive
   learning profile without exporting screenshots or source sentences; imports
   merge idempotently with existing progress
@@ -277,10 +319,11 @@ On first use:
 4. Choose **Start translating** or press `Fn+Z` by default.
 5. Hover a Danish word to hear it and see what it means.
 6. With a bubble visible, press `4` to translate the whole line, `1` for
-   **Knew**, `2` for **Don’t know**, or `3` to pin it. The buttons themselves
-   appear only once the bubble is held — pin it, hold Option, or leave the
-   pointer still — but the shortcuts work whenever a bubble is on screen. These
-   shortcuts and the hold modifier are editable under **Settings → Shortcuts**.
+   **Knew**, `2` for **Don’t know**, or `3` to pin it. The same four are buttons
+   in the row at the top of the word panel, and the shortcuts work whenever a
+   bubble is on screen — including when the word panel is switched off and there
+   is no row. These shortcuts and the hold modifier are editable under
+   **Settings → Shortcuts**.
 7. Press the activation shortcut again to deactivate.
 
 Power saving is enabled by default. It can be disabled under **Settings →
