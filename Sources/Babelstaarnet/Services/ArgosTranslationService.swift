@@ -254,34 +254,37 @@ actor ArgosTranslationService {
         activeLanguagePair = nil
     }
 
+    /// The bundled bridge script, plus the checkout's copy when this is a
+    /// debug build.
+    ///
+    /// The working-directory copy is there so the executable can be run
+    /// straight out of the repository during development. It resolves a
+    /// relative path against whatever directory the process happens to have
+    /// been started in, which is a fine convenience for a build only a
+    /// developer runs and a way to execute someone else's script in a build
+    /// handed to readers. A shipped app never needs it: the script is inside
+    /// the bundle.
     private static var bridgeURL: URL? {
-        let candidates = [
+        var candidates = [
             Bundle.main.resourceURL?
-                .appendingPathComponent("LocalEngines/argos_bridge.py"),
+                .appendingPathComponent("LocalEngines/argos_bridge.py")
+        ].compactMap { $0 }
+#if DEBUG
+        candidates.append(
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 .appendingPathComponent("Resources/LocalEngines/argos_bridge.py")
-        ].compactMap { $0 }
+        )
+#endif
         return candidates.first {
             FileManager.default.fileExists(atPath: $0.path)
         }
     }
 
+    /// Where the interpreter is looked for, as a closed list, for the reason
+    /// given on `InstalledEngineLocations`. This one is handed the recognized
+    /// text rather than the capture, which is the same secret one step later.
     private static var pythonURL: URL? {
-        let managedPython = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(
-                "Library/Application Support/Babelstaarnet/argos-venv/bin/python3"
-            )
-        let fixedCandidates = [
-            managedPython.path,
-            "/opt/homebrew/bin/python3",
-            "/usr/local/bin/python3",
-            "/usr/bin/python3"
-        ]
-        let pathCandidates = ProcessInfo.processInfo.environment["PATH"]?
-            .split(separator: ":")
-            .map { String($0) + "/python3" } ?? []
-
-        return (fixedCandidates + pathCandidates)
+        InstalledEngineLocations.python
             .first(where: FileManager.default.isExecutableFile(atPath:))
             .map(URL.init(fileURLWithPath:))
     }

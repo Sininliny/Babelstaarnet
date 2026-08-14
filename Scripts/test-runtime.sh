@@ -42,15 +42,21 @@ swiftc \
     "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
     "$project_dir/Tests/RuntimeChecks/OCRServiceCheck.swift" \
     -o "$output_dir/OCRServiceCheck"
 "$output_dir/OCRServiceCheck" "$fixture"
 
+# -DDEBUG so the bridge script is still found beside the checkout: a bare
+# swiftc build has no bundle to read it from, and locating it relative to the
+# working directory is exactly the development-only path that flag gates.
 swiftc \
     -parse-as-library \
+    -DDEBUG \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/ArgosTranslationService.swift" \
     "$project_dir/Tests/RuntimeChecks/ArgosServiceCheck.swift" \
     -o "$output_dir/ArgosServiceCheck"

@@ -26,6 +26,7 @@ swiftc \
     "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatFixtures.swift" \

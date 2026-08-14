@@ -555,20 +555,22 @@ struct TesseractOCRService {
         return smallerArea > 0 ? intersectionArea / smallerArea : 0
     }
 
+    /// Where Tesseract is looked for, as a closed list.
+    ///
+    /// This used to fall back to every directory in `$PATH`, which decides
+    /// what gets executed from an environment variable the app does not
+    /// control: launched from a shell it inherits that shell's `PATH`, and the
+    /// first writable directory on it — a project-local `bin`, anything a
+    /// dotfile prepends — becomes a place to put a binary this app will run.
+    /// What it hands that binary is a PNG of whatever the reader is looking
+    /// at, so the cost of resolving the wrong one is the screen itself.
+    ///
+    /// The engine only ever arrives from a package manager or the bundle, and
+    /// those live at known absolute paths, so the list is written down. An
+    /// installation somewhere else is not found rather than guessed at, and
+    /// reading falls back to Vision.
     private var executableURL: URL? {
-        let fixedCandidates = [
-            Bundle.main.resourceURL?
-                .appendingPathComponent("LocalEngines/tesseract").path,
-            "/opt/homebrew/bin/tesseract",
-            "/usr/local/bin/tesseract",
-            "/usr/bin/tesseract"
-        ].compactMap { $0 }
-
-        let pathCandidates = ProcessInfo.processInfo.environment["PATH"]?
-            .split(separator: ":")
-            .map { String($0) + "/tesseract" } ?? []
-
-        return (fixedCandidates + pathCandidates)
+        InstalledEngineLocations.tesseract
             .first(where: FileManager.default.isExecutableFile(atPath:))
             .map(URL.init(fileURLWithPath:))
     }

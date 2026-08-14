@@ -222,7 +222,8 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   not installed
 
 No screenshot, recognized text, definition, or audio is sent to a remote
-service.
+service. [SECURITY.md](SECURITY.md) accounts for how that is enforced, what is
+stored on disk, which binaries the app will execute, and what is still open.
 
 ## Architecture
 

@@ -50,15 +50,30 @@ actor EngineInstallerService {
         }.value
     }
 
+    /// The bundled installer, plus the checkout's copy when this is a debug
+    /// build.
+    ///
+    /// This one is passed to `/bin/zsh`, so a relative path resolved against
+    /// the process's working directory is a script of someone else's choosing
+    /// run as the user, reached by pressing **Install engines**. A launch from
+    /// Finder has a working directory of `/` and would never find it, but that
+    /// is the launcher's doing rather than this app's. Development builds keep
+    /// the convenience because a developer already chose the directory they
+    /// ran from; shipped builds read the installer only from inside the
+    /// bundle.
     private static var installerURL: URL? {
-        let candidates = [
+        var candidates = [
             Bundle.main.resourceURL?
                 .appendingPathComponent(
                     "LocalEngines/install-local-engines.sh"
-                ),
+                )
+        ].compactMap { $0 }
+#if DEBUG
+        candidates.append(
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 .appendingPathComponent("Scripts/install-local-engines.sh")
-        ].compactMap { $0 }
+        )
+#endif
 
         return candidates.first {
             FileManager.default.fileExists(atPath: $0.path)
