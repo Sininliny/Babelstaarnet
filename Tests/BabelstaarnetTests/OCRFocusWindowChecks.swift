@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import Vision
+@testable import BabelstaarnetKit
 
 /// Checks the geometry that lets one line be re-read on its own.
 ///

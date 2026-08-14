@@ -1,4 +1,5 @@
 import AppKit
+@testable import BabelstaarnetKit
 
 @main
 enum BabelstaarnetIconChecks {

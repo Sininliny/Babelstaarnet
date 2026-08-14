@@ -1,4 +1,5 @@
 import Foundation
+@testable import BabelstaarnetKit
 
 @main
 enum BoundedCacheChecks {

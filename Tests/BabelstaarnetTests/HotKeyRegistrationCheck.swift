@@ -1,4 +1,5 @@
 import Carbon
+@testable import BabelstaarnetKit
 
 @main
 enum HotKeyRegistrationCheck {

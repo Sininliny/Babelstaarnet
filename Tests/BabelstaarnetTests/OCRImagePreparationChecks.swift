@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+@testable import BabelstaarnetKit
 
 /// Covers the properties the OCR passes depend on: whatever colours a crop
 /// uses, preparation has to hand back dark text on a light background with the

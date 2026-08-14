@@ -5,7 +5,7 @@ import Translation
 import UniformTypeIdentifiers
 
 @MainActor
-final class AppModel: ObservableObject {
+public final class AppModel: ObservableObject {
     @Published var phase: ScanPhase = .idle
     @Published var pendingRegions: [TextRegion] = []
     @Published var ocrEngineName = "Detecting"
@@ -18,12 +18,12 @@ final class AppModel: ObservableObject {
         source: Locale.Language(identifier: "da"),
         target: Locale.Language(identifier: "en")
     )
-    @Published var learningModeActive = false
+    @Published public var learningModeActive = false
     @Published private(set) var learnerTrackedWordCount = 0
     @Published private(set) var learnerFamiliarWordCount = 0
     @Published private(set) var learnerDataMessage: String?
     @Published private(set) var shortcutMessage: String?
-    @Published private(set) var detectionSuspendedForIdle = false
+    @Published public private(set) var detectionSuspendedForIdle = false
     @Published var screenPermissionGranted = false
     @Published var screenPermissionWasRequested: Bool
     @Published var liveMode = true {
@@ -116,7 +116,7 @@ final class AppModel: ObservableObject {
         capacity: 4_096
     )
 
-    init() {
+    public init() {
         let defaults = UserDefaults.standard
         screenPermissionWasRequested = defaults.bool(
             forKey: Keys.screenPermissionWasRequested

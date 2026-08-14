@@ -1,5 +1,6 @@
 import Carbon
 import Foundation
+@testable import BabelstaarnetKit
 
 @main
 enum HotKeyConfigurationChecks {

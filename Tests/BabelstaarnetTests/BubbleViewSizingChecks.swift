@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+@testable import BabelstaarnetKit
 
 @main
 @MainActor

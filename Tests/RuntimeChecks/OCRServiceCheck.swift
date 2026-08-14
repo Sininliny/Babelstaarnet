@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+@testable import BabelstaarnetKit
 
 enum OCRServiceCheckError: Error {
     case missingFixture

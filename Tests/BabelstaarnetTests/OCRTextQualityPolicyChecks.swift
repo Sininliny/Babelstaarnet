@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+@testable import BabelstaarnetKit
 
 @main
 enum OCRTextQualityPolicyChecks {

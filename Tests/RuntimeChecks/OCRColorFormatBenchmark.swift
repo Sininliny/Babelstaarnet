@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+@testable import BabelstaarnetKit
 
 /// Measures OCR accuracy across colour and format variations.
 ///

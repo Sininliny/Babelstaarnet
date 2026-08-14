@@ -1,10 +1,14 @@
 import SwiftUI
 import Translation
 
-struct TranslationHostView: View {
+public struct TranslationHostView: View {
     @ObservedObject var model: AppModel
 
-    var body: some View {
+    public init(model: AppModel) {
+        self.model = model
+    }
+
+    public var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
             .translationTask(model.translationConfiguration) { session in

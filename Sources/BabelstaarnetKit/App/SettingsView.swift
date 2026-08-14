@@ -1,9 +1,13 @@
 import SwiftUI
 
-struct SettingsView: View {
+public struct SettingsView: View {
     @ObservedObject var model: AppModel
 
-    var body: some View {
+    public init(model: AppModel) {
+        self.model = model
+    }
+
+    public var body: some View {
         Form {
             Section("Translation") {
                 Toggle(

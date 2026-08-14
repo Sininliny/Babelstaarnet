@@ -1,8 +1,8 @@
 import AppKit
 
-enum BabelstaarnetIcon {
-    static let inactiveMenuBarImage = makeMenuBarImage(active: false)
-    static let activeMenuBarImage = makeMenuBarImage(active: true)
+public enum BabelstaarnetIcon {
+    public static let inactiveMenuBarImage = makeMenuBarImage(active: false)
+    public static let activeMenuBarImage = makeMenuBarImage(active: true)
 
     private static func makeMenuBarImage(active: Bool) -> NSImage {
         let image = NSImage(

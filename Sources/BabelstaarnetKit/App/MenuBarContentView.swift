@@ -1,10 +1,14 @@
 import AppKit
 import SwiftUI
 
-struct MenuBarContentView: View {
+public struct MenuBarContentView: View {
     @ObservedObject var model: AppModel
 
-    var body: some View {
+    public init(model: AppModel) {
+        self.model = model
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 

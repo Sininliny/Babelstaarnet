@@ -31,33 +31,35 @@ swiftc \
 
 # Built optimized because this check asserts latency budgets, and the app
 # itself ships as a release build. An unoptimized binary would measure a
-# configuration no user runs.
+# configuration no user runs. `-enable-testing` is what lets the check reach
+# the library's internals; it also keeps a little more of the module alive
+# through optimization, so timings recorded before this became a module build
+# are not comparable with timings recorded after it.
+swift build -c release -Xswiftc -enable-testing --target BabelstaarnetKit
+release_module="$(swift build -c release --show-bin-path)/BabelstaarnetKit.o"
+
 swiftc \
     -O \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
+    -I "$(dirname "$release_module")" \
+    "$release_module" \
     "$project_dir/Tests/RuntimeChecks/OCRServiceCheck.swift" \
     -o "$output_dir/OCRServiceCheck"
 "$output_dir/OCRServiceCheck" "$fixture"
 
-# -DDEBUG so the bridge script is still found beside the checkout: a bare
-# swiftc build has no bundle to read it from, and locating it relative to the
-# working directory is exactly the development-only path that flag gates.
+# The debug module, because the bridge script has to still be found beside the
+# checkout: a build with no bundle to read it from locates it relative to the
+# working directory, and that development-only path is gated on DEBUG — which
+# a debug build of the library is what defines.
+swift build --target BabelstaarnetKit
+debug_module="$(swift build --show-bin-path)/BabelstaarnetKit.o"
+
 swiftc \
     -parse-as-library \
-    -DDEBUG \
     -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/ArgosTranslationService.swift" \
+    -I "$(dirname "$debug_module")" \
+    "$debug_module" \
     "$project_dir/Tests/RuntimeChecks/ArgosServiceCheck.swift" \
     -o "$output_dir/ArgosServiceCheck"
 "$output_dir/ArgosServiceCheck"

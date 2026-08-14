@@ -1,4 +1,5 @@
 import CoreGraphics
+@testable import BabelstaarnetKit
 
 @main
 enum AdaptiveCapturePlannerChecks {

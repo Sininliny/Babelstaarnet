@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+@testable import BabelstaarnetKit
 
 @main
 enum BubbleInteractionChecks {
