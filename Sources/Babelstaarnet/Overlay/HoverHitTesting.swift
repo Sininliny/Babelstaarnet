@@ -2,6 +2,13 @@ import CoreGraphics
 import Foundation
 
 enum HoverHitTesting {
+    /// A previous word, addressed the way a match looks it up: same display,
+    /// same word.
+    private struct WordKey: Hashable {
+        let displayID: CGDirectDisplayID
+        let text: String
+    }
+
     static func stabilizeIdentifiers(
         in regions: [TextRegion],
         against previousRegions: [TextRegion]
@@ -11,19 +18,47 @@ enum HoverHitTesting {
             return regions
         }
 
-        var usedIDs = Set<UUID>()
+        // The previous scan is indexed once, rather than scanned once per word.
+        // Filtering the whole previous array for every new word copied it that
+        // many times and re-normalized every candidate's text inside the
+        // comparison, so the cost grew with the product of the two scans: a
+        // pointer resting on blank space keeps the entire page — the hovered
+        // line is only ever narrowed away when a word is actually under the
+        // pointer — and 840 words then took two thirds of a second on the main
+        // actor, which is the thread the bubble is drawn on.
+        var indexByID: [UUID: Int] = [:]
+        var indexesByWord: [WordKey: [Int]] = [:]
+        indexByID.reserveCapacity(previousWords.count)
+        for (index, previous) in previousWords.enumerated() {
+            // First occurrence wins, matching the linear search this replaces.
+            if indexByID[previous.id] == nil {
+                indexByID[previous.id] = index
+            }
+            indexesByWord[
+                WordKey(
+                    displayID: previous.displayID,
+                    text: normalized(previous.sourceText)
+                ),
+                default: []
+            ].append(index)
+        }
+
+        var claimed = [Bool](repeating: false, count: previousWords.count)
         return regions.map { region in
             var updatedRegion = region
             updatedRegion.words = region.words.map { word in
-                let candidates = previousWords.filter {
-                    !usedIDs.contains($0.id)
-                }
-                guard let match = replacement(for: word, in: candidates) else {
+                guard let match = replacementIndex(
+                    for: word,
+                    in: previousWords,
+                    indexByID: indexByID,
+                    indexesByWord: indexesByWord,
+                    claimed: claimed
+                ) else {
                     return word
                 }
-                usedIDs.insert(match.id)
+                claimed[match] = true
                 return WordRegion(
-                    id: match.id,
+                    id: previousWords[match].id,
                     sourceText: word.sourceText,
                     translatedText: word.translatedText,
                     wordBridgeDanishText: word.wordBridgeDanishText,
@@ -38,6 +73,48 @@ enum HoverHitTesting {
             }
             return updatedRegion
         }
+    }
+
+    /// `replacement(for:in:)` against the index built above, and answering with
+    /// a position so the caller can mark it taken.
+    private static func replacementIndex(
+        for word: WordRegion,
+        in previousWords: [WordRegion],
+        indexByID: [UUID: Int],
+        indexesByWord: [WordKey: [Int]],
+        claimed: [Bool]
+    ) -> Int? {
+        if let index = indexByID[word.id], !claimed[index] {
+            return index
+        }
+
+        let key = WordKey(
+            displayID: word.displayID,
+            text: normalized(word.sourceText)
+        )
+        guard let candidates = indexesByWord[key] else {
+            return nil
+        }
+        let center = word.frame.center
+        var nearest: Int?
+        var nearestDistance = CGFloat.infinity
+        for index in candidates where !claimed[index] {
+            let candidateDistance = distance(
+                from: previousWords[index].frame.center,
+                to: center
+            )
+            // Strictly nearer, so equal distances keep the earlier word — the
+            // tie `min(by:)` broke the same way.
+            if candidateDistance < nearestDistance {
+                nearestDistance = candidateDistance
+                nearest = index
+            }
+        }
+        guard let nearest else {
+            return nil
+        }
+        let tolerance = max(36, word.frame.height * 3)
+        return nearestDistance <= tolerance ? nearest : nil
     }
 
     static func word(
@@ -86,14 +163,19 @@ enum HoverHitTesting {
             return identical
         }
 
+        // Normalizing the word being matched is loop-invariant; inside the
+        // comparison it ran once per candidate, on a path the mouse timer
+        // enters twenty times a second.
+        let key = normalized(word.sourceText)
+        let center = word.frame.center
         let nearest = candidates
             .filter {
                 $0.displayID == word.displayID
-                    && normalized($0.sourceText) == normalized(word.sourceText)
+                    && normalized($0.sourceText) == key
             }
             .min {
-                distance(from: $0.frame.center, to: word.frame.center)
-                    < distance(from: $1.frame.center, to: word.frame.center)
+                distance(from: $0.frame.center, to: center)
+                    < distance(from: $1.frame.center, to: center)
             }
 
         guard let nearest else {
