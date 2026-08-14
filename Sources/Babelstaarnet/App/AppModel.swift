@@ -498,6 +498,13 @@ final class AppModel: ObservableObject {
         scanGeneration = UUID()
         pendingGeneration = nil
         pendingRegions = []
+        // The page that was being read stops being an answer the moment reading
+        // stops. Left behind, it was still the thing the next session opened
+        // against: the menu bar reported a word count before anything had been
+        // read, identifiers were carried over from whatever had been on screen
+        // last time, and the whole page — text, translations, and bridges —
+        // stayed resident while the app sat idle in the menu bar.
+        translatedRegions = []
         overlayController.hide()
         speechService.stop()
         scanTask?.cancel()
