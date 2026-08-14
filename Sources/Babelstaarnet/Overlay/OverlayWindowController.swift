@@ -21,6 +21,11 @@ final class OverlayWindowController {
     private var currentRegion: TextRegion?
     private var hoverAnchorPoint: CGPoint?
     private var expandedEnglishWords = Set<String>()
+    /// What the reader last did to a word, and when. Read back whenever that
+    /// word comes under the pointer again, so the tick is a fact about the word
+    /// rather than a receipt for the keypress that has since scrolled away.
+    private var rememberedActions:
+        [String: (action: BridgeFeedbackConfirmation, at: Date)] = [:]
     /// Sticky for the whole session: asking for full English is a way of
     /// reading, not a question about one word, and re-pressing it on every
     /// hover would be exactly the kind of nagging the bridge avoids.
@@ -247,10 +252,17 @@ final class OverlayWindowController {
         if targetChanged {
             hoverSpeechTimer?.invalidate()
             hoverSpeechTimer = nil
-            bubbleState.clearFeedback()
         }
         currentWord = match?.word
         currentRegion = match?.region
+
+        if targetChanged {
+            // Whatever was done to *this* word, if it was recent enough. A
+            // different word carries its own answer, which is usually none.
+            bubbleState.restoreFeedback(
+                match.map { rememberedAction(for: $0.word.sourceText) } ?? nil
+            )
+        }
 
         guard let match else {
             dismissBubble()
@@ -622,6 +634,7 @@ final class OverlayWindowController {
         }
         expandedEnglishWords.insert(key)
         onLearnerProfileChanged(true)
+        remember(.englishRestored, for: currentWord.sourceText)
         refreshCurrentCard(preservePosition: true)
         bubbleState.showFeedback(.englishRestored)
     }
@@ -640,8 +653,43 @@ final class OverlayWindowController {
             LearnerProfileStore.normalizedKey(for: currentWord.sourceText)
         )
         onLearnerProfileChanged(true)
+        remember(.markedKnown, for: currentWord.sourceText)
         refreshCurrentCard(preservePosition: true)
         bubbleState.showFeedback(.markedKnown)
+    }
+
+    private func remember(
+        _ action: BridgeFeedbackConfirmation,
+        for word: String
+    ) {
+        let key = LearnerProfileStore.normalizedKey(for: word)
+        let now = Date()
+        // Drop what has aged out before adding, so the table stays the size of
+        // a reading session rather than growing with one.
+        rememberedActions = rememberedActions.filter {
+            BridgeFeedbackMemory.isRemembered(recordedAt: $0.value.at, now: now)
+        }
+        if rememberedActions.count >= BridgeFeedbackMemory.capacity,
+           rememberedActions[key] == nil,
+           let oldest = rememberedActions.min(by: { $0.value.at < $1.value.at })
+        {
+            rememberedActions.removeValue(forKey: oldest.key)
+        }
+        rememberedActions[key] = (action, now)
+    }
+
+    private func rememberedAction(
+        for word: String
+    ) -> BridgeFeedbackConfirmation? {
+        let key = LearnerProfileStore.normalizedKey(for: word)
+        guard let record = rememberedActions[key] else {
+            return nil
+        }
+        guard BridgeFeedbackMemory.isRemembered(recordedAt: record.at) else {
+            rememberedActions.removeValue(forKey: key)
+            return nil
+        }
+        return record.action
     }
 
     private func refreshCurrentCard(preservePosition: Bool) {

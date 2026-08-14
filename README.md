@@ -30,8 +30,11 @@ The bubble answers before it teaches:
   question: nothing about them changes as you read, and ignoring them for a
   whole session costs nothing. Their shortcuts stay live either way, and the
   menu-bar popover lists them.
-- **Acting always answers back.** The bubble never prompts, but pressing a
-  shortcut confirms itself inline.
+- **Acting always answers back, and keeps answering.** Pressing a shortcut
+  turns that control's key into a tick, and the tick stays as long as the word
+  is on screen. Come back to the same word within five minutes and it is still
+  there: what you did to a word is a fact about the word, not a receipt for the
+  keypress. A word met again after that comes back clean.
 
 ## Learning, without being a lesson
 
@@ -132,9 +135,10 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   word keeps a faint direct meaning in the focused word panel so passive
   learning never becomes a barrier to translation. Sentence-only mode carries
   the same focused safety meaning instead of silently removing it. Feedback
-  briefly confirms **Marked known** or **English restored** in the active
-  bubble whether or not the controls are on screen. Marking a word known also
-  gives that Danish word a short lift and glow. Confidence shows as a restrained
+  answers **Marked known** or **English restored** on the control that was
+  pressed, and holds that answer for five minutes per word rather than flashing
+  it for a second and a half. Marking a word known also gives that Danish word
+  a short lift and glow. Confidence shows as a restrained
   fade of the *English* gloss, which is the part meant to go away; the Danish
   stays inside one perceptual step of full strength at every level so that
   knowing a word never makes it harder to read.
