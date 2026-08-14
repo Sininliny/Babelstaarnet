@@ -330,6 +330,40 @@ enum BubbleViewSizingChecks {
             substituted.compactMap(\.danish)
                 == ["Hun", "før", "hun", "svarede."]
         )
+        precondition(substituted.allSatisfy { !$0.isFocus })
+
+        // The word being pointed at is its own substitution, whatever it is
+        // standing between. Run it together with the English on either side and
+        // the answer to the reader's question is somewhere in the middle of an
+        // unbroken line, with nothing to say which part of it was the answer.
+        let focused = InterlinearBridgePresentation.units(
+            text: "It could for example be information campaigns, støtte til.",
+            englishTokenIndexes: [0, 1, 2, 3, 4, 5, 6],
+            focusTokenIndexes: [5, 6]
+        )
+        precondition(
+            focused.map(\.english) == [
+                "It could for example be",
+                "information campaigns,",
+                nil,
+                nil
+            ],
+            String(describing: focused.map(\.english))
+        )
+        precondition(focused[1].isFocus)
+        precondition(focused[0].isFocus == false)
+        precondition(focused[1].sourceIndex == 5)
+
+        // A Danish word the reader kept is marked the same way, since it is
+        // just as much the word that was asked about.
+        let focusedDanish = InterlinearBridgePresentation.units(
+            text: "Hun tøvede før svaret.",
+            englishTokenIndexes: [],
+            focusTokenIndexes: [1]
+        )
+        precondition(focusedDanish[1].danish == "tøvede")
+        precondition(focusedDanish[1].isFocus)
+        precondition(focusedDanish.filter(\.isFocus).count == 1)
     }
 
     private static func measuredWordHeight(

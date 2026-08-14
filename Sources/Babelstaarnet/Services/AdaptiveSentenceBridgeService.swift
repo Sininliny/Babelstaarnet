@@ -3,6 +3,23 @@ import Foundation
 struct AdaptiveSentenceBridge: Equatable, Sendable {
     let text: String
     let englishTokenIndexes: [Int]
+    /// The tokens standing in for the word under the pointer, when that word
+    /// was one of the replaced ones. Without it the sentence panel cannot show
+    /// which of its words answers the question that was asked: the reader
+    /// points at "læringsmiljøer" and the sentence says "learning
+    /// environments" somewhere in the middle of a line, with nothing to
+    /// connect the two panels to each other.
+    let focusEnglishTokenIndexes: [Int]
+
+    init(
+        text: String,
+        englishTokenIndexes: [Int],
+        focusEnglishTokenIndexes: [Int] = []
+    ) {
+        self.text = text
+        self.englishTokenIndexes = englishTokenIndexes
+        self.focusEnglishTokenIndexes = focusEnglishTokenIndexes
+    }
 }
 
 enum LanguageTransferState: Equatable, Sendable {
@@ -24,11 +41,21 @@ enum LanguageTransferState: Equatable, Sendable {
 struct AdaptiveSentenceBridgeService {
     private static let englishStart = "\u{E000}"
     private static let englishEnd = "\u{E001}"
+    // The word that was asked about is marked apart from the rest of the
+    // English, because the panel showing the sentence has to be able to point
+    // back at the word the panel above it is answering.
+    private static let focusStart = "\u{E002}"
+    private static let focusEnd = "\u{E003}"
     private static let danishLocale = Locale(identifier: "da_DK")
     private static let wordTrimmingCharacters =
         CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
     private static let wordExpression = try! NSRegularExpression(
         pattern: #"[\p{L}]+(?:['’-][\p{L}]+)*"#
+    )
+    /// Where a Danish sentence pauses, and so where it can be cut without
+    /// leaving half a clause behind.
+    private static let clauseSeparators: Set<unichar> = Set(
+        ",;:—–()[]".unicodeScalars.map { unichar($0.value) }
     )
 
     func wordsNeedingEnglish(
@@ -55,7 +82,7 @@ struct AdaptiveSentenceBridgeService {
         focusWord: String,
         focusOccurrence: Int = 0,
         stateForWord: (String) -> LanguageTransferState,
-        wordLimit: Int = 20,
+        wordLimit: Int = 36,
         replacementLimit: Int? = nil
     ) -> AdaptiveSentenceBridge {
         let compact = danishSentence
@@ -167,7 +194,8 @@ struct AdaptiveSentenceBridgeService {
                         of: english,
                         to: match.word,
                         isSentenceStart: index == 0
-                    )
+                    ),
+                    isFocus: index == focusIndex
                 )
             case .testing, .known:
                 continue
@@ -177,16 +205,29 @@ struct AdaptiveSentenceBridgeService {
         return annotatedBridge(from: mutable as String)
     }
 
+    /// The text the bridge rewrites: the sentence the pointed-at word belongs
+    /// to, kept whole wherever it fits.
+    ///
+    /// A window measured only in words stopped wherever the count ran out, so
+    /// the reader was handed a line that began after the subject and ended
+    /// before the verb. The sentence is the unit carrying the word order this
+    /// is meant to teach, so it survives intact; one long enough to still need
+    /// cutting is cut where the sentence itself pauses rather than mid-phrase.
     private func contextWindow(
         in text: String,
         around focusWord: String,
         occurrence: Int,
         wordLimit: Int
     ) -> String {
-        let matches = wordMatches(in: text)
+        let sentence = focusedSentence(
+            in: text,
+            around: focusWord,
+            occurrence: occurrence
+        )
+        let matches = wordMatches(in: sentence)
         let limit = max(1, wordLimit)
         guard matches.count > limit else {
-            return completeSentence(text)
+            return completeSentence(sentence)
         }
 
         let focus = normalized(focusWord)
@@ -207,8 +248,91 @@ struct AdaptiveSentenceBridgeService {
             length: NSMaxRange(matches[end].range)
                 - matches[start].range.location
         )
-        let selected = (text as NSString).substring(with: range)
+        let selected = (sentence as NSString).substring(
+            with: clauseBounded(
+                range,
+                around: matches[focusIndex].range,
+                in: sentence
+            )
+        )
         return completeSentence(selected)
+    }
+
+    /// Narrows text holding several sentences to the one that was pointed at.
+    ///
+    /// Text with no word to point at is left alone: a word bridge arrives here
+    /// as a whole short Danish explanation, and keeping only its first sentence
+    /// would drop the half that explains the word.
+    private func focusedSentence(
+        in text: String,
+        around focusWord: String,
+        occurrence: Int
+    ) -> String {
+        guard DanishSentenceBoundary.sentenceRanges(in: text).count > 1 else {
+            return text
+        }
+        let matches = wordMatches(in: text)
+        let focus = normalized(focusWord)
+        let focusIndexes = matches.indices.filter {
+            normalized(matches[$0].word) == focus
+        }
+        guard !focusIndexes.isEmpty else {
+            return text
+        }
+        let index = focusIndexes[
+            min(max(0, occurrence), focusIndexes.count - 1)
+        ]
+        let sentence = DanishSentenceBoundary.sentenceRange(
+            in: text,
+            containing: matches[index].range.location
+        )
+        return (text as NSString)
+            .substring(with: sentence)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Moves the edges of a word window onto the sentence's own pauses, so a
+    /// cut sentence still reads as a phrase instead of stopping mid-thought.
+    private func clauseBounded(
+        _ range: NSRange,
+        around focus: NSRange,
+        in text: String
+    ) -> NSRange {
+        let source = text as NSString
+        var start = range.location
+        var end = NSMaxRange(range)
+
+        var index = focus.location - 1
+        while index >= range.location {
+            if Self.clauseSeparators.contains(
+                source.character(at: index)
+            ) {
+                start = index + 1
+                break
+            }
+            index -= 1
+        }
+        // Searched from the far edge inwards, so the window gives up as little
+        // of the sentence as a complete phrase allows.
+        index = end - 1
+        while index >= NSMaxRange(focus) {
+            if Self.clauseSeparators.contains(
+                source.character(at: index)
+            ) {
+                end = index
+                break
+            }
+            index -= 1
+        }
+        while start < end,
+              let scalar = UnicodeScalar(source.character(at: start)),
+              CharacterSet.whitespaces.contains(scalar) {
+            start += 1
+        }
+        guard start < end, start <= focus.location else {
+            return range
+        }
+        return NSRange(location: start, length: end - start)
     }
 
     private func wordMatches(
@@ -254,8 +378,13 @@ struct AdaptiveSentenceBridgeService {
         }
     }
 
-    private func markedEnglish(_ value: String) -> String {
-        Self.englishStart + value + Self.englishEnd
+    private func markedEnglish(
+        _ value: String,
+        isFocus: Bool = false
+    ) -> String {
+        isFocus
+            ? Self.focusStart + value + Self.focusEnd
+            : Self.englishStart + value + Self.englishEnd
     }
 
     /// Gives the English the case of the Danish it stands in for.
@@ -292,8 +421,10 @@ struct AdaptiveSentenceBridgeService {
 
     private func annotatedBridge(from markedText: String) -> AdaptiveSentenceBridge {
         var insideEnglish = false
+        var insideFocus = false
         var tokens: [String] = []
         var englishIndexes: [Int] = []
+        var focusIndexes: [Int] = []
 
         for rawToken in markedText.split(
             whereSeparator: \Character.isWhitespace
@@ -306,7 +437,16 @@ struct AdaptiveSentenceBridgeService {
                     with: ""
                 )
             }
+            if token.contains(Self.focusStart) {
+                insideEnglish = true
+                insideFocus = true
+                token = token.replacingOccurrences(
+                    of: Self.focusStart,
+                    with: ""
+                )
+            }
             let isEnglish = insideEnglish
+            let isFocus = insideFocus
             if token.contains(Self.englishEnd) {
                 token = token.replacingOccurrences(
                     of: Self.englishEnd,
@@ -314,17 +454,29 @@ struct AdaptiveSentenceBridgeService {
                 )
                 insideEnglish = false
             }
+            if token.contains(Self.focusEnd) {
+                token = token.replacingOccurrences(
+                    of: Self.focusEnd,
+                    with: ""
+                )
+                insideEnglish = false
+                insideFocus = false
+            }
             guard !token.isEmpty else {
                 continue
             }
             if isEnglish {
                 englishIndexes.append(tokens.count)
             }
+            if isFocus {
+                focusIndexes.append(tokens.count)
+            }
             tokens.append(token)
         }
         return AdaptiveSentenceBridge(
             text: tokens.joined(separator: " "),
-            englishTokenIndexes: englishIndexes
+            englishTokenIndexes: englishIndexes,
+            focusEnglishTokenIndexes: focusIndexes
         )
     }
 
@@ -335,7 +487,7 @@ struct AdaptiveSentenceBridgeService {
         guard !trimmed.isEmpty else {
             return ""
         }
-        if trimmed.last.map({ ".!?".contains($0) }) == true {
+        if trimmed.last.map({ ".!?…".contains($0) }) == true {
             return trimmed
         }
         return trimmed.trimmingCharacters(

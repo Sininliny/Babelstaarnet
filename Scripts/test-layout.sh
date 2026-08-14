@@ -100,6 +100,27 @@ swiftc \
 swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/DanishSentenceBoundaryChecks.swift" \
+    -o "$output_dir/DanishSentenceBoundaryChecks"
+
+"$output_dir/DanishSentenceBoundaryChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/SentenceAssemblyPolicy.swift" \
+    "$project_dir/Tests/BabelstaarnetTests/SentenceAssemblyChecks.swift" \
+    -o "$output_dir/SentenceAssemblyChecks"
+
+"$output_dir/SentenceAssemblyChecks"
+
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/AdaptiveSentenceBridgeService.swift" \
     "$project_dir/Tests/BabelstaarnetTests/AdaptiveSentenceBridgeChecks.swift" \
     -o "$output_dir/AdaptiveSentenceBridgeChecks"
@@ -110,6 +131,7 @@ swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Services/BeginnerDanishService.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/AdaptiveSentenceBridgeService.swift" \
     "$project_dir/Tests/BabelstaarnetTests/AdaptiveWordBridgeChecks.swift" \
     -o "$output_dir/AdaptiveWordBridgeChecks"
@@ -190,6 +212,8 @@ swiftc \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
     "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
+    "$project_dir/Sources/Babelstaarnet/Services/SentenceAssemblyPolicy.swift" \
     "$project_dir/Sources/Babelstaarnet/Services/FocusedRegionSelectionPolicy.swift" \
     "$project_dir/Tests/BabelstaarnetTests/FocusedRegionSelectionChecks.swift" \
     -o "$output_dir/FocusedRegionSelectionChecks"

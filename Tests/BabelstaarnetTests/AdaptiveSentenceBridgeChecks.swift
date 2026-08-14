@@ -94,6 +94,53 @@ enum AdaptiveSentenceBridgeChecks {
         )
         precondition(repeated.englishTokenIndexes.count == 2)
 
+        // The English standing in for the word that was pointed at is reported
+        // apart from the rest of it, so the sentence panel can show which of
+        // its words answers the question the panel above it is answering.
+        let focusReported = service.bridge(
+            danishSentence: "Hun tøvede, før hun svarede.",
+            englishByDanishWord: [
+                "tøvede": "hesitated",
+                "svarede": "answered"
+            ],
+            focusWord: "tøvede",
+            stateForWord: { _ in .unknown }
+        )
+        precondition(
+            focusReported.text == "Hun hesitated, før hun answered.",
+            focusReported.text
+        )
+        precondition(focusReported.englishTokenIndexes == [1, 4])
+        precondition(
+            focusReported.focusEnglishTokenIndexes == [1],
+            String(describing: focusReported.focusEnglishTokenIndexes)
+        )
+
+        // A word worth several English ones reports all of them, because all of
+        // them stand in for the one word.
+        let focusPhrase = service.bridge(
+            danishSentence: "Refleksionsperioden er slut.",
+            englishByDanishWord: [
+                "refleksionsperioden": "the period of reflection"
+            ],
+            focusWord: "Refleksionsperioden",
+            stateForWord: { $0 == "refleksionsperioden" ? .unknown : .known }
+        )
+        precondition(
+            focusPhrase.focusEnglishTokenIndexes == [0, 1, 2, 3],
+            String(describing: focusPhrase.focusEnglishTokenIndexes)
+        )
+
+        // A word the reader kept in Danish has no English standing in for it,
+        // and nothing is reported.
+        let focusKept = service.bridge(
+            danishSentence: "Hun tøvede, før hun svarede.",
+            englishByDanishWord: ["svarede": "answered"],
+            focusWord: "tøvede",
+            stateForWord: { $0 == "tøvede" ? .known : .unknown }
+        )
+        precondition(focusKept.focusEnglishTokenIndexes.isEmpty)
+
         let repeatedFocus = service.bridge(
             danishSentence: "Ukendt ukendt.",
             englishByDanishWord: ["ukendt": "unknown"],
@@ -153,6 +200,55 @@ enum AdaptiveSentenceBridgeChecks {
             manyUnknown.text
         )
         precondition(manyUnknown.englishTokenIndexes.count == 8)
+
+        // Text carrying more than one sentence is narrowed to the one that was
+        // pointed at, so a line holding the end of one sentence and the start
+        // of another answers about the sentence the word is in.
+        let secondSentence = service.bridge(
+            danishSentence: "Fristen er fast. Emnerne kan spænde bredt.",
+            englishByDanishWord: ["spænde": "range", "bredt": "widely"],
+            focusWord: "spænde",
+            stateForWord: { ["spænde", "bredt"].contains($0) ? .unknown : .known }
+        )
+        precondition(
+            secondSentence.text == "Emnerne kan range widely.",
+            secondSentence.text
+        )
+
+        // Nothing was pointed at, so nothing is narrowed: a word bridge comes
+        // in as a whole short Danish explanation, and keeping only its first
+        // sentence would drop the half that explains the word.
+        let wordBridge = service.bridge(
+            danishSentence: "Et udtryk. Det bruges i læringsmiljøer.",
+            englishByDanishWord: ["udtryk": "expression"],
+            focusWord: "",
+            stateForWord: { $0 == "udtryk" ? .unknown : .known }
+        )
+        precondition(
+            wordBridge.text == "Et expression. Det bruges i læringsmiljøer.",
+            wordBridge.text
+        )
+
+        // A sentence past the limit is cut where it pauses. Both edges land on
+        // a clause boundary, so what is left reads as whole phrases rather
+        // than stopping mid-thought.
+        let overLong = service.bridge(
+            danishSentence: "Det er en betingelse for tildeling, at ansøgeren"
+                + " kan dokumentere sin tilknytning til landet gennem arbejde,"
+                + " og at kommunen har modtaget oplysningerne inden fristen,"
+                + " som er fastsat i bekendtgørelsen.",
+            englishByDanishWord: ["tilknytning": "connection"],
+            focusWord: "tilknytning",
+            stateForWord: { $0 == "tilknytning" ? .unknown : .known },
+            wordLimit: 20
+        )
+        precondition(overLong.text.contains("connection"), overLong.text)
+        precondition(
+            overLong.text
+                == "at ansøgeren kan dokumentere sin connection til landet"
+                + " gennem arbejde.",
+            overLong.text
+        )
 
         let letters = Array("abcdefghijklmnopqrstuvwxyz")
         let longWords = (0..<30).map {

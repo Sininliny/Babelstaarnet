@@ -6,7 +6,8 @@ enum FocusedRegionSelectionPolicy {
         from regions: [TextRegion],
         at focusPoint: CGPoint
     ) -> [TextRegion] {
-        let matches = regions.compactMap { region -> (TextRegion, CGFloat)? in
+        let matches = regions.compactMap {
+            region -> (TextRegion, WordRegion, CGFloat)? in
             let words = region.words.filter {
                 $0.frame.insetBy(dx: -4, dy: -5).contains(focusPoint)
             }
@@ -18,13 +19,23 @@ enum FocusedRegionSelectionPolicy {
             }
             return (
                 region,
+                nearest,
                 distance(from: nearest.frame.center, to: focusPoint)
             )
         }
-        guard let match = matches.min(by: { $0.1 < $1.1 }) else {
+        guard let match = matches.min(by: { $0.2 < $1.2 }) else {
             return regions
         }
-        return [match.0]
+        // The hovered line, plus the lines its sentence runs onto. Keeping the
+        // line alone was cheaper, but it decided the bubble could only ever
+        // show the fragment the column happened to wrap — and the words on the
+        // continuation lines were dropped before translation, so nothing later
+        // in the pipeline could recover them.
+        return SentenceAssemblyPolicy.lines(
+            containing: match.1,
+            in: match.0,
+            among: regions
+        )
     }
 
     static func focusedSourceKeys(

@@ -30,6 +30,28 @@ enum FocusedRegionSelectionChecks {
             ) == ["dansk"]
         )
 
+        // A line the sentence runs onto is kept with it. Dropping it here was
+        // final: its words never reached translation, so the bubble could only
+        // ever show the fragment the column happened to wrap.
+        let opening = region(
+            text: "Jeg lærer dansk, fordi jeg",
+            word: "lærer",
+            frame: CGRect(x: 80, y: 300, width: 180, height: 26),
+            screen: screen
+        )
+        let continuation = region(
+            text: "bor i landet.",
+            word: "bor",
+            frame: CGRect(x: 80, y: 274, width: 110, height: 26),
+            screen: screen
+        )
+        precondition(
+            FocusedRegionSelectionPolicy.foregroundRegions(
+                from: [opening, continuation],
+                at: CGPoint(x: 110, y: 313)
+            ) == [opening, continuation]
+        )
+
         let unfocused = FocusedRegionSelectionPolicy.foregroundRegions(
             from: [first, second],
             at: CGPoint(x: 500, y: 500)
