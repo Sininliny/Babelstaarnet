@@ -38,9 +38,27 @@ actor OCRService {
     private let resultCache = BoundedCache<CacheKey, CachedResult>(
         capacity: 12
     )
+    /// Whether the installed Tesseract can actually read Danish, remembered
+    /// because answering it costs a process launch.
+    private var tesseractReadsDanish: Bool?
 
     func isOpenSourceEngineReady() async -> Bool {
-        await tesseract.isDanishReady()
+        let ready = await tesseract.isDanishReady()
+        tesseractReadsDanish = ready
+        return ready
+    }
+
+    /// An installed Tesseract is not a usable one. Routing on the executable
+    /// alone sent every scan through four processes that opened, failed to find
+    /// dan.traineddata, and exited — after the capture had been encoded as PNG
+    /// for each of them — before the reading fell back to Vision anyway.
+    private func tesseractCanReadDanish() async -> Bool {
+        if let tesseractReadsDanish {
+            return tesseractReadsDanish
+        }
+        let ready = await tesseract.isDanishReady()
+        tesseractReadsDanish = ready
+        return ready
     }
 
     /// Loads the Vision text recognizer before the first hover needs it.
@@ -160,6 +178,7 @@ actor OCRService {
 
         try Task.checkCancellation()
         if tesseract.isAvailable,
+           await tesseractCanReadDanish(),
            let tesseractRegions = try? await tesseract.recognize(
                in: capture,
                prefersSmallText: prefersSmallTextRecovery

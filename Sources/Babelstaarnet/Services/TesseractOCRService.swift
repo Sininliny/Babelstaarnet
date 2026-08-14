@@ -363,10 +363,17 @@ struct TesseractOCRService {
         process.standardError = errors
 
         try process.run()
-        input.fileHandleForWriting.write(png)
-        try input.fileHandleForWriting.close()
+        // Registered before the capture is handed over, not after: the write
+        // below blocks until Tesseract has taken all of it, and a scan
+        // cancelled during that window could not reach a process it had not
+        // been told about yet.
         controller.register(process)
         defer { controller.clear(process) }
+        // The throwing form, so a Tesseract that has already exited — a missing
+        // language file, a rejected argument — comes back as an error this
+        // function can report and the caller can fall back to Vision on.
+        try input.fileHandleForWriting.write(contentsOf: png)
+        try input.fileHandleForWriting.close()
 
         let outputData = output.fileHandleForReading.readDataToEndOfFile()
         let errorData = errors.fileHandleForReading.readDataToEndOfFile()
