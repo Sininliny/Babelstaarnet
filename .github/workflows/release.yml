@@ -54,7 +54,7 @@ jobs:
       - name: Run deterministic checks
         run: make test
 
-      - name: Build installable DMG
+      - name: Build the app archive
         env:
           SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: make release
@@ -66,19 +66,24 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          dmg_path="$(find dist -maxdepth 1 -name '*.dmg' -print -quit)"
-          xcrun notarytool submit "$dmg_path" \
+          zip_path="$(find dist -maxdepth 1 -name '*.app.zip' -print -quit)"
+          xcrun notarytool submit "$zip_path" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" \
             --wait
-          xcrun stapler staple "$dmg_path"
-          xcrun stapler validate "$dmg_path"
-          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg_path"
+          # The ticket staples to the app, not to the archive it travelled in,
+          # so the archive is made again around the stapled bundle.
+          xcrun stapler staple dist/Babelstaarnet.app
+          xcrun stapler validate dist/Babelstaarnet.app
+          spctl --assess --type exec --verbose=2 dist/Babelstaarnet.app
+          rm -f "$zip_path"
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/Babelstaarnet.app "$zip_path"
           (
             cd dist
-            dmg_name="$(basename "$dmg_path")"
-            shasum -a 256 "$dmg_name" > "$dmg_name.sha256"
+            zip_name="$(basename "$zip_path")"
+            shasum -a 256 "$zip_name" > "$zip_name.sha256"
           )
 
       - name: Publish GitHub release
@@ -90,8 +95,6 @@ jobs:
             tag="${{ inputs.tag }}"
           fi
           gh release create "$tag" \
-            dist/*.dmg \
-            dist/*.dmg.sha256 \
             dist/*.app.zip \
             dist/*.app.zip.sha256 \
             --title "Babelstårnet ${tag#v}" \

@@ -1,10 +1,17 @@
 # Publishing a macOS release
 
-Pushing a version tag such as `v0.2.0` builds both a DMG and a ZIP containing
-`Babelstaarnet.app`, then publishes both with SHA-256 checksums. The workflow
+Pushing a version tag such as `v0.4.0` builds a ZIP containing
+`Babelstaarnet.app` and publishes it with a SHA-256 checksum. The workflow
 always builds and at least ad-hoc signs the app. For a normal double-click
 installation on other Macs, configure Developer ID signing and notarization
 first.
+
+There is deliberately no DMG. A disk image is the right shape for an app that
+opens with a double click, and without a paid Apple Developer ID this one
+cannot: whichever container it arrives in, the first launch is a Control-click
+and an **Open**. The DMG only added a second download of the same bytes, a
+second checksum, and a mount step in front of the same warning. Bring it back
+on the day the app is notarized.
 
 Add these GitHub Actions repository secrets:
 
@@ -20,8 +27,8 @@ Add these GitHub Actions repository secrets:
 Then publish:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 For a local preview package:
@@ -30,9 +37,8 @@ For a local preview package:
 make release
 ```
 
-The DMG, `.app.zip`, and their SHA-256 checksums are written under `dist/`.
+The `.app.zip` and its SHA-256 checksum are written under `dist/`.
 
-Without a paid Apple Developer account, both downloads are ad-hoc signed and
-cannot be notarized. The `.app.zip` is offered as a direct alternative to the
-DMG, but macOS may still require Control-clicking the extracted app, choosing
+Without a paid Apple Developer account the download is ad-hoc signed and cannot
+be notarized, so macOS requires Control-clicking the extracted app, choosing
 **Open**, and confirming once.

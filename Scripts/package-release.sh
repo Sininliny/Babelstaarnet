@@ -11,21 +11,21 @@ version="$(
         "$info_plist"
 )"
 app_path="$project_dir/dist/Babelstaarnet.app"
-dmg_name="Babelstaarnet-${version}-macOS.dmg"
-dmg_path="$project_dir/dist/$dmg_name"
 app_zip_name="Babelstaarnet-${version}-macOS.app.zip"
 app_zip_path="$project_dir/dist/$app_zip_name"
-staging_root="$(mktemp -d "${TMPDIR:-/tmp}/babelstaarnet-release.XXXXXX")"
-payload_dir="$staging_root/Babelstårnet"
-
-cleanup() {
-    rm -rf "$staging_root"
-}
-trap cleanup EXIT
 
 "$script_dir/build-app.sh"
 codesign --verify --deep --strict "$app_path"
 
+# A ZIP, and only a ZIP.
+#
+# The DMG this used to build alongside it was the drag-to-Applications
+# package, which is the right shape for an app that opens with a double
+# click. This one does not: without a paid Apple Developer ID it can only be
+# ad-hoc signed, so whichever container it arrives in, the first launch is a
+# Control-click and an Open. A disk image cannot make that go away — it only
+# adds a second download of the same bytes, a second checksum, and a mount
+# step before the same warning. Restore it on the day the app is notarized.
 rm -f "$app_zip_path"
 /usr/bin/ditto \
     -c \
@@ -35,26 +35,10 @@ rm -f "$app_zip_path"
     "$app_path" \
     "$app_zip_path"
 
-mkdir -p "$payload_dir"
-/usr/bin/ditto "$app_path" "$payload_dir/Babelstaarnet.app"
-ln -s /Applications "$payload_dir/Applications"
-cp "$project_dir/Resources/Start Here.txt" "$payload_dir/Start Here.txt"
-
-hdiutil create \
-    -volname "Babelstårnet" \
-    -srcfolder "$payload_dir" \
-    -format UDZO \
-    -ov \
-    "$dmg_path"
-hdiutil verify "$dmg_path"
-
 (
     cd "$project_dir/dist"
-    /usr/bin/shasum -a 256 "$dmg_name" > "$dmg_name.sha256"
     /usr/bin/shasum -a 256 "$app_zip_name" > "$app_zip_name.sha256"
 )
 
-echo "Packaged $dmg_path"
-echo "Checksum $dmg_path.sha256"
 echo "Packaged $app_zip_path"
 echo "Checksum $app_zip_path.sha256"
