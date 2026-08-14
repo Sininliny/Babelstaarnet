@@ -89,7 +89,7 @@ enum BubbleViewSizingChecks {
             learningText: "Noget som hører til Earth.",
             englishSupport: "Relating to Earth or belonging to the planet.",
             adaptiveEnglishTokenIndexes: [4],
-            showsEnglishSupportInSentenceBridge: true
+            sentencePanelStandsAlone: true
         )
         let sentenceOnlyHeight = measuredSentenceHeight(
             sentenceOnlyCard,
@@ -101,7 +101,7 @@ enum BubbleViewSizingChecks {
             wordKnowledgeLevel: 3,
             wordEnglishMeaning: "student accommodation",
             learningText: "Mange studieboliger står tomme.",
-            showsEnglishSupportInSentenceBridge: true
+            sentencePanelStandsAlone: true
         )
         let testingSentenceOnlyHeight = measuredSentenceHeight(
             testingSentenceOnlyCard,
@@ -182,7 +182,7 @@ enum BubbleViewSizingChecks {
             word: word,
             learningText: longLine,
             englishSupport: "Relating to Earth or belonging to the planet.",
-            showsEnglishSupportInSentenceBridge: true
+            sentencePanelStandsAlone: true
         )
         let plainSentenceHeight = measuredSentenceHeight(
             plainSentence,
@@ -265,6 +265,54 @@ enum BubbleViewSizingChecks {
             "Pinning changed the bubble height"
         )
         state.isPinned = false
+
+        // Knew and Don't know are about the word, so the sentence panel says
+        // nothing about them while the word panel is on screen to answer. It
+        // was printing "Marked known" under a sentence at the same moment the
+        // word panel confirmed the same press.
+        let pairedSentence = HoverCard(
+            word: word,
+            learningText: longLine
+        )
+        let pairedResting = measuredSentenceHeight(
+            pairedSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        state.showFeedback(.markedKnown)
+        precondition(
+            measuredSentenceHeight(
+                pairedSentence,
+                state: state,
+                hostingView: sentenceHostingView
+            ) == pairedResting,
+            "The sentence panel confirmed a word action while the word panel "
+                + "was on screen"
+        )
+
+        // With the word panel switched off there is no button anywhere, so the
+        // sentence panel has to answer.
+        let loneSentence = HoverCard(
+            word: word,
+            learningText: longLine,
+            sentencePanelStandsAlone: true
+        )
+        state.clearFeedback()
+        let loneResting = measuredSentenceHeight(
+            loneSentence,
+            state: state,
+            hostingView: sentenceHostingView
+        )
+        state.showFeedback(.markedKnown)
+        precondition(
+            measuredSentenceHeight(
+                loneSentence,
+                state: state,
+                hostingView: sentenceHostingView
+            ) > loneResting,
+            "The only panel on screen did not confirm the press"
+        )
+        state.clearFeedback()
 
         let initialAnimationID = state.knownAnimationID
         state.showFeedback(.markedKnown)

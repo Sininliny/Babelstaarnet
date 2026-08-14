@@ -139,12 +139,12 @@ struct SentenceBridgeBubbleView: View {
                 englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
                 knowledgeLevels: card.sentenceBridgeKnowledgeLevels,
                 focusTokenIndexes: card.sentenceFocusTokenIndexes,
-                knownAnimationTrigger: card.showsEnglishSupportInSentenceBridge
+                knownAnimationTrigger: card.sentencePanelStandsAlone
                     ? state.knownAnimationID
                     : 0
             )
 
-            if card.showsEnglishSupportInSentenceBridge,
+            if card.sentencePanelStandsAlone,
                card.wordKnowledgeLevel == 3,
                let wordEnglishMeaning = card.wordEnglishMeaning {
                 Text(LearnerDisplayText.clean(wordEnglishMeaning))
@@ -153,7 +153,7 @@ struct SentenceBridgeBubbleView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if card.showsEnglishSupportInSentenceBridge,
+            if card.sentencePanelStandsAlone,
                let englishSupport = card.englishSupport {
                 Text(LearnerDisplayText.clean(englishSupport))
                     .font(.system(size: 11, design: .rounded))
@@ -161,11 +161,16 @@ struct SentenceBridgeBubbleView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // No controls here — they live permanently in the word panel. The
-            // confirmation still does, because the shortcuts stay live even
-            // when the word panel is switched off and there is no button
-            // anywhere to answer back.
-            BridgeConfirmation(state: state)
+            // No controls here — they live permanently in the word panel, and
+            // Knew and Don't know are about the word, not the sentence. The
+            // confirmation appears here only when the word panel is switched
+            // off: the shortcuts stay live in that configuration and there is
+            // no button anywhere else to answer back. With both panels on it
+            // was saying "Marked known" under a sentence while the word panel
+            // was already confirming the same press.
+            if card.sentencePanelStandsAlone {
+                BridgeConfirmation(state: state)
+            }
         }
         .padding(12)
         .frame(
@@ -209,16 +214,20 @@ private struct BridgeFeedbackControls: View {
         // The narrow word bubble cannot fit four controls on one line, and a
         // button that wraps mid-label reads as a layout accident.
         InlineTokenLayout(spacing: 6, lineSpacing: 5) {
-            // No control ever changes width. Confirmation lands on the capsule
-            // of the control that was pressed, not in its label: swapping
-            // "1  Knew" for "Marked known" more than doubled that button and
-            // wrapped the row onto a second line, so acting on the bubble
-            // resized it. The Danish word's own lift and glow answers the same
-            // press, and restoring English is visible in the line itself.
+            // No control ever changes width. The confirmation replaces the
+            // shortcut key with a tick inside a slot that holds both at once,
+            // so the button is the same size whether or not it is confirming:
+            // swapping the whole label for "Marked known" more than doubled
+            // this button and wrapped the row onto a second line, so acting on
+            // the bubble resized it.
             Button {
                 state.onKnown()
             } label: {
-                Text("\(card.knownShortcutLabel)  Knew")
+                BridgeControlLabel(
+                    shortcut: card.knownShortcutLabel,
+                    title: "Knew",
+                    isConfirming: state.feedbackConfirmation == .markedKnown
+                )
             }
             .buttonStyle(
                 BridgeFeedbackButtonStyle(
@@ -229,7 +238,12 @@ private struct BridgeFeedbackControls: View {
             Button {
                 state.onDontKnow()
             } label: {
-                Text("\(card.dontKnowShortcutLabel)  Don’t know")
+                BridgeControlLabel(
+                    shortcut: card.dontKnowShortcutLabel,
+                    title: "Don’t know",
+                    isConfirming:
+                        state.feedbackConfirmation == .englishRestored
+                )
             }
             .buttonStyle(
                 BridgeFeedbackButtonStyle(
@@ -240,7 +254,10 @@ private struct BridgeFeedbackControls: View {
             Button {
                 state.onTogglePin()
             } label: {
-                Text("\(card.pinShortcutLabel)  Pin")
+                BridgeControlLabel(
+                    shortcut: card.pinShortcutLabel,
+                    title: "Pin"
+                )
             }
             .buttonStyle(BridgeFeedbackButtonStyle(isOn: state.isPinned))
             .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
@@ -253,7 +270,10 @@ private struct BridgeFeedbackControls: View {
             Button {
                 state.onShowAllEnglish()
             } label: {
-                Text("\(card.showAllEnglishShortcutLabel)  All ENG")
+                BridgeControlLabel(
+                    shortcut: card.showAllEnglishShortcutLabel,
+                    title: "All ENG"
+                )
             }
             .buttonStyle(BridgeFeedbackButtonStyle(isOn: card.showsAllEnglish))
             .help(
@@ -280,6 +300,32 @@ private struct BridgeFeedbackControls: View {
 /// be clicked. The hierarchical fills resolve against the material the bubble
 /// is actually drawn on rather than against an assumed background, which is
 /// what keeps the capsule visible over a dark page and a light one alike.
+/// A control's shortcut key and its name, with the key able to become a tick
+/// without the control changing size.
+///
+/// Both the key and the tick are always laid out, one of them invisible, so the
+/// slot they share is as wide as the wider of the two whatever the state is. A
+/// row of four of these in a 280-point panel has no room to absorb a control
+/// that grows when it is used.
+private struct BridgeControlLabel: View {
+    let shortcut: String
+    let title: String
+    var isConfirming = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ZStack {
+                Text(shortcut)
+                    .opacity(isConfirming ? 0 : 1)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .opacity(isConfirming ? 1 : 0)
+            }
+            Text(title)
+        }
+    }
+}
+
 private struct BridgeFeedbackButtonStyle: ButtonStyle {
     /// Set on a control that is currently switched on, so its state shows in
     /// the capsule rather than in a label whose width would change with it.

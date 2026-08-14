@@ -391,7 +391,7 @@ final class OverlayWindowController {
                 in: explanation.primaryText,
                 excluding: bridge?.englishTokenIndexes ?? []
             ),
-            showsEnglishSupportInSentenceBridge:
+            sentencePanelStandsAlone:
                 !bridgeConfiguration.showsWordBridge,
             showsAllEnglish: showsAllEnglish,
             speaksOnHover: autoSpeak,

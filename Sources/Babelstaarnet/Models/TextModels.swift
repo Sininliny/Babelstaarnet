@@ -95,7 +95,12 @@ struct HoverCard: Equatable, Sendable {
     let adaptiveEnglishTokenIndexes: [Int]
     let sentenceBridgeKnowledgeLevels: [Int: Int]
     let sentenceFocusTokenIndexes: [Int]
-    let showsEnglishSupportInSentenceBridge: Bool
+    /// Whether the sentence panel is the only panel on screen, because the
+    /// reader switched the word panel off. It decides what the sentence panel
+    /// has to carry on its own — the focused meaning, the English support, and
+    /// the confirmation that a shortcut did something — rather than naming any
+    /// one of them.
+    let sentencePanelStandsAlone: Bool
     let showsAllEnglish: Bool
     let speaksOnHover: Bool
     let knownShortcutLabel: String
@@ -116,7 +121,7 @@ struct HoverCard: Equatable, Sendable {
         adaptiveEnglishTokenIndexes: [Int] = [],
         sentenceBridgeKnowledgeLevels: [Int: Int] = [:],
         sentenceFocusTokenIndexes: [Int] = [],
-        showsEnglishSupportInSentenceBridge: Bool = false,
+        sentencePanelStandsAlone: Bool = false,
         showsAllEnglish: Bool = false,
         speaksOnHover: Bool = false,
         knownShortcutLabel: String = "1",
@@ -137,8 +142,8 @@ struct HoverCard: Equatable, Sendable {
         self.sentenceBridgeKnowledgeLevels =
             sentenceBridgeKnowledgeLevels
         self.sentenceFocusTokenIndexes = sentenceFocusTokenIndexes
-        self.showsEnglishSupportInSentenceBridge =
-            showsEnglishSupportInSentenceBridge
+        self.sentencePanelStandsAlone =
+            sentencePanelStandsAlone
         self.showsAllEnglish = showsAllEnglish
         self.speaksOnHover = speaksOnHover
         self.knownShortcutLabel = knownShortcutLabel
