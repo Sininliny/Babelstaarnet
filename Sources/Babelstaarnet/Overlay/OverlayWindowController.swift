@@ -26,10 +26,6 @@ final class OverlayWindowController {
     /// rather than a receipt for the keypress that has since scrolled away.
     private var rememberedActions:
         [String: (action: BridgeFeedbackConfirmation, at: Date)] = [:]
-    /// Sticky for the whole session: asking for full English is a way of
-    /// reading, not a question about one word, and re-pressing it on every
-    /// hover would be exactly the kind of nagging the bridge avoids.
-    private var showsAllEnglish = false
     private var pinnedByUser = false
     private var temporarilyHeldForIdle = false
     private var holdModifierPressed = false
@@ -74,9 +70,6 @@ final class OverlayWindowController {
         }
         bubbleState.onTogglePin = { [weak self] in
             self?.toggleBubblePin()
-        }
-        bubbleState.onShowAllEnglish = { [weak self] in
-            self?.toggleAllEnglish()
         }
     }
 
@@ -149,7 +142,6 @@ final class OverlayWindowController {
         overlays.removeAll()
         dismissBubble()
         expandedEnglishWords.removeAll()
-        showsAllEnglish = false
         mouseTimer?.invalidate()
         mouseTimer = nil
         hoverSpeechTimer?.invalidate()
@@ -337,15 +329,8 @@ final class OverlayWindowController {
             knowledgeLevelCache[normalized] = level
             return level
         }
-        // Asking for all English is a direct request for the translation, so it
-        // overrides the learner profile for display without touching it. The
-        // profile keeps its real levels; only what is drawn changes.
-        let stateForWord: (String) -> LanguageTransferState = {
-            [showsAllEnglish] candidate in
-            guard !showsAllEnglish else {
-                return .unknown
-            }
-            return LanguageTransferState.forKnowledgeLevel(
+        let stateForWord: (String) -> LanguageTransferState = { candidate in
+            LanguageTransferState.forKnowledgeLevel(
                 knowledgeLevelForWord(candidate)
             )
         }
@@ -363,7 +348,7 @@ final class OverlayWindowController {
             .directEnglishMeaning(
                 sourceWord: word.sourceText,
                 englishTranslation: word.translatedText,
-                knowledgeLevel: showsAllEnglish ? 0 : wordKnowledgeLevel
+                knowledgeLevel: wordKnowledgeLevel
             )
         let explanation = adaptiveExplanationService.explanation(
             bridgeText: bridge?.text ?? fallbackBridge(for: word),
@@ -405,13 +390,10 @@ final class OverlayWindowController {
             ),
             sentencePanelStandsAlone:
                 !bridgeConfiguration.showsWordBridge,
-            showsAllEnglish: showsAllEnglish,
             speaksOnHover: autoSpeak,
             knownShortcutLabel: hotKeyConfiguration.known.displayText,
             dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
-            pinShortcutLabel: hotKeyConfiguration.togglePin.displayText,
-            showAllEnglishShortcutLabel:
-                hotKeyConfiguration.showAllEnglish.displayText
+            pinShortcutLabel: hotKeyConfiguration.togglePin.displayText
         )
     }
 
@@ -639,11 +621,6 @@ final class OverlayWindowController {
         bubbleState.showFeedback(.englishRestored)
     }
 
-    private func toggleAllEnglish() {
-        showsAllEnglish.toggle()
-        refreshCurrentCard(preservePosition: true)
-    }
-
     private func markCurrentWordKnown() {
         guard let currentWord else {
             return
@@ -845,8 +822,6 @@ final class OverlayWindowController {
             markCurrentWordUnknown()
         case .togglePin:
             toggleBubblePin()
-        case .showAllEnglish:
-            toggleAllEnglish()
         }
     }
 

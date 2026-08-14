@@ -10,10 +10,18 @@ The bubble answers before it teaches:
 - **The meaning leads.** It is the first and largest thing in the bubble, with
   no heading to read past. The Danish word sits underneath, so you can confirm
   the pointer landed where you meant.
-- **You can always get everything.** Press `4` with a bubble open and every word
-  on the line is translated, regardless of what the app thinks you know. Press
-  it again to go back. It is a reading mode, so it stays on until you turn it
-  off.
+- **Any word you point at is answered in full.** Whatever the app believes you
+  know, the word under the pointer gets its meaning — being quietly tested on a
+  word is never allowed to stand between you and reading. If the answer was not
+  enough, `2` says so and brings back more English for that word.
+
+  There used to be a fourth control that translated the whole line into English
+  regardless of the profile. It is gone. A reader who wants the English of a
+  whole line is asking for a translation rather than a bridge, which is not what
+  this app is for, and nothing in the app read the fact that it had been pressed
+  — a signal that strong about what someone cannot read should teach the profile
+  something, and it taught it nothing. It would be worth having back on the day
+  it does.
 - **Nothing is asked of you.** The **Knew** / **Don’t know** controls sit in a
   fixed row above the answer, behind a rule, so the meaning is still the first
   thing you read inside the bubble. They are a permanent tool rather than a
@@ -55,8 +63,8 @@ The two panels serve different reading problems and can be used separately:
   familiar, growing to five when the text is genuinely difficult.
 
 Both use one frozen OCR snapshot, so the answer does not keep changing after the
-pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, and
-`4` shows all English.
+pointer stops. `1` is **Knew**, `2` is **Don’t know**, and `3` pins the
+bubbles.
 
 ## What works
 
@@ -108,9 +116,6 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
 - Meaning-first bubbles with no mode selection: the English answer is the
   headline, the Danish word sits under it, and familiar words simply need less
   English than new ones
-- A full-English reveal on `4`, which translates every word on the line no
-  matter what the profile believes, and stays on until it is turned off. The
-  profile is only overridden for display; the reveal records nothing
 - A private adaptive learning profile with a hidden knowledge level from 0 to
   5. One **Knew** action removes unnecessary English for the focused word; one
   **Don’t know** action immediately restores full help. Spaced encounters in
@@ -158,8 +163,8 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   by the construction around them: asked on its own, `er` came back as `no`. A
   line reading "Det er en betingelse for, at CPR-kontoret kan tildele" spent two
   of three anchors on `er` and `en`. Pointing at one of these words is still a
-  question about it and is answered in full, as is asking for all English; the
-  rule only withholds anchors from the rest of the line
+  question about it and is answered in full; the rule only withholds anchors
+  from the rest of the line
 - Two coordinated bubbles with no headings on either: a compact word panel above
   the hovered word and a wider sentence panel below it. The word panel leads
   with the English meaning, keeps the Danish word beneath it, and adds a concise
@@ -168,7 +173,7 @@ pointer stops. `1` is **Knew**, `2` is **Don’t know**, `3` pins the bubbles, a
   Settings, and all content wraps instead of being shortened. Both use one
   frozen OCR snapshot, so background rescans cannot change them while the
   pointer is still. `1` marks a word known, `2` marks it unknown and shows extra
-  English, `3` pins or unpins the visible bubbles, and `4` toggles full English.
+  English, and `3` pins or unpins the visible bubbles.
   Holding Option keeps them open while the pointer moves to the controls. After
   0.75 seconds without input, they are held temporarily; any pointer or keyboard
   input releases that temporary hold. Every shortcut and the hold modifier can

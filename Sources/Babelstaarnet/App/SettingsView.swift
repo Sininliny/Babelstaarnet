@@ -27,7 +27,7 @@ struct SettingsView: View {
                 )
 
                 Text(
-                    "Hovering a Danish word shows what it means. Use either panel on its own or both together; turning both off keeps Danish speech on hover. Press \(model.showAllEnglishShortcutLabel) with a bubble open to translate every word on the line, and again to go back."
+                    "Hovering a Danish word shows what it means. Use either panel on its own or both together; turning both off keeps Danish speech on hover."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

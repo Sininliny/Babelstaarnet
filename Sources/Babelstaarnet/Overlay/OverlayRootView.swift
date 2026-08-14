@@ -211,8 +211,8 @@ private struct BridgeFeedbackControls: View {
     let card: HoverCard
 
     var body: some View {
-        // The narrow word bubble cannot fit four controls on one line, and a
-        // button that wraps mid-label reads as a layout accident.
+        // The narrow word bubble cannot always fit the controls on one line,
+        // and a button that wraps mid-label reads as a layout accident.
         InlineTokenLayout(spacing: 6, lineSpacing: 5) {
             // No control ever changes width. The confirmation replaces the
             // shortcut key with a tick inside a slot that holds both at once,
@@ -261,26 +261,6 @@ private struct BridgeFeedbackControls: View {
             }
             .buttonStyle(BridgeFeedbackButtonStyle(isOn: state.isPinned))
             .help(state.isPinned ? "Let the bubble follow the pointer" : "Keep this bubble open")
-
-            // The label stays put and the capsule carries the state instead.
-            // Swapping "All English" for "Less English" made the button wider
-            // exactly when it was pressed, which was enough to wrap the row
-            // onto a second line and jump the bubble 24 points taller on a
-            // mode toggle.
-            Button {
-                state.onShowAllEnglish()
-            } label: {
-                BridgeControlLabel(
-                    shortcut: card.showAllEnglishShortcutLabel,
-                    title: "All ENG"
-                )
-            }
-            .buttonStyle(BridgeFeedbackButtonStyle(isOn: card.showsAllEnglish))
-            .help(
-                card.showsAllEnglish
-                    ? "Return to adaptive support"
-                    : "Translate every word on this line"
-            )
         }
         .buttonStyle(BridgeFeedbackButtonStyle())
         .font(.system(size: 10, weight: .regular, design: .rounded))

@@ -63,7 +63,6 @@ meaning appears above the pointer, and the whole line below it.
 | `1` | Mark the word **known** |
 | `2` | Mark it **unknown** and show more English |
 | `3` | Pin the bubbles |
-| `4` | Translate the whole line into English |
 
 You never have to press any of them. Hold Option to keep a bubble open while you
 move the pointer to it; every shortcut is editable under **Settings →

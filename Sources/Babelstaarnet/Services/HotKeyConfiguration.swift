@@ -141,23 +141,20 @@ struct AppShortcut: Codable, Equatable, Hashable, Sendable {
     ]
 }
 
-/// Declared in the order the default shortcuts run, 1 through 4, because that
-/// order is what Settings lists and what the menu-bar popover prints. Showing
-/// all English came first and carried `4`, so every surface read 4, 1, 2, 3.
-/// The raw values are the case names, so persisted shortcuts are unaffected.
+/// Declared in the order the default shortcuts run, 1 through 3, because that
+/// order is what Settings lists and what the menu-bar popover prints. The raw
+/// values are the case names, so persisted shortcuts are unaffected.
 enum ConfigurableHotKeyAction: String, CaseIterable, Identifiable, Sendable {
     case toggleLearning
     case known
     case dontKnow
     case togglePin
-    case showAllEnglish
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .toggleLearning: "Toggle hover translation"
-        case .showAllEnglish: "Show all English"
         case .known: "Knew"
         case .dontKnow: "Don’t know"
         case .togglePin: "Pin or unpin"
@@ -201,7 +198,6 @@ enum BubbleHoldModifier: String, CaseIterable, Codable, Identifiable, Sendable {
 
 struct HotKeyConfiguration: Codable, Equatable, Sendable {
     var toggleLearning: AppShortcut
-    var showAllEnglish: AppShortcut
     var known: AppShortcut
     var dontKnow: AppShortcut
     var togglePin: AppShortcut
@@ -211,10 +207,6 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
         toggleLearning: AppShortcut(
             keyCode: UInt32(kVK_ANSI_Z),
             modifiers: [.function]
-        ),
-        showAllEnglish: AppShortcut(
-            keyCode: UInt32(kVK_ANSI_4),
-            modifiers: []
         ),
         known: AppShortcut(keyCode: UInt32(kVK_ANSI_1), modifiers: []),
         dontKnow: AppShortcut(keyCode: UInt32(kVK_ANSI_2), modifiers: []),
@@ -236,7 +228,6 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
     func shortcut(for action: ConfigurableHotKeyAction) -> AppShortcut {
         switch action {
         case .toggleLearning: toggleLearning
-        case .showAllEnglish: showAllEnglish
         case .known: known
         case .dontKnow: dontKnow
         case .togglePin: togglePin
@@ -249,7 +240,6 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
     ) {
         switch action {
         case .toggleLearning: toggleLearning = shortcut
-        case .showAllEnglish: showAllEnglish = shortcut
         case .known: known = shortcut
         case .dontKnow: dontKnow = shortcut
         case .togglePin: togglePin = shortcut
@@ -268,19 +258,16 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
 
 // Declared in an extension so the memberwise initializer above survives.
 extension HotKeyConfiguration {
+    /// Written by hand so that a configuration stored by an older version still
+    /// loads. It will carry a `showAllEnglish` shortcut, which no longer exists;
+    /// a keyed container ignores what it is not asked for, so the key is simply
+    /// left behind rather than resetting every shortcut the learner had chosen.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         toggleLearning = try container.decode(
             AppShortcut.self,
             forKey: .toggleLearning
         )
-        // Added after the first release. A stored configuration written before
-        // it existed is still valid; dropping the whole thing would silently
-        // reset every shortcut the learner had already chosen.
-        showAllEnglish = try container.decodeIfPresent(
-            AppShortcut.self,
-            forKey: .showAllEnglish
-        ) ?? Self.defaults.showAllEnglish
         known = try container.decode(AppShortcut.self, forKey: .known)
         dontKnow = try container.decode(AppShortcut.self, forKey: .dontKnow)
         togglePin = try container.decode(AppShortcut.self, forKey: .togglePin)

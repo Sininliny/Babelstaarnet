@@ -15,7 +15,6 @@ final class OverlayState: ObservableObject {
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
     var onTogglePin: () -> Void = {}
-    var onShowAllEnglish: () -> Void = {}
 
     /// Records an action the reader has just taken. It stays until the word
     /// under the pointer changes; nothing clears it on a timer, because it

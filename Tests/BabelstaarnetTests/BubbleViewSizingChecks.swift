@@ -134,24 +134,6 @@ enum BubbleViewSizingChecks {
                 + "hover and a settled one"
         )
 
-        // Requesting all English keeps the bubble in the same shape; it changes
-        // what is glossed, not how much chrome the learner has to read past.
-        let allEnglishCard = HoverCard(
-            word: word,
-            wordEnglishMeaning: "student accommodation",
-            wordBridgeText: "En bolig til students.",
-            wordBridgeEnglishTokenIndexes: [3],
-            learningText: "Noget som hører til Earth.",
-            adaptiveEnglishTokenIndexes: [4],
-            showsAllEnglish: true
-        )
-        let allEnglishHeight = measuredWordHeight(
-            allEnglishCard,
-            state: state,
-            hostingView: wordHostingView
-        )
-        precondition(allEnglishHeight == wordHeight)
-
         precondition(wordHeight >= 42)
         precondition(wordHeight < 140)
         precondition(directMeaningOnlyHeight < wordHeight)

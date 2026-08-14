@@ -5,7 +5,6 @@ enum BubbleHotKeyAction: UInt32, CaseIterable {
     case known = 1
     case dontKnow = 2
     case togglePin = 3
-    case showAllEnglish = 4
 
     var configurableAction: ConfigurableHotKeyAction {
         switch self {
@@ -15,8 +14,6 @@ enum BubbleHotKeyAction: UInt32, CaseIterable {
             .dontKnow
         case .togglePin:
             .togglePin
-        case .showAllEnglish:
-            .showAllEnglish
         }
     }
 }
