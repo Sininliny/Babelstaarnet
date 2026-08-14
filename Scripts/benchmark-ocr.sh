@@ -16,19 +16,17 @@ baseline="$output_dir/baseline.json"
 
 mkdir -p "$output_dir"
 
+cd "$project_dir"
+swift build -c release -Xswiftc -enable-testing
+bin_dir="$(swift build -c release --show-bin-path)"
+module_objects=("$bin_dir"/*.o(N))
+
 swiftc \
     -O \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
+    -I "$bin_dir" \
+    "${module_objects[@]}" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatFixtures.swift" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatBenchmark.swift" \
     -o "$output_dir/OCRColorFormatBenchmark"

@@ -4,254 +4,32 @@ set -euo pipefail
 
 project_dir="$(cd "$(dirname "$0")/.." && pwd)"
 output_dir="$project_dir/.build/layout-checks"
+check_dir="$project_dir/Tests/BabelstaarnetTests"
 
 mkdir -p "$output_dir"
+cd "$project_dir"
 
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Overlay/OverlayLayout.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/OverlayLayoutTests.swift" \
-    -o "$output_dir/OverlayLayoutChecks"
+# Each check is its own small binary that fails loudly on a precondition, and
+# links every module rather than a hand-listed set of source files. The list
+# used to be maintained per check, which meant every file that moved between
+# modules broke a script nobody was editing at the time.
+swift build
+bin_dir="$(swift build --show-bin-path)"
+module_objects=("$bin_dir"/*.o(N))
 
-"$output_dir/OverlayLayoutChecks"
+if (( ${#module_objects} == 0 )); then
+    echo "No built modules found in $bin_dir"
+    exit 1
+fi
 
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Overlay/BubbleInteractionPolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/BubbleInteractionChecks.swift" \
-    -o "$output_dir/BubbleInteractionChecks"
-
-"$output_dir/BubbleInteractionChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/App/BabelstaarnetIcon.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/BabelstaarnetIconChecks.swift" \
-    -framework AppKit \
-    -o "$output_dir/BabelstaarnetIconChecks"
-
-"$output_dir/BabelstaarnetIconChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Overlay/OverlayState.swift" \
-    "$project_dir/Sources/Babelstaarnet/Overlay/OverlayRootView.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/BubbleViewSizingChecks.swift" \
-    -framework AppKit \
-    -framework SwiftUI \
-    -o "$output_dir/BubbleViewSizingChecks"
-
-"$output_dir/BubbleViewSizingChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Tests/BabelstaarnetTests/HotKeyRegistrationCheck.swift" \
-    -framework Carbon \
-    -o "$output_dir/HotKeyRegistrationCheck"
-
-"$output_dir/HotKeyRegistrationCheck"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/HotKeyConfiguration.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/HotKeyConfigurationChecks.swift" \
-    -framework AppKit \
-    -framework Carbon \
-    -o "$output_dir/HotKeyConfigurationChecks"
-
-"$output_dir/HotKeyConfigurationChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/BoundedCacheChecks.swift" \
-    -o "$output_dir/BoundedCacheChecks"
-
-"$output_dir/BoundedCacheChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/DictionaryService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/DictionaryServiceChecks.swift" \
-    -framework CoreServices \
-    -o "$output_dir/DictionaryServiceChecks"
-
-"$output_dir/DictionaryServiceChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/LearnerProfileStore.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveExplanationService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/AdaptiveLearningChecks.swift" \
-    -o "$output_dir/AdaptiveLearningChecks"
-
-"$output_dir/AdaptiveLearningChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/DanishSentenceBoundaryChecks.swift" \
-    -o "$output_dir/DanishSentenceBoundaryChecks"
-
-"$output_dir/DanishSentenceBoundaryChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/SentenceAssemblyPolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/SentenceAssemblyChecks.swift" \
-    -o "$output_dir/SentenceAssemblyChecks"
-
-"$output_dir/SentenceAssemblyChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveSentenceBridgeService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/AdaptiveSentenceBridgeChecks.swift" \
-    -o "$output_dir/AdaptiveSentenceBridgeChecks"
-
-"$output_dir/AdaptiveSentenceBridgeChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/BeginnerDanishService.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveSentenceBridgeService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/AdaptiveWordBridgeChecks.swift" \
-    -o "$output_dir/AdaptiveWordBridgeChecks"
-
-"$output_dir/AdaptiveWordBridgeChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/TranslationQualityService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/TranslationQualityChecks.swift" \
-    -o "$output_dir/TranslationQualityChecks"
-
-"$output_dir/TranslationQualityChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Overlay/HoverHitTesting.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/HoverHitTestingChecks.swift" \
-    -o "$output_dir/HoverHitTestingChecks"
-
-"$output_dir/HoverHitTestingChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Overlay/HoverHitTesting.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/ScanSchedulingPolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/ScanSchedulingPolicyChecks.swift" \
-    -o "$output_dir/ScanSchedulingPolicyChecks"
-
-"$output_dir/ScanSchedulingPolicyChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/OCRRoutingPolicyChecks.swift" \
-    -o "$output_dir/OCRRoutingPolicyChecks"
-
-"$output_dir/OCRRoutingPolicyChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/OCRLanguagePolicyChecks.swift" \
-    -o "$output_dir/OCRLanguagePolicyChecks"
-
-"$output_dir/OCRLanguagePolicyChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/OCRTextQualityPolicyChecks.swift" \
-    -o "$output_dir/OCRTextQualityPolicyChecks"
-
-"$output_dir/OCRTextQualityPolicyChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/OCRImagePreparationChecks.swift" \
-    -framework AppKit \
-    -o "$output_dir/OCRImagePreparationChecks"
-
-"$output_dir/OCRImagePreparationChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/DanishSentenceBoundary.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/SentenceAssemblyPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/FocusedRegionSelectionPolicy.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/FocusedRegionSelectionChecks.swift" \
-    -o "$output_dir/FocusedRegionSelectionChecks"
-
-"$output_dir/FocusedRegionSelectionChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/AdaptiveCapturePlanner.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/AdaptiveCapturePlannerChecks.swift" \
-    -o "$output_dir/AdaptiveCapturePlannerChecks"
-
-"$output_dir/AdaptiveCapturePlannerChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Services/SystemIdleMonitor.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/PowerSavingPolicyChecks.swift" \
-    -o "$output_dir/PowerSavingPolicyChecks"
-
-"$output_dir/PowerSavingPolicyChecks"
-
-swiftc \
-    -parse-as-library \
-    -module-cache-path "$output_dir/module-cache" \
-    "$project_dir/Sources/Babelstaarnet/Models/TextModels.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/BoundedCache.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRImagePreparation.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRLanguagePolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRRoutingPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRTextQualityPolicy.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/InstalledEngineLocations.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/TesseractOCRService.swift" \
-    "$project_dir/Sources/Babelstaarnet/Services/OCRService.swift" \
-    "$project_dir/Tests/BabelstaarnetTests/OCRFocusWindowChecks.swift" \
-    -o "$output_dir/OCRFocusWindowChecks"
-
-"$output_dir/OCRFocusWindowChecks"
+for check in "$check_dir"/*.swift; do
+    name="${check:t:r}"
+    swiftc \
+        -parse-as-library \
+        -module-cache-path "$output_dir/module-cache" \
+        -I "$bin_dir" \
+        "${module_objects[@]}" \
+        "$check" \
+        -o "$output_dir/$name"
+    "$output_dir/$name"
+done

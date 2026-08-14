@@ -1,4 +1,11 @@
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 @main
 enum AdaptiveSentenceBridgeChecks {
@@ -12,7 +19,7 @@ enum AdaptiveSentenceBridgeChecks {
         // replaced, because substituting only some of them leaves the rest
         // stranded in a line that is no longer Danish either.
 
-        let service = AdaptiveSentenceBridgeService()
+        let service = AdaptiveSentenceBridgeService(language: .danish)
         let sentence = "Hun tøvede, før hun svarede."
 
         let unknown = service.bridge(

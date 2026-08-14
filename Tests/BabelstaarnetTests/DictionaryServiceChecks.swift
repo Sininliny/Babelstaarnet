@@ -1,9 +1,16 @@
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 @main
 enum DictionaryServiceChecks {
     static func main() {
-        let adaptive = DictionaryService().adaptiveEnglishGloss(
+        let adaptive = DictionaryService(target: .english).adaptiveGloss(
             for: "natural resources",
             sourceWord: "naturressourcer"
         )

@@ -1,6 +1,13 @@
 import AppKit
 import CoreGraphics
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 /// Measures OCR accuracy across colour and format variations.
 ///
@@ -33,7 +40,7 @@ struct OCRColorFormatBenchmark {
         // load. Pay it here, as the app does at activation, so the numbers
         // below describe recognition rather than start-up.
         let warmUpStartedAt = CFAbsoluteTimeGetCurrent()
-        await OCRService().warmUp()
+        await OCRService(language: .danish).warmUp()
         print(
             "warm-up \(Int((CFAbsoluteTimeGetCurrent() - warmUpStartedAt) * 1_000)) ms\n"
         )
@@ -68,9 +75,9 @@ struct OCRColorFormatBenchmark {
     ) async throws -> Measurement {
         // A fresh service per scenario keeps the bounded result cache from
         // masking a slow pass behind an earlier scenario's hit.
-        let service = OCRService()
+        let service = OCRService(language: .danish)
         let startedAt = CFAbsoluteTimeGetCurrent()
-        let result = try await service.recognizeDanishText(
+        let result = try await service.recognizeText(
             in: scenario.capture,
             focusPoint: scenario.focusPoint
         )

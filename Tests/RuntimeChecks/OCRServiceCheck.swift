@@ -1,6 +1,13 @@
 import AppKit
 import CoreGraphics
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 enum OCRServiceCheckError: Error {
     case missingFixture
@@ -38,7 +45,7 @@ struct OCRServiceCheck {
             frame: captureFrame,
             screenFrame: screenFrame
         )
-        let service = OCRService()
+        let service = OCRService(language: .danish)
         // The app warms the recognizer at activation; the first accurate
         // request in a process otherwise pays a one-time model load that has
         // been observed to take tens of seconds.
@@ -46,7 +53,7 @@ struct OCRServiceCheck {
 
         let focusPoint = CGPoint(x: -1_190, y: 420)
         let focusedStartedAt = CFAbsoluteTimeGetCurrent()
-        let focusedResult = try await service.recognizeDanishText(
+        let focusedResult = try await service.recognizeText(
             in: capture,
             focusPoint: focusPoint
         )
@@ -69,7 +76,7 @@ struct OCRServiceCheck {
         // A dropped ring or slash is not a smaller error; it changes which word
         // gets translated, so the focused pass has to preserve them exactly.
         let diacriticFocus = CGPoint(x: -1_100, y: 552)
-        let diacriticResult = try await OCRService().recognizeDanishText(
+        let diacriticResult = try await OCRService(language: .danish).recognizeText(
             in: capture,
             focusPoint: diacriticFocus
         )
@@ -83,7 +90,7 @@ struct OCRServiceCheck {
         }
 
         let startedAt = CFAbsoluteTimeGetCurrent()
-        let result = try await service.recognizeDanishText(in: capture)
+        let result = try await service.recognizeText(in: capture)
         let elapsed = CFAbsoluteTimeGetCurrent() - startedAt
         let source = result.regions.map(\.sourceText).joined(separator: " ")
         let words = result.regions.flatMap(\.words)
@@ -118,9 +125,9 @@ struct OCRServiceCheck {
         }) else {
             preconditionFailure("Tiny-text fixture word was not recognized.")
         }
-        let tinyService = OCRService()
+        let tinyService = OCRService(language: .danish)
         let tinyStartedAt = CFAbsoluteTimeGetCurrent()
-        let tinyResult = try await tinyService.recognizeDanishText(
+        let tinyResult = try await tinyService.recognizeText(
             in: capture,
             focusPoint: CGPoint(x: tinyWord.frame.midX, y: tinyWord.frame.midY)
         )
@@ -140,7 +147,7 @@ struct OCRServiceCheck {
         )
 
         let cacheStartedAt = CFAbsoluteTimeGetCurrent()
-        let cached = try await service.recognizeDanishText(in: capture)
+        let cached = try await service.recognizeText(in: capture)
         let cacheElapsed = CFAbsoluteTimeGetCurrent() - cacheStartedAt
         precondition(cached.regions == result.regions)
         precondition(
@@ -150,7 +157,7 @@ struct OCRServiceCheck {
 
         let blueFocusPoint = CGPoint(x: -1_180, y: 478)
         let blueStartedAt = CFAbsoluteTimeGetCurrent()
-        let blueResult = try await service.recognizeDanishText(
+        let blueResult = try await service.recognizeText(
             in: capture,
             focusPoint: blueFocusPoint
         )
@@ -172,9 +179,9 @@ struct OCRServiceCheck {
             "Blue focused OCR exceeded 2.3 seconds: \(blueElapsed)"
         )
 
-        let cancellationService = OCRService()
+        let cancellationService = OCRService(language: .danish)
         let cancellationTask = Task {
-            try await cancellationService.recognizeDanishText(in: capture)
+            try await cancellationService.recognizeText(in: capture)
         }
         try await Task.sleep(for: .milliseconds(50))
         let cancellationStartedAt = CFAbsoluteTimeGetCurrent()

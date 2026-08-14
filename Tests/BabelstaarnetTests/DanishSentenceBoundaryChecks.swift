@@ -1,57 +1,64 @@
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 @main
 enum DanishSentenceBoundaryChecks {
     static func main() {
         // A line that runs to a stop, and one that only wrapped.
         precondition(
-            DanishSentenceBoundary.endsSentence(
+            SourceLanguage.danish.sentenceBoundary.endsSentence(
                 "ledelse og lige adgang til mobilitetsmidler."
             )
         )
         precondition(
-            !DanishSentenceBoundary.endsSentence(
+            !SourceLanguage.danish.sentenceBoundary.endsSentence(
                 "Det kunne fx være oplysningskampagner, støtte til"
             )
         )
         precondition(
-            DanishSentenceBoundary.endsSentence("Hvem tøvede?")
+            SourceLanguage.danish.sentenceBoundary.endsSentence("Hvem tøvede?")
         )
         precondition(
-            DanishSentenceBoundary.endsSentence("Han sagde “nej.”")
+            SourceLanguage.danish.sentenceBoundary.endsSentence("Han sagde “nej.”")
         )
 
         // Danish writes ordinals and dates with a period, and the sentence
         // carries on straight through them.
         precondition(
-            !DanishSentenceBoundary.endsSentence(
+            !SourceLanguage.danish.sentenceBoundary.endsSentence(
                 "Der er ansøgningsfrist den 15."
             )
         )
         precondition(
-            DanishSentenceBoundary.sentenceRanges(
+            SourceLanguage.danish.sentenceBoundary.sentenceRanges(
                 in: "Der er ansøgningsfrist den 15. september 2026."
             ).count == 1
         )
         precondition(
-            DanishSentenceBoundary.sentenceRanges(
+            SourceLanguage.danish.sentenceBoundary.sentenceRanges(
                 in: "Du kan høre mere på et online infomøde 11. september kl. 13."
             ).count == 1
         )
         precondition(
-            DanishSentenceBoundary.sentenceRanges(
+            SourceLanguage.danish.sentenceBoundary.sentenceRanges(
                 in: "Emnerne kan bl.a. være ligestilling. Andre emner er også"
                     + " velkomne."
             ).count == 2
         )
         precondition(
-            DanishSentenceBoundary.sentenceRanges(
+            SourceLanguage.danish.sentenceBoundary.sentenceRanges(
                 in: "Se mere på www.au.dk. Fristen er fast."
             ).count == 2
         )
 
         let two = "Projektet er slut. Nye emner er velkomne."
-        let ranges = DanishSentenceBoundary.sentenceRanges(in: two)
+        let ranges = SourceLanguage.danish.sentenceBoundary.sentenceRanges(in: two)
         precondition(ranges.count == 2, "\(ranges.count)")
         precondition(
             (two as NSString).substring(with: ranges[0])
@@ -67,7 +74,7 @@ enum DanishSentenceBoundaryChecks {
         // decides what the pointed-at word is part of.
         precondition(
             (two as NSString).substring(
-                with: DanishSentenceBoundary.sentenceRange(
+                with: SourceLanguage.danish.sentenceBoundary.sentenceRange(
                     in: two,
                     containing: 22
                 )
@@ -75,7 +82,7 @@ enum DanishSentenceBoundaryChecks {
         )
         precondition(
             (two as NSString).substring(
-                with: DanishSentenceBoundary.sentenceRange(
+                with: SourceLanguage.danish.sentenceBoundary.sentenceRange(
                     in: two,
                     containing: 4
                 )
@@ -86,7 +93,7 @@ enum DanishSentenceBoundaryChecks {
         let single = "tilgængelighed i digitale læringsmiljøer, inkluderende"
         precondition(
             (single as NSString).substring(
-                with: DanishSentenceBoundary.sentenceRange(
+                with: SourceLanguage.danish.sentenceBoundary.sentenceRange(
                     in: single,
                     containing: 3
                 )
@@ -95,20 +102,20 @@ enum DanishSentenceBoundaryChecks {
 
         // A stop inside the line is what tells a line walk to stop walking.
         precondition(
-            DanishSentenceBoundary.stopsBeforeEnd(
+            SourceLanguage.danish.sentenceBoundary.stopsBeforeEnd(
                 "Projektet er slut. Nye emner"
             )
         )
         precondition(
-            !DanishSentenceBoundary.stopsBeforeEnd("Projektet er slut.")
+            !SourceLanguage.danish.sentenceBoundary.stopsBeforeEnd("Projektet er slut.")
         )
         precondition(
-            !DanishSentenceBoundary.stopsBeforeEnd("den 15. september 2026")
+            !SourceLanguage.danish.sentenceBoundary.stopsBeforeEnd("den 15. september 2026")
         )
 
-        precondition(DanishSentenceBoundary.stopLocations(in: "").isEmpty)
+        precondition(SourceLanguage.danish.sentenceBoundary.stopLocations(in: "").isEmpty)
         precondition(
-            DanishSentenceBoundary.sentenceRanges(in: "").isEmpty
+            SourceLanguage.danish.sentenceBoundary.sentenceRanges(in: "").isEmpty
         )
 
         print("Danish sentence boundary checks passed")

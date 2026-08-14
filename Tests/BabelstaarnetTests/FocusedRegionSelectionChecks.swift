@@ -1,5 +1,12 @@
 import CoreGraphics
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 @main
 enum FocusedRegionSelectionChecks {
@@ -18,13 +25,13 @@ enum FocusedRegionSelectionChecks {
             screen: screen
         )
 
-        let focused = FocusedRegionSelectionPolicy.foregroundRegions(
+        let focused = FocusedRegionSelectionPolicy(language: .danish).foregroundRegions(
             from: [first, second],
             at: CGPoint(x: 110, y: 313)
         )
         precondition(focused == [first])
         precondition(
-            FocusedRegionSelectionPolicy.focusedSourceKeys(
+            FocusedRegionSelectionPolicy(language: .danish).focusedSourceKeys(
                 in: [first, second],
                 at: CGPoint(x: 110, y: 313)
             ) == ["dansk"]
@@ -46,19 +53,19 @@ enum FocusedRegionSelectionChecks {
             screen: screen
         )
         precondition(
-            FocusedRegionSelectionPolicy.foregroundRegions(
+            FocusedRegionSelectionPolicy(language: .danish).foregroundRegions(
                 from: [opening, continuation],
                 at: CGPoint(x: 110, y: 313)
             ) == [opening, continuation]
         )
 
-        let unfocused = FocusedRegionSelectionPolicy.foregroundRegions(
+        let unfocused = FocusedRegionSelectionPolicy(language: .danish).foregroundRegions(
             from: [first, second],
             at: CGPoint(x: 500, y: 500)
         )
         precondition(unfocused == [first, second])
         precondition(
-            FocusedRegionSelectionPolicy.focusedSourceKeys(
+            FocusedRegionSelectionPolicy(language: .danish).focusedSourceKeys(
                 in: [first, second],
                 at: CGPoint(x: 500, y: 500)
             ).isEmpty

@@ -1,10 +1,17 @@
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 @main
 enum AdaptiveWordBridgeChecks {
     static func main() {
-        let danishService = BeginnerDanishService()
-        let bridgeService = AdaptiveSentenceBridgeService()
+        let danishService = BeginnerGlossService(language: .danish)
+        let bridgeService = AdaptiveSentenceBridgeService(language: .danish)
         precondition(danishService.clean(explanation: "Betyder.").isEmpty)
         precondition(danishService.clean(explanation: "Det betyder.").isEmpty)
         precondition(

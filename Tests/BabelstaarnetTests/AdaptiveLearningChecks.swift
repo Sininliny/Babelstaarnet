@@ -1,4 +1,11 @@
 import Foundation
+@testable import BabelCore
+@testable import BabelOCR
+@testable import BabelTranslate
+@testable import BabelLexicon
+@testable import BabelSpeech
+@testable import LanguageDanish
+@testable import BabelstaarnetKit
 
 @main
 enum AdaptiveLearningChecks {
@@ -13,13 +20,17 @@ enum AdaptiveLearningChecks {
 
         let key = "test.words"
         let store = LearnerProfileStore(
+            language: .danish,
             defaults: defaults,
             storageKey: key
         )
         let now = Date(timeIntervalSince1970: 1_700_000_000)
 
         precondition(
-            LearnerProfileStore.normalizedKey(for: "  TØVER! ") == "tøver"
+            LearnerProfileStore.normalizedKey(
+                for: "  TØVER! ",
+                locale: SourceLanguage.danish.locale
+            ) == "tøver"
         )
         precondition(
             store.recordEncounter(
@@ -68,6 +79,7 @@ enum AdaptiveLearningChecks {
         store.flushPersistence()
 
         let persistedStore = LearnerProfileStore(
+            language: .danish,
             defaults: defaults,
             storageKey: key
         )
@@ -112,9 +124,9 @@ enum AdaptiveLearningChecks {
         precondition(legacyProgress.lastContextSignature == nil)
 
         precondition(
-            LearnerProfileStore.contextSignature(
+            persistedStore.contextSignature(
                 for: "  Hun   tænker på svaret. "
-            ) == LearnerProfileStore.contextSignature(
+            ) == persistedStore.contextSignature(
                 for: "hun tænker på svaret."
             )
         )
@@ -128,6 +140,7 @@ enum AdaptiveLearningChecks {
         precondition(store.progress(for: "og", at: now).knowledgeLevel == 0)
 
         let passiveStore = LearnerProfileStore(
+            language: .danish,
             defaults: defaults,
             storageKey: "passive.words"
         )
@@ -181,6 +194,7 @@ enum AdaptiveLearningChecks {
 
         let retentionKey = "retention.words"
         let retentionStore = LearnerProfileStore(
+            language: .danish,
             defaults: defaults,
             storageKey: retentionKey
         )
@@ -228,6 +242,7 @@ enum AdaptiveLearningChecks {
             exportedAt: Date
         ) -> Data {
             let archive = LearnerProfileArchive(
+                sourceLanguage: "da",
                 exportedAt: exportedAt,
                 words: [progress]
             )
@@ -237,6 +252,7 @@ enum AdaptiveLearningChecks {
         }
 
         let mergeStore = LearnerProfileStore(
+            language: .danish,
             defaults: defaults,
             storageKey: "merge.words"
         )
@@ -283,6 +299,7 @@ enum AdaptiveLearningChecks {
 
         let invalidArchive = LearnerProfileArchive(
             schemaVersion: 99,
+            sourceLanguage: "da",
             exportedAt: now,
             words: []
         )
@@ -298,44 +315,49 @@ enum AdaptiveLearningChecks {
             preconditionFailure("Unexpected archive error: \(error)")
         }
 
-        let service = AdaptiveExplanationService()
+        let service = AdaptiveExplanationService(language: .danish)
         for level in 0...3 {
             precondition(
-                PassiveWordMeaningPolicy.directEnglishMeaning(
+                PassiveWordMeaningPolicy(language: .danish, target: .english)
+            .directMeaning(
                     sourceWord: "studieboliger",
-                    englishTranslation: "student accommodation",
+                    translation: "student accommodation",
                     knowledgeLevel: level
                 ) == "student accommodation"
             )
         }
         for level in 4...5 {
             precondition(
-                PassiveWordMeaningPolicy.directEnglishMeaning(
+                PassiveWordMeaningPolicy(language: .danish, target: .english)
+            .directMeaning(
                     sourceWord: "studieboliger",
-                    englishTranslation: "student accommodation",
+                    translation: "student accommodation",
                     knowledgeLevel: level
                 ) == nil
             )
         }
         precondition(
-            PassiveWordMeaningPolicy.directEnglishMeaning(
+            PassiveWordMeaningPolicy(language: .danish, target: .english)
+            .directMeaning(
                 sourceWord: "IKEA",
-                englishTranslation: "IKEA",
+                translation: "IKEA",
                 knowledgeLevel: 0
             ) == nil
         )
         precondition(
-            PassiveWordMeaningPolicy.directEnglishMeaning(
+            PassiveWordMeaningPolicy(language: .danish, target: .english)
+            .directMeaning(
                 sourceWord: "udtryk",
-                englishTranslation:
+                translation:
                     "an expression that is used in a particular situation",
                 knowledgeLevel: 0
             ) == "an expression that is used in a particular situation"
         )
         precondition(
-            PassiveWordMeaningPolicy.directEnglishMeaning(
+            PassiveWordMeaningPolicy(language: .danish, target: .english)
+            .directMeaning(
                 sourceWord: "udtryk",
-                englishTranslation:
+                translation:
                     "a word or phrase that conveys an idea or emotion and is used in speech or writing",
                 knowledgeLevel: 0
             ) == "a word or phrase that conveys an idea or emotion"
