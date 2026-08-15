@@ -19,7 +19,13 @@ let package = Package(
         .library(name: "BabelTranslate", targets: ["BabelTranslate"]),
         .library(name: "BabelLexicon", targets: ["BabelLexicon"]),
         .library(name: "BabelSpeech", targets: ["BabelSpeech"]),
-        .library(name: "LanguageDanish", targets: ["LanguageDanish"])
+        .library(name: "LanguageDanish", targets: ["LanguageDanish"]),
+        // A product rather than a bare target so that every build system emits
+        // an archive for it. The checks import this module, and a target that
+        // no product names is free to leave nothing behind but objects folded
+        // into the executable — which is exactly what happened on a clean
+        // machine, where the checks then had no module to link against.
+        .library(name: "BabelstaarnetKit", targets: ["BabelstaarnetKit"])
     ],
     targets: [
         // Recognized text, the language-pack value types, and the two helpers
