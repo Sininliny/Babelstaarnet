@@ -157,8 +157,14 @@ struct WordBubbleView: View {
         // Answering a different word is a replacement, never an interpolation,
         // whatever transaction the change happens to arrive in.
         .contentTransition(.identity)
+        // The lift comes from the panel's own window shadow, not from a shadow
+        // drawn in here. The panel is sized to exactly this bubble, so a drop
+        // shadow had no room outside the bubble to fall in: along the straight
+        // sides it was clipped away entirely, and at the corners — the only
+        // place where the panel's rectangle is not covered by the bubble's
+        // shape — it pooled in the four notches as grey smudges. That is what
+        // made the corners look blurred. See `makeBubblePanel`.
         .liquidGlassBubble(tint: .primary.opacity(0.05), cornerRadius: 12)
-        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 }
 
@@ -227,8 +233,9 @@ struct SentenceBridgeBubbleView: View {
         )
         .fixedSize(horizontal: false, vertical: true)
         .contentTransition(.identity)
+        // Lifted by the panel's window shadow, for the reason given on the
+        // word bubble.
         .liquidGlassBubble(tint: .primary.opacity(0.04), cornerRadius: 14)
-        .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 
 }
@@ -776,7 +783,32 @@ private struct InlineTokenLayout: Layout {
 /// dark under dark appearance and light under light. This is the one number to
 /// turn if the panels ever want more of the page showing through them.
 private enum BubbleGround {
-    static let opacity: Double = 0.62
+    static let opacity: Double = 0.85
+
+    /// The ground and the material are the same rounded rectangle at the same
+    /// size, so on every pixel the corner arc crosses, one antialiased edge was
+    /// being composited over another: part ground, over part material, over
+    /// part page. That is an edge fading out across two pixels rather than an
+    /// edge, and it shows on the corners because the corners are the only part
+    /// of the shape whose boundary crosses pixels at an angle — the straight
+    /// sides land on the grid and stay sharp. Pulling the ground in by a point
+    /// puts its own antialiasing down on solid material and leaves the
+    /// material's arc as the only edge there is to see.
+    static let inset: CGFloat = 1
+}
+
+/// A hairline belonging to the appearance rather than to an assumed background.
+///
+/// White at 28% is nothing at all on a white page, which left the panel's edge
+/// to be inferred from a drop shadow — and the shadow was clipped away by the
+/// panel it was drawn in. The separator colour is dark on a light desktop and
+/// light on a dark one, so the bubble has a definite edge either way.
+private enum BubbleBorder {
+    static let width: CGFloat = 1
+
+    static var color: Color {
+        Color(nsColor: .separatorColor)
+    }
 }
 
 private extension View {
@@ -789,12 +821,28 @@ private extension View {
                 cornerRadius: cornerRadius,
                 style: .continuous
             )
+            .inset(by: BubbleGround.inset)
             .fill(
                 Color(nsColor: .windowBackgroundColor)
                     .opacity(BubbleGround.opacity)
             )
         }
         .bubbleMaterial(tint: tint, cornerRadius: cornerRadius)
+        .overlay {
+            // strokeBorder, not stroke: a stroke is centred on the path, so
+            // half of its width falls outside the shape with nothing under it
+            // to sit on, and the corners wear that overhang as a soft halo.
+            // strokeBorder insets by half the width and draws the whole line
+            // inside the edge it is describing.
+            RoundedRectangle(
+                cornerRadius: cornerRadius,
+                style: .continuous
+            )
+            .strokeBorder(
+                BubbleBorder.color,
+                lineWidth: BubbleBorder.width
+            )
+        }
     }
 
     @ViewBuilder
@@ -823,6 +871,10 @@ private extension View {
         // Regular rather than ultra-thin: this panel carries the text the
         // reader came for, and ultra-thin is a wash for chrome sitting over
         // content, not a surface to set a sentence on.
+        //
+        // The edge is drawn once, by the caller, for this path and the glass
+        // one alike — a rim here and a rim there is two rims on the systems
+        // that have both.
         background(
             .regularMaterial,
             in: RoundedRectangle(
@@ -830,12 +882,5 @@ private extension View {
                 style: .continuous
             )
         )
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: cornerRadius,
-                style: .continuous
-            )
-            .stroke(.white.opacity(0.28), lineWidth: 0.7)
-        }
     }
 }
