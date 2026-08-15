@@ -1,6 +1,6 @@
 import AppKit
-import Foundation
 import BabelCore
+import Foundation
 
 enum TesseractError: LocalizedError {
     case unavailable

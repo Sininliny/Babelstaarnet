@@ -1,11 +1,6 @@
+import BabelCore
 import CoreGraphics
 import Foundation
-import BabelCore
-import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
 
 struct FocusedRegionSelectionPolicy: Sendable {
     private let language: SourceLanguage

@@ -303,7 +303,25 @@ cursor movement → adaptive local crop → accurate Vision OCR
 ```
 
 The capture, OCR, translation, learner profile, dictionary, speech, overlay
-layout, and app state are separate. The capture planner uses cursor speed and
+layout, and app state are separate targets rather than separate folders:
+
+| Target | Holds | Depends on |
+| --- | --- | --- |
+| `BabelCore` | recognized text, the language-pack value types, shared helpers | — |
+| `BabelOCR` | Vision and Tesseract adapters, routing and quality policies | `BabelCore` |
+| `BabelTranslate` | the local Argos worker, translation quality | `BabelCore` |
+| `BabelLexicon` | the system dictionary | `BabelCore` |
+| `BabelSpeech` | speech synthesis | — |
+| `LanguageDanish` | Danish, as data | `BabelCore` |
+| `BabelstaarnetKit` | overlay, learner profile, capture, app state | all of the above |
+
+None of the capability targets depends on `LanguageDanish`, and none of them
+names a language: each is handed a `SourceLanguage` or `TargetLanguage` value
+by the app, which is the only place a language is chosen. Adding a language is
+adding a target beside `LanguageDanish` — the package graph is what keeps a
+service from quietly reaching for a Danish table instead.
+
+The capture planner uses cursor speed and
 the most recently observed text height to choose a local region, then retries
 with a larger crop only when words touch its boundary or no text is found.
 The pointer's word is read by accurate Vision; when its colours defeat that, one

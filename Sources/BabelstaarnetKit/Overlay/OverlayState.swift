@@ -1,11 +1,6 @@
+import BabelCore
 import Combine
 import CoreGraphics
-import BabelCore
-import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
 
 enum BridgeFeedbackConfirmation: Equatable {
     case markedKnown

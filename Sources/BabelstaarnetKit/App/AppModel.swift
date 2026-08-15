@@ -1,14 +1,13 @@
 import AppKit
-import Combine
-import OSLog
-import Translation
-import UniformTypeIdentifiers
 import BabelCore
-import BabelLexicon
 import BabelOCR
 import BabelSpeech
 import BabelTranslate
+import Combine
 import LanguageDanish
+import OSLog
+import Translation
+import UniformTypeIdentifiers
 
 @MainActor
 public final class AppModel: ObservableObject {

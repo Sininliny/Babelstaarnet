@@ -2,12 +2,6 @@ import AppKit
 import CoreGraphics
 import Foundation
 @testable import BabelCore
-@testable import BabelOCR
-@testable import BabelTranslate
-@testable import BabelLexicon
-@testable import BabelSpeech
-@testable import LanguageDanish
-@testable import BabelstaarnetKit
 
 /// A rendered reading situation: one cursor-sized crop, the phrases a learner
 /// must be able to recover from it, and the exact word the pointer rests on.

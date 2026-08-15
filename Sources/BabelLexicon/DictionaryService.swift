@@ -1,6 +1,6 @@
+import BabelCore
 import CoreServices
 import Foundation
-import BabelCore
 
 public struct DictionaryService {
     private let target: TargetLanguage

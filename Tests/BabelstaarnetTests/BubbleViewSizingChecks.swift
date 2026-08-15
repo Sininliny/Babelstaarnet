@@ -1,12 +1,8 @@
 import AppKit
 import SwiftUI
 @testable import BabelCore
-@testable import BabelOCR
-@testable import BabelTranslate
-@testable import BabelLexicon
-@testable import BabelSpeech
-@testable import LanguageDanish
 @testable import BabelstaarnetKit
+@testable import LanguageDanish
 
 @main
 @MainActor

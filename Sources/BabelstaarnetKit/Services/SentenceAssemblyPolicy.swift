@@ -1,11 +1,6 @@
+import BabelCore
 import CoreGraphics
 import Foundation
-import BabelCore
-import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
 
 /// The sentence a hovered word belongs to, gathered from however many OCR
 /// lines it happens to be printed across.

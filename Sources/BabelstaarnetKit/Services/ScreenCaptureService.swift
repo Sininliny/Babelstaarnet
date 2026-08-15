@@ -1,12 +1,7 @@
 import AppKit
+import BabelCore
 import CoreGraphics
 import ScreenCaptureKit
-import BabelCore
-import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
 
 enum ScreenCaptureError: LocalizedError {
     case permissionDenied

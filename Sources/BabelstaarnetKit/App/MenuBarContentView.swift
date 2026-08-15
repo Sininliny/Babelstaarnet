@@ -1,11 +1,5 @@
 import AppKit
 import SwiftUI
-import BabelCore
-import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
 
 public struct MenuBarContentView: View {
     @ObservedObject var model: AppModel

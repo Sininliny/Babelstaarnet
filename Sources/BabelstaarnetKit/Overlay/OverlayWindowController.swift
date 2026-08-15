@@ -1,11 +1,7 @@
 import AppKit
-import SwiftUI
 import BabelCore
 import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
+import SwiftUI
 
 @MainActor
 final class OverlayWindowController {

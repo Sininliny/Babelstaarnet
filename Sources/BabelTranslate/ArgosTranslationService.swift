@@ -1,5 +1,5 @@
-import Foundation
 import BabelCore
+import Foundation
 
 public enum ArgosTranslationError: LocalizedError {
     case unavailable

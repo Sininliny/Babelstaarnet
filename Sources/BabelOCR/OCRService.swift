@@ -1,7 +1,7 @@
+import BabelCore
 import Foundation
 import NaturalLanguage
 import Vision
-import BabelCore
 
 enum OCRError: LocalizedError {
     case requestFailed

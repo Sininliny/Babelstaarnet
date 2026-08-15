@@ -3,11 +3,6 @@ import Foundation
 import Vision
 @testable import BabelCore
 @testable import BabelOCR
-@testable import BabelTranslate
-@testable import BabelLexicon
-@testable import BabelSpeech
-@testable import LanguageDanish
-@testable import BabelstaarnetKit
 
 /// Checks the geometry that lets one line be re-read on its own.
 ///

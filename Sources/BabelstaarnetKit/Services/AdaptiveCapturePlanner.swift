@@ -1,11 +1,6 @@
+import BabelCore
 import CoreGraphics
 import Foundation
-import BabelCore
-import BabelLexicon
-import BabelOCR
-import BabelSpeech
-import BabelTranslate
-import LanguageDanish
 
 struct CursorVelocity: Equatable, Sendable {
     var dx: CGFloat

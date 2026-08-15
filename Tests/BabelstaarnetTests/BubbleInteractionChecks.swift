@@ -1,11 +1,5 @@
-import Foundation
 import CoreGraphics
-@testable import BabelCore
-@testable import BabelOCR
-@testable import BabelTranslate
-@testable import BabelLexicon
-@testable import BabelSpeech
-@testable import LanguageDanish
+import Foundation
 @testable import BabelstaarnetKit
 
 @main

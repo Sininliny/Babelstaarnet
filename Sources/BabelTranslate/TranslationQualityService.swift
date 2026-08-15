@@ -1,5 +1,5 @@
-import Foundation
 import BabelCore
+import Foundation
 
 /// Whether a translation is good enough to stand in place of the word it
 /// replaced, and what to show instead when it is not.
