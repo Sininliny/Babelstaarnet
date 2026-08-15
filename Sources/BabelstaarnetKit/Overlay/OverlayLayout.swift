@@ -5,7 +5,54 @@ struct LearningBubbleCenters: Equatable {
     let sentence: CGPoint
 }
 
+/// Where the mark naming the pointed-at word is drawn, on the page itself.
+///
+/// The panels cannot sit on the word — they would cover the sentence being
+/// read — so on a paragraph they answer from its edge, and the reader was left
+/// to work out which of the words in front of them was being answered about.
+/// Pointing at a word and being handed a meaning somewhere off to the side is
+/// only unambiguous while the pointer has not moved, and the reader's eye
+/// leaves the pointer long before their hand does.
+enum WordFocusMarker {
+    static let thickness: CGFloat = 2
+    /// Clear space under the word's own box, so the rule underlines the word
+    /// rather than striking through its descenders.
+    static let drop: CGFloat = 2
+    /// Room around the rule for its glow to fade out in. Clipped at the panel
+    /// edge, the glow reads as a second, harder line.
+    static let glow: CGFloat = 4
+    /// The rule runs a little past the word at each end, the way an underline
+    /// drawn by hand does.
+    static let overhang: CGFloat = 1
+
+    /// The panel the rule is drawn in: the width of the word, sitting just
+    /// under it, with the glow's room added on every side.
+    static func frame(under wordFrame: CGRect) -> CGRect {
+        CGRect(
+            x: wordFrame.minX - overhang - glow,
+            y: wordFrame.minY - drop - thickness - glow,
+            width: wordFrame.width + (overhang + glow) * 2,
+            height: thickness + glow * 2
+        )
+    }
+}
+
 enum OverlayLayout {
+    /// Where the two panels go, in order of how far the word panel ends up
+    /// from the word it is answering about.
+    ///
+    /// Neither panel may cover the sentence being read, and a sentence running
+    /// over several lines is one block for that purpose. So a word in the
+    /// middle of a paragraph cannot be answered beside itself, and the list
+    /// below is what "as close as the block allows" means instead: the margin
+    /// level with the word's own line first, then the edge of the block over
+    /// the word's own column.
+    ///
+    /// Only the last candidate leaves the sentence panel's height free beneath
+    /// the word panel. Reserving that room was the first thing tried, and the
+    /// sentence panel then usually went *below* the block instead — so the
+    /// answer was pushed a panel's height further up than anything needed,
+    /// which on a four-line paragraph put it most of a screen from the word.
     static func learningBubbleCenters(
         wordFrame: CGRect,
         sourceFrame: CGRect,
@@ -14,12 +61,26 @@ enum OverlayLayout {
         screenFrame: CGRect
     ) -> LearningBubbleCenters? {
         let gap: CGFloat = 9
-        let preferredWordCandidates = centers(
-            around: wordFrame,
-            size: wordSize,
-            gap: gap,
-            order: [.above, .right, .left, .below]
-        )
+        let besideTheBlockCandidates = [
+            CGPoint(
+                x: sourceFrame.maxX + gap + wordSize.width / 2,
+                y: wordFrame.midY
+            ),
+            CGPoint(
+                x: sourceFrame.minX - gap - wordSize.width / 2,
+                y: wordFrame.midY
+            )
+        ]
+        let againstTheBlockCandidates = [
+            CGPoint(
+                x: wordFrame.midX,
+                y: sourceFrame.maxY + gap + wordSize.height / 2
+            ),
+            CGPoint(
+                x: wordFrame.midX,
+                y: sourceFrame.minY - gap - wordSize.height / 2
+            )
+        ]
         let highStackWordCandidate = CGPoint(
             x: wordFrame.midX,
             y: sourceFrame.maxY
@@ -28,8 +89,19 @@ enum OverlayLayout {
                 + gap
                 + wordSize.height / 2
         )
-        let wordCandidates = preferredWordCandidates
-            + [highStackWordCandidate]
+        let wordCandidates = nearestFirst(
+            centers(
+                around: wordFrame,
+                size: wordSize,
+                gap: gap,
+                order: [.above, .right, .left, .below]
+            )
+                + besideTheBlockCandidates
+                + againstTheBlockCandidates
+                + [highStackWordCandidate],
+            size: wordSize,
+            from: wordFrame
+        )
         let alignedSentenceCandidates = [
             CGPoint(
                 x: wordFrame.midX,
@@ -155,11 +227,53 @@ enum OverlayLayout {
                 y: wordFrame.midY
             )
         ]
+        let avoiding = obstacles.isEmpty ? [wordFrame] : obstacles
         if let center = firstSafeCenter(
             candidates: candidates,
             size: estimatedSize,
             screenFrame: screenFrame,
-            obstacles: obstacles.isEmpty ? [wordFrame] : obstacles
+            obstacles: avoiding
+        ) {
+            return center
+        }
+
+        // Nothing touching the word is free, which is what a word inside a
+        // paragraph looks like. Before giving up and printing over the text
+        // being read, the space around the paragraph is offered — still the
+        // nearest position first, so a word on the last line is answered just
+        // under its own block rather than above the whole of it.
+        let block = avoiding.dropFirst().reduce(avoiding[0]) { $0.union($1) }
+        if let center = firstSafeCenter(
+            candidates: nearestFirst(
+                centers(
+                    around: block,
+                    size: estimatedSize,
+                    gap: gap,
+                    order: [.above, .below, .right, .left]
+                ) + [
+                    CGPoint(
+                        x: block.maxX + gap + estimatedSize.width / 2,
+                        y: wordFrame.midY
+                    ),
+                    CGPoint(
+                        x: block.minX - gap - estimatedSize.width / 2,
+                        y: wordFrame.midY
+                    ),
+                    CGPoint(
+                        x: wordFrame.midX,
+                        y: block.maxY + gap + estimatedSize.height / 2
+                    ),
+                    CGPoint(
+                        x: wordFrame.midX,
+                        y: block.minY - gap - estimatedSize.height / 2
+                    )
+                ],
+                size: estimatedSize,
+                from: wordFrame
+            ),
+            size: estimatedSize,
+            screenFrame: screenFrame,
+            obstacles: avoiding
         ) {
             return center
         }
@@ -170,6 +284,51 @@ enum OverlayLayout {
             screenFrame: screenFrame,
             obstacles: [wordFrame]
         )
+    }
+
+    /// The same candidates, tried nearest to the word first.
+    ///
+    /// Which position is nearest is not a property of the list: it depends on
+    /// where in its paragraph the word sits. A word on the last line is nearest
+    /// to the space under the block, a word on the first line to the space over
+    /// it, and a word in a narrow column to the margin beside it. Fixing that
+    /// order in advance means answering some words from the far side of the
+    /// paragraph while a closer position sat free.
+    ///
+    /// Candidates within half a point of each other keep their listed order, so
+    /// the four positions touching the word itself — all exactly one gap away —
+    /// still resolve above, right, left, below.
+    private static func nearestFirst(
+        _ candidates: [CGPoint],
+        size: CGSize,
+        from wordFrame: CGRect
+    ) -> [CGPoint] {
+        candidates
+            .enumerated()
+            .sorted { left, right in
+                let leftDistance = distance(
+                    from: wordFrame,
+                    to: frame(center: left.element, size: size)
+                )
+                let rightDistance = distance(
+                    from: wordFrame,
+                    to: frame(center: right.element, size: size)
+                )
+                if abs(leftDistance - rightDistance) > 0.5 {
+                    return leftDistance < rightDistance
+                }
+                return left.offset < right.offset
+            }
+            .map(\.element)
+    }
+
+    /// The clear space between two rectangles, which is zero where they touch.
+    /// Centre to centre would rate a panel lying across the word as nearer than
+    /// one resting neatly beside it.
+    private static func distance(from rect: CGRect, to other: CGRect) -> CGFloat {
+        let dx = max(max(rect.minX - other.maxX, other.minX - rect.maxX), 0)
+        let dy = max(max(rect.minY - other.maxY, other.minY - rect.maxY), 0)
+        return hypot(dx, dy)
     }
 
     private static func firstSafeCenter(

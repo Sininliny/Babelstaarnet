@@ -66,12 +66,22 @@ final class OverlayWindowController {
     private lazy var sentenceBubbleHostingView = NSHostingView(
         rootView: SentenceBridgeBubbleView(state: bubbleState)
     )
+    private lazy var focusMarkerHostingView = NSHostingView(
+        rootView: WordFocusMarkerView(state: bubbleState)
+    )
     private lazy var wordBubblePanel = makeBubblePanel(
         contentView: wordBubbleHostingView
     )
     private lazy var sentenceBubblePanel = makeBubblePanel(
         contentView: sentenceBubbleHostingView
     )
+    /// Unlike the panels, this one is laid over the page rather than beside it,
+    /// so it must not take the click the reader meant for what is underneath.
+    private lazy var focusMarkerPanel: NSPanel = {
+        let panel = makeBubblePanel(contentView: focusMarkerHostingView)
+        panel.ignoresMouseEvents = true
+        return panel
+    }()
 
     init(
         languages: LanguagePair,
@@ -627,6 +637,7 @@ final class OverlayWindowController {
         // `prepareBubbles` has already published the card in order to measure
         // it; publishing the same card again only redraws both bubbles twice.
         let sizes = prepareBubbles(card)
+        showFocusMarker(under: word)
 
         switch (
             bridgeConfiguration.showsWordBridge,
@@ -701,9 +712,19 @@ final class OverlayWindowController {
         updateBubbleHotKeys()
     }
 
+    private func showFocusMarker(under word: WordRegion) {
+        focusMarkerPanel.setFrame(
+            WordFocusMarker.frame(under: word.frame),
+            display: true
+        )
+        focusMarkerPanel.orderFrontRegardless()
+    }
+
+    /// No panel could be placed, so there is no answer for a mark to point at.
     private func hideBridgePanels() {
-            wordBubblePanel.orderOut(nil)
-            sentenceBubblePanel.orderOut(nil)
+        wordBubblePanel.orderOut(nil)
+        sentenceBubblePanel.orderOut(nil)
+        focusMarkerPanel.orderOut(nil)
         bubbleHotKeyService.unregister()
     }
 
@@ -799,6 +820,9 @@ final class OverlayWindowController {
                 for: currentWord,
                 in: currentRegion
             )
+            // The word has not changed, but the panels are being ordered front
+            // again and the mark belongs with them.
+            showFocusMarker(under: currentWord)
             if bridgeConfiguration.showsWordBridge {
                 let wordFrame = BubbleInteractionPolicy.preservedFrame(
                     oldFrame: wordBubblePanel.frame,
@@ -908,6 +932,7 @@ final class OverlayWindowController {
         bubbleState.hoverCard = nil
         wordBubblePanel.orderOut(nil)
         sentenceBubblePanel.orderOut(nil)
+        focusMarkerPanel.orderOut(nil)
         bubbleHotKeyService.unregister()
         currentWord = nil
         currentRegion = nil
