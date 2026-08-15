@@ -12,20 +12,40 @@ let package = Package(
     platforms: [
         .macOS(.v15)
     ],
+    // Every library is declared `.static`, and `BabelstaarnetKit` is declared
+    // at all, so that the checks have something to link against on any machine.
+    //
+    // A library product with the default automatic linkage is free to leave no
+    // archive behind and let its objects be folded into whatever depends on it,
+    // and one toolchain does exactly that: the modules were compiled, and there
+    // was nothing on disk to link them from. `.static` is the way to ask for
+    // the archive rather than to hope for it. The checks are the only consumer
+    // that needs them — the app links the same code either way.
     products: [
         .executable(name: "Babelstaarnet", targets: ["Babelstaarnet"]),
-        .library(name: "BabelCore", targets: ["BabelCore"]),
-        .library(name: "BabelOCR", targets: ["BabelOCR"]),
-        .library(name: "BabelTranslate", targets: ["BabelTranslate"]),
-        .library(name: "BabelLexicon", targets: ["BabelLexicon"]),
-        .library(name: "BabelSpeech", targets: ["BabelSpeech"]),
-        .library(name: "LanguageDanish", targets: ["LanguageDanish"]),
-        // A product rather than a bare target so that every build system emits
-        // an archive for it. The checks import this module, and a target that
-        // no product names is free to leave nothing behind but objects folded
-        // into the executable — which is exactly what happened on a clean
-        // machine, where the checks then had no module to link against.
-        .library(name: "BabelstaarnetKit", targets: ["BabelstaarnetKit"])
+        .library(name: "BabelCore", type: .static, targets: ["BabelCore"]),
+        .library(name: "BabelOCR", type: .static, targets: ["BabelOCR"]),
+        .library(
+            name: "BabelTranslate",
+            type: .static,
+            targets: ["BabelTranslate"]
+        ),
+        .library(
+            name: "BabelLexicon",
+            type: .static,
+            targets: ["BabelLexicon"]
+        ),
+        .library(name: "BabelSpeech", type: .static, targets: ["BabelSpeech"]),
+        .library(
+            name: "LanguageDanish",
+            type: .static,
+            targets: ["LanguageDanish"]
+        ),
+        .library(
+            name: "BabelstaarnetKit",
+            type: .static,
+            targets: ["BabelstaarnetKit"]
+        )
     ],
     targets: [
         // Recognized text, the language-pack value types, and the two helpers
