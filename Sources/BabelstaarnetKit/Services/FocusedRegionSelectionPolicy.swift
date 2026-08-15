@@ -9,9 +9,11 @@ import LanguageDanish
 
 struct FocusedRegionSelectionPolicy: Sendable {
     private let language: SourceLanguage
+    private let sentenceAssembly: SentenceAssemblyPolicy
 
     init(language: SourceLanguage) {
         self.language = language
+        self.sentenceAssembly = SentenceAssemblyPolicy(language: language)
     }
 
     func foregroundRegions(
@@ -43,7 +45,7 @@ struct FocusedRegionSelectionPolicy: Sendable {
         // show the fragment the column happened to wrap — and the words on the
         // continuation lines were dropped before translation, so nothing later
         // in the pipeline could recover them.
-        return SentenceAssemblyPolicy(language: language).lines(
+        return sentenceAssembly.lines(
             containing: match.1,
             in: match.0,
             among: regions

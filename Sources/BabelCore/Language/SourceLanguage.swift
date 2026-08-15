@@ -12,16 +12,16 @@ public struct SentenceBoundaryRules: Sendable {
     /// Abbreviations whose period belongs to the word, not to the sentence.
     /// Written down rather than inferred: the list is short, closed, and the
     /// cost of guessing wrong is a sentence that stops in the middle.
-    public var abbreviations: Set<String>
+    public let abbreviations: Set<String>
     /// Whether a sentence in this language opens with a capital, which is what
     /// lets a period followed by a lower-case word be read as an ordinal or an
     /// unlisted abbreviation rather than as a stop.
-    public var opensWithCapital: Bool
+    public let opensWithCapital: Bool
     /// Whether a lone letter before a period is an initial.
-    public var singleLetterIsInitial: Bool
-    public var stops: Set<Character>
-    public var closers: Set<Character>
-    public var openers: Set<Character>
+    public let singleLetterIsInitial: Bool
+    public let stops: Set<Character>
+    public let closers: Set<Character>
+    public let openers: Set<Character>
 
     public init(
         abbreviations: Set<String>,
@@ -52,22 +52,22 @@ public struct SentenceBoundaryRules: Sendable {
 /// confident a classification has to be.
 public struct OCRLanguageHints: Sendable {
     /// Passed to Vision, most specific first.
-    public var recognitionLanguages: [String]
+    public let recognitionLanguages: [String]
     /// The `.traineddata` name Tesseract knows this language by.
-    public var tesseractCode: String
+    public let tesseractCode: String
     /// Characters that are strong enough evidence on their own — Danish æøå
     /// appear in essentially no neighbouring language's ordinary spelling.
-    public var distinctiveCharacters: CharacterSet
-    public var minimumConfidence: Double
-    public var minimumFocusedConfidence: Double
-    public var confidentOtherLanguageThreshold: Double
+    public let distinctiveCharacters: CharacterSet
+    public let minimumConfidence: Double
+    public let minimumFocusedConfidence: Double
+    public let confidentOtherLanguageThreshold: Double
     /// Above this length an all-lowercase word is more likely a compound than
     /// a misread, so length alone stops being suspicious.
-    public var compoundWordMinimumLength: Int
+    public let compoundWordMinimumLength: Int
     /// Whether a word in this language can end in a capital. Danish cannot,
     /// which is what makes a trailing capital a misread ascender rather than a
     /// spelling.
-    public var endsWordInCapital: Bool
+    public let endsWordInCapital: Bool
 
     public init(
         recognitionLanguages: [String],
@@ -94,8 +94,8 @@ public struct OCRLanguageHints: Sendable {
 /// A compound ending and the target-language word it becomes, so an unknown
 /// compound can still be read from its tail.
 public struct CompoundSuffix: Sendable {
-    public var suffix: String
-    public var gloss: String
+    public let suffix: String
+    public let gloss: String
 
     public init(suffix: String, gloss: String) {
         self.suffix = suffix
@@ -111,45 +111,44 @@ public struct CompoundSuffix: Sendable {
 /// fills the gaps. Whether the chrome should instead follow the reader's own
 /// language is a product decision, not a refactoring one.
 public struct SourceLanguage: Sendable {
-    public var code: String
-    public var displayName: String
-    public var localeIdentifier: String
-    public var speechVoice: String
+    public let code: String
+    public let displayName: String
+    public let localeIdentifier: String
+    public let speechVoice: String
     /// Letter-by-letter foldings applied before lookup, so a table can be
     /// written in ASCII and still match "på". Applied before the general
     /// diacritic fold, which would otherwise turn ø into o and collide.
-    public var letterFoldings: [Character: String]
-    public var ocr: OCRLanguageHints
-    public var sentenceRules: SentenceBoundaryRules
+    public let letterFoldings: [Character: String]
+    public let ocr: OCRLanguageHints
+    public let sentenceRules: SentenceBoundaryRules
     /// Closed classes, in folded form. A word here is answered from the table
     /// rather than by the translator: asked on its own, Danish "er" comes back
     /// as "no", and once the target language stands in place of the source
     /// rather than beside it, a wrong answer is the only thing left.
-    public var closedClassGlosses: [String: String]
+    public let closedClassGlosses: [String: String]
     /// Readings a translator may legitimately return for a word that also has
     /// a curated form, so the curated form is a fallback and not a pin.
-    public var acceptedGlosses: [String: Set<String>]
-    public var exactGlosses: [String: String]
-    public var compoundSuffixes: [CompoundSuffix]
+    public let acceptedGlosses: [String: Set<String>]
+    public let exactGlosses: [String: String]
+    public let compoundSuffixes: [CompoundSuffix]
     /// Explanations of common words, written in this language, for a reader
     /// who has no connection to a translation engine.
-    public var beginnerGlosses: [String: String]
+    public let beginnerGlosses: [String: String]
     /// Explanations that say nothing and should be discarded, in folded form.
-    public var vacuousExplanations: Set<String>
+    public let vacuousExplanations: Set<String>
     /// High-frequency structural words a reader is assumed to already know,
     /// so the frame of the sentence survives from the first scan. Explicit
     /// learner feedback always overrides this prior.
-    public var structuralWords: Set<String>
+    public let structuralWords: Set<String>
     /// How this language says "means X", used when there is no bridge to show.
-    public var meansPhrase: @Sendable (String) -> String
+    public let meansPhrase: @Sendable (String) -> String
 
-    public var locale: Locale {
-        Locale(identifier: localeIdentifier)
-    }
-
-    public var naturalLanguage: NLLanguage {
-        NLLanguage(rawValue: code)
-    }
+    /// Built once. These are read per word — `normalized` and `lowercased` sit
+    /// inside the OCR and bridge loops — and rebuilding a `Locale` from its
+    /// identifier on every one of those calls is what the services used to
+    /// avoid by holding a `static let`.
+    public let locale: Locale
+    public let naturalLanguage: NLLanguage
 
     public init(
         code: String,
@@ -183,17 +182,32 @@ public struct SourceLanguage: Sendable {
         self.vacuousExplanations = vacuousExplanations
         self.structuralWords = structuralWords
         self.meansPhrase = meansPhrase
+        self.locale = Locale(identifier: localeIdentifier)
+        self.naturalLanguage = NLLanguage(rawValue: code)
     }
 
     /// The form every table in this pack is keyed by: lower-cased, folded
     /// through `letterFoldings`, then stripped of any remaining diacritics.
+    ///
+    /// One pass, character by character, rather than one full-string
+    /// replacement per folding. That is not only cheaper — it is the only way
+    /// the result is defined at all. Replacing sequentially means each folding
+    /// sees what the previous one produced, and `letterFoldings` is a
+    /// Dictionary, whose iteration order Swift does not promise and which in
+    /// fact varies between runs of the same binary. Danish gets away with it
+    /// because none of "ae", "oe", "aa" contains æ, ø, or å; a pack folding
+    /// ß→ss while also mapping s would not, and would fold differently on
+    /// different launches.
     public func folded(_ value: String) -> String {
-        var folded = value.lowercased()
-        for (character, replacement) in letterFoldings {
-            folded = folded.replacingOccurrences(
-                of: String(character),
-                with: replacement
-            )
+        let lowercased = value.lowercased()
+        var folded = ""
+        folded.reserveCapacity(lowercased.count)
+        for character in lowercased {
+            if let replacement = letterFoldings[character] {
+                folded += replacement
+            } else {
+                folded.append(character)
+            }
         }
         return folded
             .folding(options: [.diacriticInsensitive], locale: nil)

@@ -89,7 +89,7 @@ public struct DictionaryService {
 }
 
 private extension String {
-    public var compacted: String {
+    var compacted: String {
         replacingOccurrences(
             of: "\\s+",
             with: " ",
@@ -97,7 +97,7 @@ private extension String {
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    public func learnerSense(wordLimit: Int) -> String {
+    func learnerSense(wordLimit: Int) -> String {
         var value = compacted
         if let partOfSpeech = value.range(
             of: #"\|\s*(?:(?:plural|mass|proper|auxiliary|modal)\s+)?(noun|verb|adjective|adverb|preposition|pronoun|conjunction|determiner|exclamation)\s+"#,
@@ -127,7 +127,7 @@ private extension String {
         return value.compacted.completeWords(limit: wordLimit)
     }
 
-    public func completeWords(limit: Int) -> String {
+    func completeWords(limit: Int) -> String {
         let words = split(whereSeparator: \Character.isWhitespace)
         let selected = words.prefix(limit).joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)

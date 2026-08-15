@@ -37,12 +37,13 @@ public struct TranslationQualityService: Sendable {
         // beside it, a wrong answer is not a wrong note next to a readable
         // word, it is the only thing left. These classes are small, closed,
         // and stable, so the citation form can simply be written down.
-        if let curated = language.closedClassGlosses[language.folded(source)] {
+        let sourceKey = language.folded(source)
+        if let curated = language.closedClassGlosses[sourceKey] {
             // Where a word has an explicit accepted set, that set still wins:
             // it records the readings a translator may legitimately return, and
             // "for meget" really is "too much". The curated form is what the
             // word falls back to, not what it is pinned to.
-            if let accepted = language.acceptedGlosses[language.folded(source)],
+            if let accepted = language.acceptedGlosses[sourceKey],
                accepted.contains(language.folded(primary)) {
                 return cleaned(primary)
             }

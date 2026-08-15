@@ -118,6 +118,29 @@ enum LanguagePackChecks {
         precondition(contrary.folded("Straße") == "strasse")
         // Danish's foldings are not applied to another language.
         precondition(contrary.folded("på") == "pa")
+
+        // Each character is folded exactly once, against the original text.
+        // These two rules feed each other — ß becomes ss, and s becomes z — so
+        // folding by repeated whole-string replacement would give "zzz" or
+        // "ssz" depending on which rule a Dictionary happened to yield first,
+        // and would differ between runs of the same binary.
+        let interacting = SourceLanguage(
+            code: "qr",
+            displayName: "Interacting",
+            localeIdentifier: "en_US_POSIX",
+            speechVoice: "qr-QR",
+            letterFoldings: ["ß": "ss", "s": "z"],
+            ocr: OCRLanguageHints(
+                recognitionLanguages: ["qr-QR"],
+                tesseractCode: "qrq",
+                distinctiveCharacters: CharacterSet(charactersIn: "ß")
+            ),
+            sentenceRules: SentenceBoundaryRules(abbreviations: []),
+            meansPhrase: { $0 }
+        )
+        for _ in 0..<64 {
+            precondition(interacting.folded("ßs") == "ssz")
+        }
     }
 
     private static func checkBeginnerGlosses() {

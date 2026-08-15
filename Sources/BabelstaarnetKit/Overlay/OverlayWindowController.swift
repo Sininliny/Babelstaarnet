@@ -18,6 +18,7 @@ final class OverlayWindowController {
     private let dictionary: DictionaryService
     private let adaptiveExplanationService: AdaptiveExplanationService
     private let sentenceBridgeService: AdaptiveSentenceBridgeService
+    private let sentenceAssembly: SentenceAssemblyPolicy
     private let passiveWordMeaningPolicy: PassiveWordMeaningPolicy
     private let learnerProfile: LearnerProfileStore
     private let systemIdleMonitor = SystemIdleMonitor()
@@ -74,6 +75,9 @@ final class OverlayWindowController {
             language: languages.source
         )
         self.sentenceBridgeService = AdaptiveSentenceBridgeService(
+            language: languages.source
+        )
+        self.sentenceAssembly = SentenceAssemblyPolicy(
             language: languages.source
         )
         self.passiveWordMeaningPolicy = PassiveWordMeaningPolicy(
@@ -509,7 +513,7 @@ final class OverlayWindowController {
         for word: WordRegion,
         in region: TextRegion
     ) -> CGRect {
-        SentenceAssemblyPolicy(language: languages.source).lines(
+        sentenceAssembly.lines(
             containing: word,
             in: region,
             among: overlays[word.displayID]?.regions ?? [region]
@@ -525,9 +529,7 @@ final class OverlayWindowController {
         // occurrence of the hovered word come back from the same assembly, so
         // a word repeated across the line break still resolves to the one
         // under the pointer.
-        let sentence = SentenceAssemblyPolicy(
-            language: languages.source
-        ).sentence(
+        let sentence = sentenceAssembly.sentence(
             containing: word,
             in: region,
             among: overlays[word.displayID]?.regions ?? [region]

@@ -8,21 +8,19 @@ import Foundation
 /// and enough about its own function words to trim a gloss without cutting it
 /// mid-phrase.
 public struct TargetLanguage: Sendable {
-    public var code: String
-    public var displayName: String
-    public var localeIdentifier: String
-    public var speechVoice: String
+    public let code: String
+    public let displayName: String
+    public let localeIdentifier: String
+    public let speechVoice: String
     /// Function words a gloss must not be left dangling on. Cutting "a place
     /// where people live in" at the limit leaves a phrase that reads as
     /// unfinished, so the cut walks back past these.
-    public var danglingWords: Set<String>
+    public let danglingWords: Set<String>
     /// Whether the system dictionary can define words in this language, which
     /// is what decides if a fuller sense is available beyond the translation.
-    public var hasSystemDictionary: Bool
+    public let hasSystemDictionary: Bool
 
-    public var locale: Locale {
-        Locale(identifier: localeIdentifier)
-    }
+    public let locale: Locale
 
     public init(
         code: String,
@@ -38,6 +36,7 @@ public struct TargetLanguage: Sendable {
         self.speechVoice = speechVoice
         self.danglingWords = danglingWords
         self.hasSystemDictionary = hasSystemDictionary
+        self.locale = Locale(identifier: localeIdentifier)
     }
 }
 
