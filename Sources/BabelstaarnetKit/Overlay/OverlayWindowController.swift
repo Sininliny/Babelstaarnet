@@ -78,7 +78,10 @@ final class OverlayWindowController {
     /// Unlike the panels, this one is laid over the page rather than beside it,
     /// so it must not take the click the reader meant for what is underneath.
     private lazy var focusMarkerPanel: NSPanel = {
-        let panel = makeBubblePanel(contentView: focusMarkerHostingView)
+        let panel = makeBubblePanel(
+            contentView: focusMarkerHostingView,
+            casts: false
+        )
         panel.ignoresMouseEvents = true
         return panel
     }()
@@ -203,7 +206,19 @@ final class OverlayWindowController {
         bubblesAreVisible && isBubbleHeld
     }
 
-    private func makeBubblePanel(contentView: NSView) -> NSPanel {
+    /// - Parameter casts: Whether the panel is lifted off the page by a shadow.
+    ///   The shadow has to be the window's own: a panel is sized to exactly the
+    ///   bubble it carries, so a shadow drawn inside it has nowhere outside the
+    ///   bubble to fall and is clipped at the panel's edge — which left it
+    ///   pooling in the corner notches and reading as blurred corners. A window
+    ///   shadow is drawn outside the window and is shaped from what the panel
+    ///   actually paints, so it follows the rounded corners without being cut.
+    ///   Off for the focus marker, which is a rule laid over the page rather
+    ///   than a surface standing above it.
+    private func makeBubblePanel(
+        contentView: NSView,
+        casts shadow: Bool = true
+    ) -> NSPanel {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.clear.cgColor
 
@@ -215,7 +230,7 @@ final class OverlayWindowController {
         )
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false
+        panel.hasShadow = shadow
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.level = .statusBar
@@ -654,16 +669,14 @@ final class OverlayWindowController {
                 hideBridgePanels()
                 return
             }
-            wordBubblePanel.setFrame(
-                bubbleFrame(center: centers.word, size: sizes.word),
-                display: true
+            place(
+                wordBubblePanel,
+                at: bubbleFrame(center: centers.word, size: sizes.word)
             )
-            sentenceBubblePanel.setFrame(
-                bubbleFrame(center: centers.sentence, size: sizes.sentence),
-                display: true
+            place(
+                sentenceBubblePanel,
+                at: bubbleFrame(center: centers.sentence, size: sizes.sentence)
             )
-            wordBubblePanel.orderFrontRegardless()
-            sentenceBubblePanel.orderFrontRegardless()
 
         case (true, false):
             guard let center = OverlayLayout.hoverCenter(
@@ -676,11 +689,10 @@ final class OverlayWindowController {
                 return
             }
             sentenceBubblePanel.orderOut(nil)
-            wordBubblePanel.setFrame(
-                bubbleFrame(center: center, size: sizes.word),
-                display: true
+            place(
+                wordBubblePanel,
+                at: bubbleFrame(center: center, size: sizes.word)
             )
-            wordBubblePanel.orderFrontRegardless()
 
         case (false, true):
             guard let center = OverlayLayout.translationCenter(
@@ -698,11 +710,10 @@ final class OverlayWindowController {
                 return
             }
             wordBubblePanel.orderOut(nil)
-            sentenceBubblePanel.setFrame(
-                bubbleFrame(center: center, size: sizes.sentence),
-                display: true
+            place(
+                sentenceBubblePanel,
+                at: bubbleFrame(center: center, size: sizes.sentence)
             )
-            sentenceBubblePanel.orderFrontRegardless()
 
         case (false, false):
             hideBridgePanels()
@@ -713,11 +724,7 @@ final class OverlayWindowController {
     }
 
     private func showFocusMarker(under word: WordRegion) {
-        focusMarkerPanel.setFrame(
-            WordFocusMarker.frame(under: word.frame),
-            display: true
-        )
-        focusMarkerPanel.orderFrontRegardless()
+        place(focusMarkerPanel, at: WordFocusMarker.frame(under: word.frame))
     }
 
     /// No panel could be placed, so there is no answer for a mark to point at.
@@ -734,6 +741,47 @@ final class OverlayWindowController {
             y: center.y - size.height / 2,
             width: size.width,
             height: size.height
+        )
+    }
+
+    /// Puts a panel on screen at a frame the display can actually draw sharply.
+    private func place(_ panel: NSPanel, at frame: CGRect) {
+        panel.setFrame(pixelAligned(frame), display: true)
+        panel.orderFrontRegardless()
+        // The shadow is shaped from what the panel paints and then cached, and
+        // the panel paints a different answer for every word hovered. Asked for
+        // after the panel is on screen rather than before, so it is shaped from
+        // a bubble that has been drawn.
+        if panel.hasShadow {
+            panel.invalidateShadow()
+        }
+    }
+
+    /// Word frames come from OCR, so they land on arbitrary fractions of a
+    /// point, and so does a panel placed against one. A panel whose origin sits
+    /// off the display's pixel grid has everything drawn in it resampled across
+    /// two pixels — text included, but the corner arcs worst, since a curve
+    /// crossing the grid at an angle has nothing but its antialiasing to
+    /// describe it and half a pixel of offset smears that over twice the width.
+    ///
+    /// Snapping to the grid of the screen the panel is actually on, rather than
+    /// to whole points, moves it by at most half a pixel: on a Retina display
+    /// the grid is half-point, and rounding to points would throw away
+    /// placement accuracy to no purpose. Sizes are left alone — they are whole
+    /// numbers already, and rounding one would re-wrap the text inside it.
+    private func pixelAligned(_ frame: CGRect) -> CGRect {
+        let scale = NSScreen.screens.first { $0.frame.intersects(frame) }?
+            .backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 1
+        guard scale > 0 else {
+            return frame
+        }
+        return CGRect(
+            x: (frame.minX * scale).rounded() / scale,
+            y: (frame.minY * scale).rounded() / scale,
+            width: frame.width,
+            height: frame.height
         )
     }
 
@@ -833,8 +881,7 @@ final class OverlayWindowController {
                         bubbleFrame: wordBubblePanel.frame
                     )
                 )
-                wordBubblePanel.setFrame(wordFrame, display: true)
-                wordBubblePanel.orderFrontRegardless()
+                place(wordBubblePanel, at: wordFrame)
             } else {
                 wordBubblePanel.orderOut(nil)
             }
@@ -848,8 +895,7 @@ final class OverlayWindowController {
                         bubbleFrame: sentenceBubblePanel.frame
                     )
                 )
-                sentenceBubblePanel.setFrame(sentenceFrame, display: true)
-                sentenceBubblePanel.orderFrontRegardless()
+                place(sentenceBubblePanel, at: sentenceFrame)
             } else {
                 sentenceBubblePanel.orderOut(nil)
             }
