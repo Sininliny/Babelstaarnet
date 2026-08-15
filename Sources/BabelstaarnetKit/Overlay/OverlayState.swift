@@ -17,6 +17,17 @@ final class OverlayState: ObservableObject {
     var onDontKnow: () -> Void = {}
     var onTogglePin: () -> Void = {}
 
+    /// Publishing is what redraws both bubbles, and an unchanged value redraws
+    /// them just as thoroughly as a changed one. This is written from the mouse
+    /// timer, so it is written twenty times a second — and while no bubble is
+    /// on screen it is written to the same value every single time.
+    func setPinned(_ pinned: Bool) {
+        guard isPinned != pinned else {
+            return
+        }
+        isPinned = pinned
+    }
+
     /// Records an action the reader has just taken. It stays until the word
     /// under the pointer changes; nothing clears it on a timer, because it
     /// describes the word rather than the keypress. The controller decides

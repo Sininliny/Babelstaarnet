@@ -10,6 +10,14 @@ final class OverlayWindowController {
         var screenFrame: CGRect
     }
 
+    /// What the hover hit test reads. Two ticks that agree on all of it resolve
+    /// to the same word, so the second one has nothing to do.
+    private struct HoverInput: Equatable {
+        let point: CGPoint
+        let overlayGeneration: UInt64
+        let interactionIsHeld: Bool
+    }
+
     private let languages: LanguagePair
     private let dictionary: DictionaryService
     private let adaptiveExplanationService: AdaptiveExplanationService
@@ -36,6 +44,12 @@ final class OverlayWindowController {
     private var holdModifierPressed = false
     private var stationaryPoint: CGPoint?
     private var stationarySince: Date?
+    /// Everything the hover answer is derived from, as of the last time it was
+    /// derived. See `hoverNeedsUpdate(at:)`.
+    private var lastHoverInput: HoverInput?
+    /// Bumped whenever the page being hovered is replaced, which is the one
+    /// input to the hit test that is not a value already at hand.
+    private var overlayGeneration: UInt64 = 0
     private var autoSpeak = true
     private var hoverDelay = 0.7
     private var hotKeyConfiguration = HotKeyConfiguration.defaults
@@ -109,18 +123,25 @@ final class OverlayWindowController {
         self.hotKeyConfiguration = hotKeyConfiguration
         self.bridgeConfiguration = bridgeConfiguration
 
-        let grouped = Dictionary(grouping: regions, by: \.displayID)
-        let activeDisplayIDs = Set(grouped.keys)
-        overlays = overlays.filter { activeDisplayIDs.contains($0.key) }
-
-        for (displayID, displayRegions) in grouped {
-            guard let screenFrame = displayRegions.first?.screenFrame else {
-                continue
+        overlays = Dictionary(grouping: regions, by: \.displayID)
+            .compactMapValues { displayRegions in
+                displayRegions.first.map {
+                    DisplayOverlay(
+                        regions: displayRegions,
+                        screenFrame: $0.screenFrame
+                    )
+                }
             }
-            overlays[displayID] = DisplayOverlay(
-                regions: displayRegions,
-                screenFrame: screenFrame
-            )
+        overlayGeneration &+= 1
+
+        // A scan that read nothing leaves nothing to hover. The pointer was
+        // still being followed twenty times a second afterwards, measuring it
+        // against a page with no words in it, for as long as the reader stayed
+        // over the blank part of the screen.
+        guard !overlays.isEmpty else {
+            stopMouseTracking()
+            dismissBubble()
+            return
         }
 
         startMouseTracking()
@@ -141,10 +162,9 @@ final class OverlayWindowController {
             }
 
             let regions = overlays.values.flatMap(\.regions)
-            let candidates = regions.flatMap(\.words)
             if let replacement = HoverHitTesting.replacement(
                 for: currentWord,
-                in: candidates
+                in: regions
             ), let replacementRegion = region(
                 containing: replacement,
                 in: regions
@@ -161,10 +181,10 @@ final class OverlayWindowController {
 
     func hide() {
         overlays.removeAll()
+        overlayGeneration &+= 1
         dismissBubble()
         expandedEnglishWords.removeAll()
-        mouseTimer?.invalidate()
-        mouseTimer = nil
+        stopMouseTracking()
         hoverSpeechTimer?.invalidate()
         hoverSpeechTimer = nil
     }
@@ -206,20 +226,63 @@ final class OverlayWindowController {
         let timer = Timer(timeInterval: 0.05, repeats: true) {
             [weak self] _ in
             MainActor.assumeIsolated {
+                guard let self else {
+                    return
+                }
                 let point = NSEvent.mouseLocation
-                self?.updateHoldModifierState()
-                self?.updateStationaryHold(at: point)
-                self?.updateHover(at: point)
+                self.updateHoldModifierState()
+                self.updateStationaryHold(at: point)
+                guard self.hoverNeedsUpdate(at: point) else {
+                    return
+                }
+                self.updateHover(at: point)
             }
         }
+        // Nothing here needs the tick to land on the millisecond, and a timer
+        // the kernel is allowed to slide can be served alongside a wake-up it
+        // was making anyway instead of forcing one of its own.
+        timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         mouseTimer = timer
+    }
+
+    private func stopMouseTracking() {
+        mouseTimer?.invalidate()
+        mouseTimer = nil
+        lastHoverInput = nil
+    }
+
+    /// Whether this tick can resolve to anything the last one did not.
+    ///
+    /// Following the pointer is the whole hit test — every word on the page
+    /// measured against it — and it runs twenty times a second for as long as a
+    /// page is on screen. But reading is done with the pointer parked, so the
+    /// common tick is one where none of what the test reads has moved since the
+    /// last: same point, same page, same hold. Resolving that tick again cannot
+    /// produce a different word, and now costs a comparison instead of a walk
+    /// over the page.
+    private func hoverNeedsUpdate(at point: CGPoint) -> Bool {
+        HoverInput(
+            point: point,
+            overlayGeneration: overlayGeneration,
+            interactionIsHeld: isBubbleHeld
+        ) != lastHoverInput
     }
 
     private func updateHover(
         at point: CGPoint,
         force: Bool = false
     ) {
+        // Recorded on the way out, so it describes the state the hover was
+        // actually left in rather than the one it was entered with.
+        defer {
+            lastHoverInput = HoverInput(
+                point: point,
+                overlayGeneration: overlayGeneration,
+                interactionIsHeld: isBubbleHeld
+            )
+        }
+
         if !force, isBubbleHeld, bubblesAreVisible {
             return
         }
@@ -337,18 +400,25 @@ final class OverlayWindowController {
         let expanded = expandedEnglishWords.contains(key)
         let now = Date()
         var knowledgeLevelCache: [String: Int] = [:]
-        let knowledgeLevelForWord: (String) -> Int = {
-            [learnerProfile] candidate in
-            let normalized = learnerProfile.normalizedKey(for: candidate)
-            if let cached = knowledgeLevelCache[normalized] {
+        // Two doors onto one answer. Callers holding a raw token come in
+        // through `knowledgeLevelForWord` and pay for the normalization;
+        // callers that normalized the token in order to look at it — which is
+        // every token of both bridges — hand the key straight over.
+        let knowledgeLevelForKey: (String) -> Int = {
+            [learnerProfile] key in
+            if let cached = knowledgeLevelCache[key] {
                 return cached
             }
             let level = learnerProfile.progress(
-                for: normalized,
+                forKey: key,
                 at: now
             ).effectiveKnowledgeLevel(at: now)
-            knowledgeLevelCache[normalized] = level
+            knowledgeLevelCache[key] = level
             return level
+        }
+        let knowledgeLevelForWord: (String) -> Int = {
+            [learnerProfile] candidate in
+            knowledgeLevelForKey(learnerProfile.normalizedKey(for: candidate))
         }
         let stateForWord: (String) -> LanguageTransferState = { candidate in
             LanguageTransferState.forKnowledgeLevel(
@@ -392,7 +462,7 @@ final class OverlayWindowController {
             wordBridgeKnowledgeLevels: tokenKnowledgeLevels(
                 in: wordBridge.text,
                 englishTokenIndexes: wordBridge.englishTokenIndexes,
-                knowledgeLevelForWord: knowledgeLevelForWord
+                knowledgeLevelForKey: knowledgeLevelForKey
             ),
             learningText: explanation.primaryText,
             englishSupport: explanation.englishSupport,
@@ -401,7 +471,7 @@ final class OverlayWindowController {
             sentenceBridgeKnowledgeLevels: tokenKnowledgeLevels(
                 in: explanation.primaryText,
                 englishTokenIndexes: bridge?.englishTokenIndexes ?? [],
-                knowledgeLevelForWord: knowledgeLevelForWord
+                knowledgeLevelForKey: knowledgeLevelForKey
             ),
             // Both the Danish the word kept and the English standing in for it
             // count as the word being pointed at: whichever of the two the
@@ -424,7 +494,7 @@ final class OverlayWindowController {
     private func tokenKnowledgeLevels(
         in text: String,
         englishTokenIndexes: [Int],
-        knowledgeLevelForWord: (String) -> Int
+        knowledgeLevelForKey: (String) -> Int
     ) -> [Int: Int] {
         let englishIndexes = Set(englishTokenIndexes)
         return Dictionary(
@@ -441,7 +511,7 @@ final class OverlayWindowController {
                     guard !word.isEmpty else {
                         return nil
                     }
-                    return (index, knowledgeLevelForWord(word))
+                    return (index, knowledgeLevelForKey(word))
                 }
         )
     }
@@ -554,8 +624,9 @@ final class OverlayWindowController {
         near word: WordRegion,
         sourceFrame: CGRect
     ) {
+        // `prepareBubbles` has already published the card in order to measure
+        // it; publishing the same card again only redraws both bubbles twice.
         let sizes = prepareBubbles(card)
-        bubbleState.hoverCard = card
 
         switch (
             bridgeConfiguration.showsWordBridge,
@@ -846,7 +917,7 @@ final class OverlayWindowController {
         holdModifierPressed = false
         stationaryPoint = nil
         stationarySince = nil
-        bubbleState.isPinned = false
+        bubbleState.setPinned(false)
     }
 
     private func updateBubbleHotKeys() {
@@ -887,7 +958,7 @@ final class OverlayWindowController {
             pinnedByUser = true
             temporarilyHeldForIdle = false
         }
-        bubbleState.isPinned = pinnedByUser
+        bubbleState.setPinned(pinnedByUser)
         refreshCurrentCard(preservePosition: true)
         if !isBubbleHeld {
             updateHover(at: NSEvent.mouseLocation)
@@ -900,14 +971,14 @@ final class OverlayWindowController {
         )
         guard bubblesAreVisible else {
             holdModifierPressed = false
-            bubbleState.isPinned = pinnedByUser
+            bubbleState.setPinned(pinnedByUser)
             return
         }
         guard down != holdModifierPressed else {
             return
         }
         holdModifierPressed = down
-        bubbleState.isPinned = pinnedByUser
+        bubbleState.setPinned(pinnedByUser)
         if !down, !pinnedByUser {
             updateHover(at: NSEvent.mouseLocation)
         }
@@ -925,13 +996,11 @@ final class OverlayWindowController {
             point,
             since: stationaryPoint
         )
-        let idleDuration = systemIdleMonitor.idleDuration()
-        let receivedInput = idleDuration < 0.12
 
         if temporarilyHeldForIdle {
             if BubbleInteractionPolicy.shouldReleaseTemporaryHold(
                 pointerMoved: pointerMoved,
-                idleDuration: idleDuration
+                idleDuration: systemIdleMonitor.idleDuration()
             ) {
                 temporarilyHeldForIdle = false
                 stationaryPoint = point
@@ -940,7 +1009,10 @@ final class OverlayWindowController {
             return
         }
 
-        if pointerMoved || receivedInput {
+        // A pointer that has moved settles the question on its own, and asking
+        // the window server how long the session has been idle is the one call
+        // in this tick that leaves the process.
+        if pointerMoved || systemIdleMonitor.idleDuration() < 0.12 {
             stationaryPoint = point
             stationarySince = Date()
             return

@@ -8,6 +8,8 @@ enum HoverHitTestingChecks {
         expandedEntryAreaCatchesOCRBoundaryMismatch()
         retentionAreaPreventsEdgeJitter()
         enteringANeighborSwitchesImmediately()
+        overlappingBoxesResolveToTheSmallerWord()
+        aClearlyNearerWordWinsOverASmallerOne()
         refreshedGeometryKeepsTheSameTarget()
         refreshedRegionsKeepTheirIdentifiers()
         eachPreviousIdentifierIsClaimedOnce()
@@ -47,6 +49,56 @@ enum HoverHitTestingChecks {
             retaining: first
         )
         precondition(result?.id == second.id)
+    }
+
+    /// Two boxes over the same point, equally near it: the smaller one is the
+    /// more specific answer, and it wins whichever order the page lists them
+    /// in. OCR produces this by reporting a word inside a longer run of text.
+    private static func overlappingBoxesResolveToTheSmallerWord() {
+        let wide = box("hele linjen", x: 70, y: 90, width: 60, height: 20)
+        let narrow = box("ord", x: 90, y: 95, width: 20, height: 10)
+        let point = CGPoint(x: 100, y: 100)
+        for words in [[wide, narrow], [narrow, wide]] {
+            precondition(
+                HoverHitTesting.word(
+                    at: point,
+                    in: [makeRegion(words: words)],
+                    retaining: nil
+                )?.id == narrow.id
+            )
+        }
+    }
+
+    /// Past that, distance decides: a word the pointer is actually on beats a
+    /// smaller one it merely reaches.
+    private static func aClearlyNearerWordWinsOverASmallerOne() {
+        let under = box("under", x: 70, y: 90, width: 60, height: 20)
+        let beside = box("ved", x: 101, y: 95, width: 16, height: 10)
+        let point = CGPoint(x: 100, y: 100)
+        for words in [[under, beside], [beside, under]] {
+            precondition(
+                HoverHitTesting.word(
+                    at: point,
+                    in: [makeRegion(words: words)],
+                    retaining: nil
+                )?.id == under.id
+            )
+        }
+    }
+
+    private static func box(
+        _ text: String,
+        x: CGFloat,
+        y: CGFloat,
+        width: CGFloat,
+        height: CGFloat
+    ) -> WordRegion {
+        WordRegion(
+            sourceText: text,
+            frame: CGRect(x: x, y: y, width: width, height: height),
+            screenFrame: CGRect(x: 0, y: 0, width: 1_440, height: 900),
+            displayID: 1
+        )
     }
 
     private static func refreshedGeometryKeepsTheSameTarget() {

@@ -406,8 +406,21 @@ final class LearnerProfileStore {
         for word: String,
         at date: Date = Date()
     ) -> LearnerWordProgress {
-        let key = normalizedKey(for: word)
-        return entries[key] ?? LearnerWordProgress(
+        progress(forKey: normalizedKey(for: word), at: date)
+    }
+
+    /// The same answer for a word already in stored form.
+    ///
+    /// Normalizing is three passes over the string, and the bubble asks this of
+    /// every token of the sentence it is bridging — through callers that had
+    /// normalized the token to look at it in the first place, and were paying
+    /// for it to be normalized again on the way in. Idempotent, so the second
+    /// pass never changed an answer; it was only ever the cost of one.
+    func progress(
+        forKey key: String,
+        at date: Date = Date()
+    ) -> LearnerWordProgress {
+        entries[key] ?? LearnerWordProgress(
             word: key,
             knowledgeLevel: VocabularyPrior.initialKnowledgeLevel(
                 for: key,
