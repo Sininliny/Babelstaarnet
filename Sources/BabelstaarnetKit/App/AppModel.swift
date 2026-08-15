@@ -702,8 +702,8 @@ public final class AppModel: ObservableObject {
                     in: expandedCapture,
                     focusPoint: cursor
                 )
-                if expandedResult.regions.flatMap(\.words).count
-                    >= result.regions.flatMap(\.words).count {
+                if wordCount(in: expandedResult.regions)
+                    >= wordCount(in: result.regions) {
                     capture = expandedCapture
                     result = expandedResult
                     ocrEngineName = expandedResult.engine
@@ -732,8 +732,7 @@ public final class AppModel: ObservableObject {
                 return
             }
 
-            let jobs = translationJobs(for: allRegions)
-            let uniqueTexts = uniqueSourceTexts(from: jobs)
+            let uniqueTexts = uniqueSourceTexts(in: allRegions)
             guard !uniqueTexts.isEmpty else {
                 presentNoReadableText()
                 return
@@ -777,22 +776,21 @@ public final class AppModel: ObservableObject {
                         }
                     }
                 }
-                let map = Dictionary(
-                    uniqueKeysWithValues: jobs.map {
-                        (
-                            $0.key,
-                            translationCache[$0.text.lowercased()] ?? $0.text
-                        )
+                var translated: [String: String] = [:]
+                var sourceTranslations: [String: String] = [:]
+                translated.reserveCapacity(uniqueTexts.count)
+                sourceTranslations.reserveCapacity(uniqueTexts.count)
+                for text in uniqueTexts {
+                    let key = text.lowercased()
+                    // Two views of the same answer: what was translated, which
+                    // a word falls back to its own spelling for, and every
+                    // word paired with something to explain, which is that
+                    // spelling when nothing translated it.
+                    if let translation = translationCache[key] {
+                        translated[key] = translation
                     }
-                )
-                let sourceTranslations = Dictionary(
-                    uniqueKeysWithValues: uniqueTexts.map {
-                        (
-                            $0.lowercased(),
-                            translationCache[$0.lowercased()] ?? $0
-                        )
-                    }
-                )
+                    sourceTranslations[key] = translated[key] ?? text
+                }
                 let focusedSourceKeys = focusedRegionSelectionPolicy
                     .focusedSourceKeys(in: allRegions, at: cursor)
                 let focusedTranslations = focusedSourceKeys.isEmpty
@@ -818,7 +816,7 @@ public final class AppModel: ObservableObject {
                 logLatency("total", since: scanStartedAt)
                 translationEngineName = "Argos Translate"
                 apply(
-                    translations: map,
+                    translations: translated,
                     explanations: explanations,
                     wordBridges: wordBridges,
                     to: allRegions,
@@ -844,7 +842,7 @@ public final class AppModel: ObservableObject {
     private func translationRequests(
         for regions: [TextRegion]
     ) -> [TranslationSession.Request] {
-        uniqueSourceTexts(from: translationJobs(for: regions))
+        uniqueSourceTexts(in: regions)
             .enumerated()
             .map { index, text in
                 TranslationSession.Request(
@@ -854,27 +852,26 @@ public final class AppModel: ObservableObject {
             }
     }
 
-    private func translationJobs(
-        for regions: [TextRegion]
-    ) -> [(key: String, text: String)] {
-        regions.flatMap { region in
-            region.words.map { word in
-                (
-                    key: "word:\(word.id.uuidString)",
-                    text: word.sourceText
-                )
-            }
-        }
-    }
-
+    /// Every distinct word on the page, in reading order, one per spelling.
+    ///
+    /// What a word translates to depends on the word, never on which of its
+    /// occurrences this is, so the page is addressed by spelling throughout.
+    /// Keying the same answer once per occurrence instead meant formatting a
+    /// UUID into a string for every word on screen, twice — once to record the
+    /// translation and once to read it back — for a table that could only ever
+    /// hold the same value under every key naming the same word.
     private func uniqueSourceTexts(
-        from jobs: [(key: String, text: String)]
+        in regions: [TextRegion]
     ) -> [String] {
         var seen = Set<String>()
-        return jobs.compactMap { job in
-            let key = job.text.lowercased()
-            return seen.insert(key).inserted ? job.text : nil
+        var texts: [String] = []
+        for region in regions {
+            for word in region.words
+            where seen.insert(word.sourceText.lowercased()).inserted {
+                texts.append(word.sourceText)
+            }
         }
+        return texts
     }
 
     private func apply(
@@ -901,11 +898,6 @@ public final class AppModel: ObservableObject {
                 translationCache[source] = translation
             }
         }
-        let responseMap = Dictionary(
-            uniqueKeysWithValues: translationJobs(for: regions).map {
-                ($0.key, bySourceText[$0.text.lowercased()] ?? $0.text)
-            }
-        )
         let explanations = bridgeConfiguration.showsWordBridge
             ? await beginnerExplanations(for: bySourceText)
             : [:]
@@ -913,7 +905,7 @@ public final class AppModel: ObservableObject {
             ? await adaptiveWordBridges(from: explanations)
             : [:]
         apply(
-            translations: responseMap,
+            translations: bySourceText,
             explanations: explanations,
             wordBridges: wordBridges,
             to: regions,
@@ -921,6 +913,8 @@ public final class AppModel: ObservableObject {
         )
     }
 
+    /// Writes the page the reader will hover, keyed throughout by the word
+    /// itself rather than by the occurrence.
     private func apply(
         translations: [String: String],
         explanations: [String: String] = [:],
@@ -932,35 +926,43 @@ public final class AppModel: ObservableObject {
             return
         }
 
+        // A page repeats its words, and each repetition was re-reading the same
+        // explanation for the same word: tokenizing it, deciding which of its
+        // words need English, and looking each of those up again. This is main
+        // actor work standing between a finished scan and the bubble, so it is
+        // done once per distinct word instead of once per occurrence of one.
+        var bridgeTranslationsBySourceKey: [String: [String: String]] = [:]
         translatedRegions = regions.map { region in
             var translatedRegion = region
             translatedRegion.words = region.words.map { word in
                 var translatedWord = word
-                translatedWord.translatedText = translations[
-                    "word:\(word.id.uuidString)"
-                ] ?? word.sourceText
                 let sourceKey = word.sourceText.lowercased()
+                let explanation = explanations[sourceKey] ?? ""
                 let bridge = wordBridges[sourceKey]
-                translatedWord.wordBridgeText = bridge?.text
-                    ?? explanations[sourceKey]
-                    ?? ""
+                translatedWord.translatedText = translations[sourceKey]
+                    ?? word.sourceText
+                translatedWord.wordBridgeText = bridge?.text ?? explanation
                 translatedWord.wordBridgeEnglishTokenIndexes = bridge?
                     .englishTokenIndexes ?? []
-                translatedWord.wordBridgeDanishText = explanations[
-                    sourceKey
-                ] ?? ""
-                translatedWord.wordBridgeTranslations = Dictionary(
-                    uniqueKeysWithValues: adaptiveWordBridgeService
-                        .wordsNeedingEnglish(
-                            in: explanations[sourceKey] ?? "",
-                            stateForWord: { _ in .unknown }
-                        )
-                        .compactMap { term in
-                            wordBridgeTranslationCache[term].map {
-                                (term, $0)
+                translatedWord.wordBridgeDanishText = explanation
+                if let known = bridgeTranslationsBySourceKey[sourceKey] {
+                    translatedWord.wordBridgeTranslations = known
+                } else {
+                    let resolved = Dictionary(
+                        uniqueKeysWithValues: adaptiveWordBridgeService
+                            .wordsNeedingEnglish(
+                                in: explanation,
+                                stateForWord: { _ in .unknown }
+                            )
+                            .compactMap { term in
+                                wordBridgeTranslationCache[term].map {
+                                    (term, $0)
+                                }
                             }
-                        }
-                )
+                    )
+                    bridgeTranslationsBySourceKey[sourceKey] = resolved
+                    translatedWord.wordBridgeTranslations = resolved
+                }
                 return translatedWord
             }
             return translatedRegion
@@ -1182,7 +1184,8 @@ public final class AppModel: ObservableObject {
                 }
 
                 try? await Task.sleep(
-                    for: PowerSavingPolicy.activePollInterval
+                    for: PowerSavingPolicy.activePollInterval,
+                    tolerance: PowerSavingPolicy.activePollTolerance
                 )
                 guard !Task.isCancelled, let self else {
                     return
@@ -1231,32 +1234,41 @@ public final class AppModel: ObservableObject {
         guard !overlayController.isHoldingInteraction else {
             return false
         }
+        let refreshInterval = PowerSavingPolicy.stationaryRefreshInterval(
+            idleDuration: idleDuration
+        )
+
+        // Asked first because it is arithmetic on two points, where the reuse
+        // test below measures every word of the last reading against the
+        // pointer. A pointer that has neither moved far enough nor waited long
+        // enough cannot start a scan whatever that reading holds, and that is
+        // the state a reader spends most of a page in.
+        if let lastCapturePoint, let lastCaptureDate {
+            let movement = hypot(
+                cursor.x - lastCapturePoint.x,
+                cursor.y - lastCapturePoint.y
+            )
+            let movementThreshold = min(
+                max((estimatedTextHeight ?? 18) * 0.7, 9),
+                30
+            )
+            guard movement >= movementThreshold
+                || now.timeIntervalSince(lastCaptureDate) >= refreshInterval
+            else {
+                return false
+            }
+        }
+
         if let lastCompletedScanDate,
            ScanSchedulingPolicy.canReuseRecognizedWord(
                at: cursor,
                in: translatedRegions,
                resultAge: now.timeIntervalSince(lastCompletedScanDate),
-               refreshInterval: PowerSavingPolicy
-                   .stationaryRefreshInterval(idleDuration: idleDuration)
+               refreshInterval: refreshInterval
            ) {
             return false
         }
-        guard let lastCapturePoint, let lastCaptureDate else {
-            return true
-        }
-        let movement = hypot(
-            cursor.x - lastCapturePoint.x,
-            cursor.y - lastCapturePoint.y
-        )
-        let movementThreshold = min(
-            max((estimatedTextHeight ?? 18) * 0.7, 9),
-            30
-        )
-        return movement >= movementThreshold
-            || now.timeIntervalSince(lastCaptureDate)
-                >= PowerSavingPolicy.stationaryRefreshInterval(
-                    idleDuration: idleDuration
-                )
+        return true
     }
 
     private func cursorVelocity(

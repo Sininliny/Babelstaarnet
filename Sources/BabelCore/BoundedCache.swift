@@ -26,12 +26,14 @@ public final class BoundedCache<Key: Hashable, Value> {
 
     public subscript(key: Key) -> Value? {
         get {
-            guard var entry = entries[key] else {
+            // Reading is also what records the read, so it is done through a
+            // position rather than by looking the key up, mutating a copy, and
+            // hashing it a second time to put the copy back.
+            guard let index = entries.index(forKey: key) else {
                 return nil
             }
-            entry.lastAccess = nextAccess()
-            entries[key] = entry
-            return entry.value
+            entries.values[index].lastAccess = nextAccess()
+            return entries.values[index].value
         }
         set {
             guard let newValue else {
