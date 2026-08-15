@@ -118,48 +118,112 @@ enum HoverHitTesting {
         return nearestDistance <= tolerance ? nearest : nil
     }
 
+    /// The word under `point`, chosen in one pass over the page.
+    ///
+    /// The two candidate sets this used to build — every word on screen, then
+    /// every word the pointer touches — were arrays built and thrown away
+    /// twenty times a second, on the main actor, for a page that had not
+    /// changed. They are running comparisons now instead: same words examined
+    /// in the same order, so ties still fall to the earliest word, but nothing
+    /// is copied to examine them.
     static func word(
         at point: CGPoint,
         in regions: [TextRegion],
         retaining current: WordRegion?
     ) -> WordRegion? {
-        let words = regions.flatMap(\.words)
         let currentReplacement = current.flatMap {
-            replacement(for: $0, in: words)
+            replacement(for: $0, in: regions)
         }
 
-        let directCandidates = words.filter {
-            $0.frame.insetBy(dx: -4, dy: -5).contains(point)
+        var enteredNeighbor: WordRegion?
+        var enteredNeighborDistance = CGFloat.infinity
+        var nearest: WordRegion?
+        var nearestDistance = CGFloat.infinity
+        var nearestArea = CGFloat.infinity
+
+        for region in regions {
+            for candidate in region.words
+            where candidate.frame.insetBy(dx: -4, dy: -5).contains(point) {
+                let candidateDistance = distance(
+                    from: point,
+                    to: candidate.frame.center
+                )
+
+                // `representsSameTarget` normalizes two strings, so it is asked
+                // last, of the few candidates that could still win.
+                if currentReplacement != nil,
+                   candidateDistance < enteredNeighborDistance,
+                   candidate.frame.contains(point),
+                   !representsSameTarget(candidate, currentReplacement) {
+                    enteredNeighborDistance = candidateDistance
+                    enteredNeighbor = candidate
+                }
+
+                let candidateArea = candidate.frame.area
+                if nearest == nil
+                    || isCloserTarget(
+                        distance: candidateDistance,
+                        area: candidateArea,
+                        than: nearestDistance,
+                        area: nearestArea
+                    ) {
+                    nearest = candidate
+                    nearestDistance = candidateDistance
+                    nearestArea = candidateArea
+                }
+            }
         }
 
         if let currentReplacement {
-            if let enteredNeighbor = directCandidates
-                .filter({ !representsSameTarget($0, currentReplacement) })
-                .filter({ $0.frame.contains(point) })
-                .min(by: { distance(from: point, to: $0.frame.center)
-                    < distance(from: point, to: $1.frame.center) }) {
+            if let enteredNeighbor {
                 return enteredNeighbor
             }
-
             if retentionFrame(for: currentReplacement).contains(point) {
                 return currentReplacement
             }
         }
 
-        return directCandidates.min {
-            let leftDistance = distance(from: point, to: $0.frame.center)
-            let rightDistance = distance(from: point, to: $1.frame.center)
-            if abs(leftDistance - rightDistance) > 0.5 {
-                return leftDistance < rightDistance
-            }
-            return $0.frame.area < $1.frame.area
+        return nearest
+    }
+
+    /// Which of two touched words the pointer is really on: the nearer one,
+    /// unless they are within half a point of each other, where the smaller box
+    /// is the more specific answer.
+    private static func isCloserTarget(
+        distance: CGFloat,
+        area: CGFloat,
+        than bestDistance: CGFloat,
+        area bestArea: CGFloat
+    ) -> Bool {
+        if abs(distance - bestDistance) > 0.5 {
+            return distance < bestDistance
         }
+        return area < bestArea
     }
 
     static func replacement(
         for word: WordRegion,
         in candidates: [WordRegion]
     ) -> WordRegion? {
+        replacement(for: word, among: candidates)
+    }
+
+    /// The same lookup against a page that has not been flattened into one
+    /// array first. The hover path holds regions, and flattening them was the
+    /// larger of the two costs on a page a pointer is resting over.
+    static func replacement(
+        for word: WordRegion,
+        in regions: [TextRegion]
+    ) -> WordRegion? {
+        replacement(for: word, among: regions.lazy.flatMap(\.words))
+    }
+
+    private static func replacement<Candidates: Collection>(
+        for word: WordRegion,
+        among candidates: Candidates
+    ) -> WordRegion? where Candidates.Element == WordRegion {
+        // The identifier is the usual answer and costs no string work, so it is
+        // asked for on its own first and stops as soon as it is found.
         if let identical = candidates.first(where: { $0.id == word.id }) {
             return identical
         }
@@ -169,22 +233,28 @@ enum HoverHitTesting {
         // enters twenty times a second.
         let key = normalized(word.sourceText)
         let center = word.frame.center
-        let nearest = candidates
-            .filter {
-                $0.displayID == word.displayID
-                    && normalized($0.sourceText) == key
+        var nearest: WordRegion?
+        var nearestDistance = CGFloat.infinity
+        for candidate in candidates
+        where candidate.displayID == word.displayID {
+            guard normalized(candidate.sourceText) == key else {
+                continue
             }
-            .min {
-                distance(from: $0.frame.center, to: center)
-                    < distance(from: $1.frame.center, to: center)
+            let candidateDistance = distance(
+                from: candidate.frame.center,
+                to: center
+            )
+            if candidateDistance < nearestDistance {
+                nearestDistance = candidateDistance
+                nearest = candidate
             }
+        }
 
-        guard let nearest else {
+        guard nearest != nil else {
             return nil
         }
         let tolerance = max(36, word.frame.height * 3)
-        return distance(from: nearest.frame.center, to: word.frame.center)
-            <= tolerance ? nearest : nil
+        return nearestDistance <= tolerance ? nearest : nil
     }
 
     static func representsSameTarget(

@@ -66,12 +66,20 @@ enum AdaptiveCapturePlanner {
         regions: [TextRegion],
         captureFrame: CGRect
     ) -> Bool {
-        let words = regions.flatMap(\.words)
+        // Only a reading of one or two words is a reading that might have been
+        // cut off by the crop, so the page behind a resting pointer answers
+        // this on its third word rather than after being copied into one array.
+        var words: [WordRegion] = []
+        for region in regions {
+            for word in region.words {
+                guard words.count < 2 else {
+                    return false
+                }
+                words.append(word)
+            }
+        }
         guard !words.isEmpty else {
             return true
-        }
-        guard words.count <= 2 else {
-            return false
         }
 
         let margin = max(
@@ -92,14 +100,19 @@ enum AdaptiveCapturePlanner {
         from regions: [TextRegion],
         previous: CGFloat?
     ) -> CGFloat? {
-        let heights = regions
-            .flatMap(\.words)
-            .map(\.frame.height)
-            .filter { $0 >= 4 && $0 <= 180 }
-            .sorted()
+        var heights: [CGFloat] = []
+        for region in regions {
+            for word in region.words {
+                let height = word.frame.height
+                if height >= 4, height <= 180 {
+                    heights.append(height)
+                }
+            }
+        }
         guard !heights.isEmpty else {
             return previous
         }
+        heights.sort()
         let median = heights[heights.count / 2]
         guard let previous else {
             return median

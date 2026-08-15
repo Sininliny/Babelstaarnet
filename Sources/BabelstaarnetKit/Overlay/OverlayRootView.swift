@@ -19,6 +19,37 @@ enum BubbleTransition {
     static let appearance = Animation.easeOut(duration: 0.14)
 }
 
+/// The mark on the page saying which word the panels are answering about.
+///
+/// It is the same accent rule the sentence panel already draws under the word
+/// it is pointing at, moved onto the page: one idiom for "this one", in the
+/// only colour either panel uses to say it. Drawn over whatever the reader
+/// happens to be reading rather than on a panel of known colour, it carries its
+/// own glow — enough to survive a dark page, not enough to read as a highlight.
+struct WordFocusMarkerView: View {
+    @ObservedObject var state: OverlayState
+
+    var body: some View {
+        Group {
+            if state.hoverCard != nil {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.85))
+                    .frame(height: WordFocusMarker.thickness)
+                    .shadow(
+                        color: Color.accentColor.opacity(0.5),
+                        radius: 3
+                    )
+                    .padding(.horizontal, WordFocusMarker.glow)
+                    .frame(maxHeight: .infinity)
+                    .transition(.opacity)
+            } else {
+                Color.clear
+            }
+        }
+        .animation(BubbleTransition.appearance, value: state.hoverCard == nil)
+    }
+}
+
 struct WordBubbleView: View {
     @ObservedObject var state: OverlayState
 
