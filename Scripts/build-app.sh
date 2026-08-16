@@ -51,10 +51,12 @@ cp "$project_dir/Scripts/install-local-engines.sh" \
 
 signing_identity="${SIGNING_IDENTITY:-}"
 
+# Nothing under Resources is code — the two local-engine files are a Python
+# script and a shell script — so there is no nested bundle to sign and
+# --deep, which Apple no longer recommends for signing, has nothing to reach.
 if [[ -n "$signing_identity" ]]; then
     codesign \
         --force \
-        --deep \
         --options runtime \
         --timestamp \
         --sign "$signing_identity" \
@@ -63,7 +65,6 @@ if [[ -n "$signing_identity" ]]; then
 else
     codesign \
         --force \
-        --deep \
         --sign - \
         --requirements '=designated => identifier "dev.sinin.babelstaarnet"' \
         "$app_dir"

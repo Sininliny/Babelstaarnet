@@ -1,16 +1,56 @@
 BABELSTÅRNET — START HERE
 
+Requires macOS 15 or newer.
+
+
+INSTALL
+
+Double-click "Install Babelstaarnet.command", in this folder.
+
+Terminal will ask whether you are sure you want to open a script
+downloaded from the Internet. Click Open. The installer puts the app in
+your Applications folder and starts it. You can close the window when it
+says it is done.
+
+The installer is plain text and says at the top exactly what it does.
+Open it in TextEdit first if you would like to read it.
+
+
+IF YOU WOULD RATHER NOT RUN THE INSTALLER
+
+Do the same thing by hand:
+
 1. Drag Babelstaarnet.app into your Applications folder.
-2. Open Babelstaarnet from Applications.
-3. Click “Set up Babelstårnet”.
-4. In System Settings, enable Babelstårnet under Screen Recording.
-5. Return to Babelstårnet. If asked, click “Enabled it? Relaunch”.
-6. Click “Start hover learning”, or press fn + Z.
-7. Move the pointer over a Danish word.
+2. Double-click it. macOS will say it cannot verify the developer, and
+   offer you only Move to Trash or Done. Click Done.
+3. Open System Settings, then Privacy & Security, and scroll down.
+   There is a line there about Babelstaarnet having been blocked, and
+   an "Open Anyway" button beside it. Click it.
+4. Confirm with Touch ID or your password, then click Open.
+
+You only do this once.
+
+Older instructions said to Control-click the app and choose Open.
+That worked up to macOS 14. Apple removed it in macOS 15, and the
+System Settings button above is what replaced it.
+
+
+WHY MACOS ASKS AT ALL
+
+The app is signed, but ad-hoc — with a signature this Mac can check for
+damage, rather than one issued by Apple. Notarizing it would need a paid
+Apple Developer Program membership, which this project does not have.
+The warning is about that missing membership. It is not a finding about
+the app.
+
+
+THEN
+
+1. Babelstårnet has no Dock icon. Look for it in the menu bar.
+2. Click "Set up Babelstårnet".
+3. In System Settings, enable Babelstårnet under Screen Recording.
+4. Return to Babelstårnet. If asked, click "Enabled it? Relaunch".
+5. Click "Start hover learning", or press fn + Z.
+6. Move the pointer over a Danish word.
 
 Everything runs on this Mac. No account is required.
-
-If macOS says it cannot verify this preview build:
-Control-click Babelstaarnet.app, choose Open, then choose Open once more.
-
-A normally signed and notarized release opens with a regular double-click.
