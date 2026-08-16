@@ -66,25 +66,20 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          zip_path="$(find dist -maxdepth 1 -name '*.app.zip' -print -quit)"
+          zip_path="$(find dist -maxdepth 1 -name '*-macOS.zip' -print -quit)"
           xcrun notarytool submit "$zip_path" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" \
             --wait
           # The ticket staples to the app, not to the archive it travelled in,
-          # so the archive is made again around the stapled bundle.
+          # so the archive is made again around the stapled bundle — by the
+          # packaging script, so that it is laid out the same way as the one
+          # it replaces.
           xcrun stapler staple dist/Babelstaarnet.app
           xcrun stapler validate dist/Babelstaarnet.app
           spctl --assess --type exec --verbose=2 dist/Babelstaarnet.app
-          rm -f "$zip_path"
-          ditto -c -k --sequesterRsrc --keepParent \
-            dist/Babelstaarnet.app "$zip_path"
-          (
-            cd dist
-            zip_name="$(basename "$zip_path")"
-            shasum -a 256 "$zip_name" > "$zip_name.sha256"
-          )
+          SKIP_BUILD=1 ./Scripts/package-release.sh
 
       - name: Publish GitHub release
         env:
@@ -95,8 +90,8 @@ jobs:
             tag="${{ inputs.tag }}"
           fi
           gh release create "$tag" \
-            dist/*.app.zip \
-            dist/*.app.zip.sha256 \
+            dist/*-macOS.zip \
+            dist/*-macOS.zip.sha256 \
             --title "Babelstårnet ${tag#v}" \
             --notes-file docs/RELEASE_NOTES.md \
             --generate-notes

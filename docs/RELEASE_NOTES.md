@@ -49,14 +49,24 @@ Also in this release:
 
 ### Download
 
-**APP ZIP** — a ZIP containing `Babelstaarnet.app`. There is no DMG: a disk
-image is the right shape for an app that opens with a double click, and this
-one cannot, so it only added a mount step in front of the same warning.
+**ZIP** — `Babelstaarnet.app`, an installer, and `Start Here.txt`. There is no
+DMG: a disk image is the right shape for an app that opens with a double click,
+and this one does not, so it only added a mount step in front of the same
+warning.
 
 This preview is ad-hoc signed because the project does not have an Apple
-Developer ID, and macOS will say it cannot verify the developer. After
-extracting, Control-click **Babelstaarnet.app**, choose **Open**, and confirm
-once.
+Developer ID, so it is not notarized and macOS will say it cannot verify the
+developer. Extract the ZIP and double-click **Install Babelstaarnet.command**;
+click **Open** when Terminal asks about a script downloaded from the Internet.
+It installs the app to **Applications** and opens it.
+
+To do it by hand instead: drag the app to **Applications**, double-click it,
+click **Done** on the warning, then go to **System Settings → Privacy &
+Security** and click **Open Anyway** next to the line about Babelstaarnet.
+
+Control-clicking the app and choosing **Open**, which earlier releases told you
+to do, was removed by Apple in macOS 15 and no longer works anywhere this app
+runs.
 
 All OCR, translation, explanations, speech, and learning-profile data are
 processed and stored on your own Mac.

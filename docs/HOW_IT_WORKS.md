@@ -349,12 +349,16 @@ make test
 make test-runtime
 make benchmark-ocr
 make run
+make install
 make release
 make readme-images
 ```
 
-`make run` builds and ad-hoc signs `dist/Babelstaarnet.app`, then launches it.
-`make release` produces `Babelstaarnet.app.zip` and its checksum under `dist/`.
+`make run` builds and ad-hoc signs `dist/Babelstaarnet.app`, then launches it
+from `dist/`. `make install` puts that bundle into `/Applications` and opens it
+there, quitting any copy already running first, since a bundle cannot be
+replaced under a process still executing out of it. `make release` produces the
+distributable ZIP and its checksum under `dist/`.
 
 `make test-runtime` renders a Retina-scale cursor crop containing dark, light,
 and colored Danish text. It verifies the focused Vision response, that the
@@ -385,17 +389,60 @@ or OCR request is made.
 When the Apple translation fallback is used, the first translation may prompt
 macOS to download its Danish → English language pack. It then works offline.
 
-## Screen Recording identity
+## Signing, Gatekeeper, and Screen Recording identity
 
-Local builds are ad-hoc signed with the explicit designated requirement
-`identifier "dev.sinin.babelstaarnet"`. This keeps the identity macOS uses for
-Screen Recording stable across `make app` rebuilds without installing or
-trusting a private certificate.
+The project is not enrolled in the Apple Developer Program, so there is no
+Developer ID certificate and therefore no notarization. Builds are ad-hoc
+signed. Set `SIGNING_IDENTITY` and the signing step switches to a real identity
+with the hardened runtime and a timestamp; leave it unset and it ad-hoc signs.
+
+These are two different things, and only one of them is a limitation:
+
+- **The signature.** An ad-hoc signature is a real one. `codesign --verify`
+  checks it, macOS re-checks it on every launch, and TCC will hold a Screen
+  Recording grant against it. Nothing about running the app locally is degraded
+  by it.
+- **Notarization.** Gatekeeper refuses to open a bundle that is carrying
+  `com.apple.quarantine` and has no notarization ticket, and since macOS 15
+  there is no override inside that refusal — Apple removed the Control-click
+  route, and the only remaining one is **Open Anyway** in System Settings.
+  Notarizing needs a paid membership. There is no substitute for it: a
+  self-signed certificate is not trusted by Gatekeeper either, so it buys
+  nothing here.
+
+The flag is attached by whatever downloads the archive, which means it is the
+*download* that is held and not the app. Anything that never travelled as a
+download — `make app`, `make run`, `make install` — is never flagged and opens
+with no warning at all. `Resources/Install Babelstaarnet.command` ships in the
+release ZIP to do the same thing for someone who did download it: verify the
+signature, copy to `/Applications`, clear the flag from the copy, open it. It
+works because a quarantined *script* is confirmed rather than refused, which is
+a different code path from a quarantined bundle.
+
+Nothing here is signing the app for distribution to strangers. Any Mac that
+opens this app is being asked to take the developer's word for it, which is
+exactly what notarization exists to avoid asking. Enrolling and setting the
+repository secrets in [RELEASING.md](RELEASING.md) is the fix; everything above
+is what can be done until then.
+
+### The designated requirement
+
+Ad-hoc signed code gets a designated requirement built from its CDHash, which
+changes with every build — so TCC would treat each rebuild as a different app
+and drop the Screen Recording grant. The signing step overrides it with an
+explicit `identifier "dev.sinin.babelstaarnet"`, which keeps the identity macOS
+uses for Screen Recording stable across rebuilds without installing or trusting
+a private certificate.
+
+The cost is that the requirement is satisfied by anything claiming that bundle
+identifier. That is an acceptable trade for a local grant on a development
+machine and it is not one to keep after notarization: a Developer ID build gets
+a requirement naming the certificate, and should not carry this override.
 
 If Screen Recording was granted to an older build that used a CDHash
 requirement, remove or toggle that old Babelstårnet entry once, launch the
-current bundle, enable Babelstårnet again, and relaunch. Later local rebuilds
-retain the designated requirement.
+current bundle, enable Babelstårnet again, and relaunch. Later rebuilds retain
+the designated requirement.
 
 ## Optional open-source local engines
 

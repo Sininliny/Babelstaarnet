@@ -1,4 +1,4 @@
-.PHONY: build test test-runtime benchmark-ocr app release run install-engines readme-images clean
+.PHONY: build test test-runtime benchmark-ocr app release run install install-engines readme-images clean
 
 build:
 	swift build
@@ -20,6 +20,9 @@ release:
 
 run: app
 	open ./dist/Babelstaarnet.app
+
+install:
+	./Scripts/install-app.sh
 
 install-engines:
 	./Scripts/install-local-engines.sh
