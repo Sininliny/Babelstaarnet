@@ -1,3 +1,4 @@
+import AppKit
 import BabelCore
 import LanguageDanish
 import SwiftUI
@@ -780,10 +781,49 @@ private struct InlineTokenLayout: Layout {
 /// So the text is given its own ground, painted inside the material rather than
 /// instead of it: the glass still frames the panel and still belongs to the
 /// desktop, while the words sit on the panel's own background colour, which is
-/// dark under dark appearance and light under light. This is the one number to
-/// turn if the panels ever want more of the page showing through them.
-private enum BubbleGround {
+/// dark under dark appearance and light under light. `opacity` is the one
+/// number to turn if the panels ever want more of the page showing through
+/// them.
+enum BubbleGround {
     static let opacity: Double = 0.85
+
+    /// The colour the panel paints itself.
+    ///
+    /// The reported fault is a grey background that sometimes does not show
+    /// up. It was `windowBackgroundColor`, chosen on the reasoning that a
+    /// panel should be painted whatever the system paints panels — but under
+    /// Aqua that colour now resolves to pure white, the same white as an
+    /// article page. So on the most ordinary page there is, the ground was
+    /// exactly the page: measured over a white backdrop it came back with a
+    /// difference of zero, and the panel's only separation from the text
+    /// underneath was whatever the material happened to pick up from behind
+    /// it. Over a sidebar or a coloured block that is enough and the bubble
+    /// reads as a panel; over the body text it is nothing at all. The grey was
+    /// coming from the page rather than from the bubble, which is why it came
+    /// and went with the page.
+    ///
+    /// A panel floating over someone else's content needs a ground that
+    /// contrasts with content, not one that matches the system's window fill,
+    /// so both values are stated here rather than borrowed. Light is a definite
+    /// step below white — about the step macOS itself puts between a sidebar
+    /// and the content beside it, which survives the dilution `opacity` leaves
+    /// and still reads as paper rather than as a slab. Dark keeps the value
+    /// `windowBackgroundColor` was already resolving to, since that case was
+    /// never the broken one.
+    ///
+    /// Resolved per appearance rather than per `colorScheme` at build time:
+    /// the bubbles live in borderless panels that are never key, and the
+    /// appearance they are drawn in is the one to answer to.
+    static let color = Color(
+        nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? dark
+                : light
+        }
+    )
+
+    static let light = NSColor(white: 0.89, alpha: 1)
+    static let dark = NSColor(white: 0.118, alpha: 1)
 
     /// The ground and the material are the same rounded rectangle at the same
     /// size, so on every pixel the corner arc crosses, one antialiased edge was
@@ -822,10 +862,7 @@ private extension View {
                 style: .continuous
             )
             .inset(by: BubbleGround.inset)
-            .fill(
-                Color(nsColor: .windowBackgroundColor)
-                    .opacity(BubbleGround.opacity)
-            )
+            .fill(BubbleGround.color.opacity(BubbleGround.opacity))
         }
         .bubbleMaterial(tint: tint, cornerRadius: cornerRadius)
         .overlay {
