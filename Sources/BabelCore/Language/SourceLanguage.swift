@@ -142,6 +142,10 @@ public struct SourceLanguage: Sendable {
     public let structuralWords: Set<String>
     /// How this language says "means X", used when there is no bridge to show.
     public let meansPhrase: @Sendable (String) -> String
+    /// What a local language model is asked, in this language, for the sense
+    /// a word has in its sentence. A pack without them simply has no
+    /// contextual glosses, and reads with word-at-a-time translation.
+    public let contextualGlossPrompts: ContextualGlossPrompts?
 
     /// Built once. These are read per word — `normalized` and `lowercased` sit
     /// inside the OCR and bridge loops — and rebuilding a `Locale` from its
@@ -165,6 +169,7 @@ public struct SourceLanguage: Sendable {
         beginnerGlosses: [String: String] = [:],
         vacuousExplanations: Set<String> = [],
         structuralWords: Set<String> = [],
+        contextualGlossPrompts: ContextualGlossPrompts? = nil,
         meansPhrase: @escaping @Sendable (String) -> String
     ) {
         self.code = code
@@ -182,6 +187,7 @@ public struct SourceLanguage: Sendable {
         self.vacuousExplanations = vacuousExplanations
         self.structuralWords = structuralWords
         self.meansPhrase = meansPhrase
+        self.contextualGlossPrompts = contextualGlossPrompts
         self.locale = Locale(identifier: localeIdentifier)
         self.naturalLanguage = NLLanguage(rawValue: code)
     }

@@ -4,7 +4,9 @@ Babelstårnet reads the screen. That is the whole function, and it is also the
 reason this page exists: an app with permission to see everything you look at
 owes you a precise account of what it does with that, rather than a promise.
 
-Last reviewed 14 August 2026, against version 0.3.0.
+Last reviewed 14 August 2026, against version 0.3.0. The contextual glosser
+and its installer were added afterwards; what they do is described below where
+it applies, but they have not had a review of their own.
 
 ## The guarantee
 
@@ -32,6 +34,13 @@ Three consequences worth stating plainly:
 - **The translation worker is offline.** The Argos bridge only reaches the
   network under `--install`, when it downloads language models. The `--server`
   mode used for every translation makes no network calls at all.
+- **So is the contextual glosser.** It is handed each sentence under the
+  pointer, which is the same secret as the capture. It has no install mode:
+  the model is loaded from a directory in Application Support, never by a name
+  that could be looked up, and the bridge forces `HF_HUB_OFFLINE`,
+  `TRANSFORMERS_OFFLINE`, and `HF_HUB_DISABLE_TELEMETRY` on before importing
+  anything that reads them, so an inherited environment cannot switch them
+  back. The app sets them as well when it starts the worker.
 
 ### Where the network *is* used
 
@@ -39,8 +48,9 @@ Being accurate matters more than sounding absolute. Network access happens in
 exactly two places, neither of which carries anything you read:
 
 1. **Installing the optional open-source engines**, which downloads Tesseract,
-   Python packages, and the Argos language models. You choose when this runs,
-   and it is not required — the app works on Apple's frameworks alone.
+   Python packages, and the Argos language models — and, as a separate step,
+   `mlx-lm` and the 2.6 GB model for contextual glosses. You choose when each
+   runs, and neither is required — the app works on Apple's frameworks alone.
 2. **Apple's Translation framework**, on first use, may download a Danish
    language pack from Apple. Translation itself then runs on-device. Apple's
    Vision recognition and the speech synthesizer are on-device throughout.
@@ -51,6 +61,7 @@ exactly two places, neither of which carries anything you read:
 | --- | --- | --- |
 | Learning profile | `~/Library/Preferences/dev.sinin.babelstaarnet.plist` | Danish words, knowledge levels, counts, timestamps |
 | Argos models and venv | `~/Library/Application Support/Babelstaarnet/` | Language models, Python environment |
+| Contextual gloss model | `~/Library/Application Support/Babelstaarnet/Models/` | Model weights and tokenizer; nothing you read |
 | Exported profile | wherever you choose to save it | The learning profile, as JSON |
 
 **The profile records words, not what you were reading.** Each entry keeps one
@@ -108,7 +119,15 @@ Recorded here rather than quietly carried:
 - **Python dependencies are installed unpinned and unverified.** The installer
   runs `pip install --upgrade pip argostranslate nltk` with no version pins and
   no hashes, so a compromised release of those packages or their dependencies
-  would execute as you. Pinning with `--require-hashes` is the fix.
+  would execute as you. Pinning with `--require-hashes` is the fix. The
+  contextual-gloss installer pins `mlx-lm` to an exact version, which fixes
+  what is installed but not its dependencies, and verifies nothing by hash;
+  it has the same gap, narrower.
+- **The contextual model is verified; its loader is not.** Every model file is
+  checked against a SHA-256 pinned in `install-contextual-glosses.sh` before it
+  is moved into place, which is the treatment the WordNet archive below still
+  lacks. The weights are `safetensors`, which cannot carry code. The code that
+  loads them is `mlx-lm` and its dependencies, pinned as above.
 - **The WordNet archive is downloaded without an integrity check**, from a
   moving branch, and extracted unverified. It should be pinned to a commit and
   checked against a known SHA-256.

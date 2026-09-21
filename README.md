@@ -93,6 +93,10 @@ You never have to press any of them. Hold Option to keep a bubble open while you
 move the pointer to it; every shortcut is editable under **Settings →
 Shortcuts**.
 
+For translations that follow the sentence — `får` as "gets" rather than
+"sheep" — download the optional language model under **Settings → Contextual
+meanings**. It runs on your Mac, like everything else here.
+
 ---
 
 **[How it works →](docs/HOW_IT_WORKS.md)** — the recognition pipeline, the design

@@ -15,6 +15,27 @@ struct FocusedRegionSelectionPolicy: Sendable {
         from regions: [TextRegion],
         at focusPoint: CGPoint
     ) -> [TextRegion] {
+        guard let match = focusedWord(in: regions, at: focusPoint) else {
+            return regions
+        }
+        // The hovered line, plus the lines its sentence runs onto. Keeping the
+        // line alone was cheaper, but it decided the bubble could only ever
+        // show the fragment the column happened to wrap — and the words on the
+        // continuation lines were dropped before translation, so nothing later
+        // in the pipeline could recover them.
+        return sentenceAssembly.lines(
+            containing: match.word,
+            in: match.region,
+            among: regions
+        )
+    }
+
+    /// The word under the pointer and the line it is on, if the pointer is on
+    /// a word at all.
+    func focusedWord(
+        in regions: [TextRegion],
+        at focusPoint: CGPoint
+    ) -> (region: TextRegion, word: WordRegion)? {
         let matches = regions.compactMap {
             region -> (TextRegion, WordRegion, CGFloat)? in
             let words = region.words.filter {
@@ -32,19 +53,9 @@ struct FocusedRegionSelectionPolicy: Sendable {
                 distance(from: nearest.frame.center, to: focusPoint)
             )
         }
-        guard let match = matches.min(by: { $0.2 < $1.2 }) else {
-            return regions
+        return matches.min(by: { $0.2 < $1.2 }).map {
+            (region: $0.0, word: $0.1)
         }
-        // The hovered line, plus the lines its sentence runs onto. Keeping the
-        // line alone was cheaper, but it decided the bubble could only ever
-        // show the fragment the column happened to wrap — and the words on the
-        // continuation lines were dropped before translation, so nothing later
-        // in the pipeline could recover them.
-        return sentenceAssembly.lines(
-            containing: match.1,
-            in: match.0,
-            among: regions
-        )
     }
 
     func focusedSourceKeys(

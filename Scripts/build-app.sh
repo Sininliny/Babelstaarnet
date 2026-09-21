@@ -48,11 +48,15 @@ cp "$project_dir/Resources/LocalEngines/argos_bridge.py" \
     "$resource_dir/LocalEngines/argos_bridge.py"
 cp "$project_dir/Scripts/install-local-engines.sh" \
     "$resource_dir/LocalEngines/install-local-engines.sh"
+cp "$project_dir/Resources/LocalEngines/gloss_bridge.py" \
+    "$resource_dir/LocalEngines/gloss_bridge.py"
+cp "$project_dir/Scripts/install-contextual-glosses.sh" \
+    "$resource_dir/LocalEngines/install-contextual-glosses.sh"
 
 signing_identity="${SIGNING_IDENTITY:-}"
 
-# Nothing under Resources is code — the two local-engine files are a Python
-# script and a shell script — so there is no nested bundle to sign and
+# Nothing under Resources is code — the local-engine files are Python and
+# shell scripts — so there is no nested bundle to sign and
 # --deep, which Apple no longer recommends for signing, has nothing to reach.
 if [[ -n "$signing_identity" ]]; then
     codesign \

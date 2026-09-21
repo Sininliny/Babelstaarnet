@@ -121,12 +121,21 @@ final class OverlayWindowController {
         }
     }
 
+    /// Shows a newly read page.
+    ///
+    /// `answersVisibleWord` is for a page that is the same reading as the one
+    /// on screen with a better answer: the translation the sentence gave, in
+    /// place of the one the word gave on its own. A bubble held still keeps
+    /// its snapshot against every other new page — a rescan must not change
+    /// what the reader is looking at — but this one it takes, once, because
+    /// it is the answer the snapshot was standing in for.
     func show(
         regions: [TextRegion],
         autoSpeak: Bool,
         hoverDelay: Double,
         hotKeyConfiguration: HotKeyConfiguration,
-        bridgeConfiguration: LearningBridgeConfiguration
+        bridgeConfiguration: LearningBridgeConfiguration,
+        answersVisibleWord: Bool = false
     ) {
         let presentationChanged = self.hotKeyConfiguration
             != hotKeyConfiguration
@@ -163,6 +172,22 @@ final class OverlayWindowController {
            currentWord != nil,
            currentRegion != nil {
             refreshCurrentCard(preservePosition: false)
+            return
+        }
+        if answersVisibleWord,
+           bubblesAreVisible,
+           let currentWord,
+           let replacement = HoverHitTesting.replacement(
+            for: currentWord,
+            in: overlays.values.flatMap(\.regions)
+           ),
+           let replacementRegion = region(
+            containing: replacement,
+            in: overlays.values.flatMap(\.regions)
+           ) {
+            self.currentWord = replacement
+            currentRegion = replacementRegion
+            refreshCurrentCard(preservePosition: true)
             return
         }
         if bubblesAreVisible, let currentWord {
