@@ -77,6 +77,15 @@ swiftc \
     -o "$output_dir/ContextualGlossServiceCheck"
 "$output_dir/ContextualGlossServiceCheck"
 
+swiftc \
+    -parse-as-library \
+    -module-cache-path "$output_dir/module-cache" \
+    -I "$debug_bin" \
+    "${debug_objects[@]}" \
+    "$project_dir/Tests/RuntimeChecks/ContextualGlossCoordinatorCheck.swift" \
+    -o "$output_dir/ContextualGlossCoordinatorCheck"
+"$output_dir/ContextualGlossCoordinatorCheck"
+
 ocr_output="$(
     /opt/homebrew/bin/tesseract \
         "$fixture" \
