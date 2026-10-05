@@ -13,6 +13,9 @@ struct WordBookEntry: Codable, Equatable, Identifiable, Sendable {
     /// The sentence the word was read in.
     var sentence: String
     var savedAt: Date
+    /// The word's dictionary form, when the contextual glosser gave one that
+    /// differs from the word: "gå" for "gik".
+    var lemma: String? = nil
 }
 
 /// The words the reader asked about: every word marked "Don't know" and every
@@ -59,6 +62,7 @@ final class WordBookStore: ObservableObject {
         word: String,
         meaning: String,
         sentence: String,
+        lemma: String? = nil,
         at date: Date = Date()
     ) {
         guard !key.isEmpty else {
@@ -94,6 +98,9 @@ final class WordBookStore: ObservableObject {
         }
         if !sentence.isEmpty {
             entry.sentence = sentence
+        }
+        if let lemma, !lemma.isEmpty {
+            entry.lemma = lemma
         }
         entry.savedAt = date
         entries.removeAll { $0.id == key }
@@ -159,11 +166,12 @@ final class WordBookStore: ObservableObject {
         }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
-        var lines = ["word,meaning,sentence,saved"]
+        var lines = ["word,dictionary form,meaning,sentence,saved"]
         for entry in entries {
             lines.append(
                 [
                     field(entry.word),
+                    field(entry.lemma ?? ""),
                     field(entry.meaning),
                     field(entry.sentence),
                     formatter.string(from: entry.savedAt)

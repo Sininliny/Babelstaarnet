@@ -73,6 +73,17 @@ enum ContextualGlossPolicyChecks {
                 == sheep.explanation
         )
 
+        // The dictionary form follows the explanation: kept when the answer
+        // is about the sentence's sense, dropped when it is about another.
+        let went = ContextualGloss.FocusedWord(
+            gloss: "went",
+            lemma: "gå",
+            explanation: "At bevæge sig til fods."
+        )
+        precondition(policy.lemma(for: went, sentenceGloss: "went") == "gå")
+        precondition(policy.lemma(for: went, sentenceGloss: "train") == nil)
+        precondition(policy.lemma(for: nil, sentenceGloss: "went") == nil)
+
         print("Contextual gloss policy checks passed")
     }
 }

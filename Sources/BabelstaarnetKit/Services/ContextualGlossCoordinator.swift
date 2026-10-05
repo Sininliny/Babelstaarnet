@@ -63,6 +63,8 @@ struct ContextualGlossAnswer: Sendable {
     /// The explanation of the word under the pointer, when the policy trusts
     /// it; otherwise the explanation shown is the one built as before.
     let explanation: String?
+    /// The word's dictionary form, when the policy trusts it.
+    let lemma: String?
 }
 
 /// Asks the contextual glosser about the sentence under the pointer, one
@@ -131,6 +133,10 @@ final class ContextualGlossCoordinator {
             glossesByWord: glosses,
             focusKey: focusKey,
             explanation: policy.explanation(
+                for: focus,
+                sentenceGloss: glosses[focusKey]
+            ),
+            lemma: policy.lemma(
                 for: focus,
                 sentenceGloss: glosses[focusKey]
             )

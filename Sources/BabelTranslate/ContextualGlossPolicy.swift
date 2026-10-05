@@ -55,6 +55,24 @@ public struct ContextualGlossPolicy: Sendable {
         return focus.explanation
     }
 
+    /// The dictionary form, under the same condition as the explanation: the
+    /// single-word answer must be about the sense the sentence gave. Asked
+    /// about "tog" on its own the model can read it as the noun and answer
+    /// "tog", where the verb in the sentence is "tage".
+    public func lemma(
+        for focus: ContextualGloss.FocusedWord?,
+        sentenceGloss: String?
+    ) -> String? {
+        guard let focus, !focus.lemma.isEmpty else {
+            return nil
+        }
+        if let sentenceGloss, !sentenceGloss.isEmpty,
+           !glossesAgree(sentenceGloss, focus.gloss) {
+            return nil
+        }
+        return focus.lemma
+    }
+
     /// Whether two short glosses name the same sense: the same word, or two
     /// forms of one — "look forward" and "looking forward to".
     ///
