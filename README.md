@@ -93,6 +93,10 @@ You never have to press any of them. Hold Option to keep a bubble open while you
 move the pointer to it; every shortcut is editable under **Settings →
 Shortcuts**.
 
+Every word you mark **unknown** or pin goes into your **Word Book**, with the
+meaning the bubble gave and the sentence you met it in. Open it from the menu
+bar to search it, hear a word again, or export it as CSV for flash cards.
+
 For translations that follow the sentence — `får` as "gets" rather than
 "sheep" — download the optional language model under **Settings → Contextual
 meanings**. It runs on your Mac, like everything else here.

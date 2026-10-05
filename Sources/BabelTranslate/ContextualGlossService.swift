@@ -5,6 +5,8 @@ import Synchronization
 public enum ContextualGlossError: LocalizedError {
     case unavailable
     case executionFailed(String)
+    /// The worker is running but could not answer this one request.
+    case requestFailed(String)
     case invalidResponse
 
     public var errorDescription: String? {
@@ -13,6 +15,8 @@ public enum ContextualGlossError: LocalizedError {
             return "The local language model for contextual glosses is not installed."
         case let .executionFailed(message):
             return "The contextual glosser failed: \(message)"
+        case let .requestFailed(message):
+            return "The contextual glosser could not answer: \(message)"
         case .invalidResponse:
             return "The contextual glosser returned an invalid response."
         }
@@ -138,6 +142,10 @@ public actor ContextualGlossService {
         }
         do {
             return try request(sentence: sentence, words: words, focus: focus)
+        } catch ContextualGlossError.requestFailed(let message) {
+            // The worker is alive and answered; restarting it would reload
+            // the model to ask the same question again.
+            throw ContextualGlossError.requestFailed(message)
         } catch {
             resetServer()
             return try request(sentence: sentence, words: words, focus: focus)
@@ -168,11 +176,19 @@ public actor ContextualGlossService {
         guard let response = try? JSONDecoder().decode(
             GlossResponse.self,
             from: responseData
-        ), response.glosses.count == words.count else {
+        ) else {
             throw ContextualGlossError.invalidResponse
         }
+        if let error = response.error {
+            throw ContextualGlossError.requestFailed(error)
+        }
+        // One gloss per word asked, whatever came back: a missing gloss is
+        // no answer for that word, which the caller already handles, and not
+        // a reason to discard the glosses that did arrive.
+        var glosses = Array((response.glosses ?? []).prefix(words.count))
+        glosses += Array(repeating: "", count: words.count - glosses.count)
         return ContextualGloss(
-            glosses: response.glosses,
+            glosses: glosses,
             focus: response.focus.map {
                 ContextualGloss.FocusedWord(
                     gloss: $0.gloss,
@@ -345,6 +361,7 @@ private struct GlossResponse: Decodable {
         let explanation: String
     }
 
-    let glosses: [String]
+    let glosses: [String]?
     let focus: Focus?
+    let error: String?
 }

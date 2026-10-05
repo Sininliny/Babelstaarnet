@@ -3,9 +3,12 @@ import SwiftUI
 
 public struct MenuBarContentView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var wordBook: WordBookStore
+    @Environment(\.openWindow) private var openWindow
 
     public init(model: AppModel) {
         self.model = model
+        self.wordBook = model.wordBook
     }
 
     public var body: some View {
@@ -68,10 +71,24 @@ public struct MenuBarContentView: View {
             Divider()
 
             HStack {
+                Button {
+                    openWindow(id: WordBookView.windowID)
+                    NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    Label(
+                        wordBook.entries.isEmpty
+                            ? "Word Book"
+                            : "Word Book (\(wordBook.entries.count))",
+                        systemImage: "book.closed"
+                    )
+                }
+                .buttonStyle(.plain)
+
                 SettingsLink {
                     Text("Settings")
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, 8)
 
                 Spacer()
 

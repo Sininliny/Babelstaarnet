@@ -95,6 +95,11 @@ public extension SourceLanguage {
     /// model sees a gloss in the form the word takes ("went", not "go") and a
     /// dictionary form that is actually the dictionary form ("gå", not "gik").
     /// Without the example the lemma came back as the word itself.
+    ///
+    /// The note on particles is there because the model otherwise gave them
+    /// their first dictionary sense: "Og så taler hun jo norsk" came back as
+    /// "also" for "jo", and "Han kommer nok" as "maybe"; with it, "you know"
+    /// and "probably". Nothing else in a twelve-sentence check changed.
     private static let danishContextualGlossPrompts = ContextualGlossPrompts(
         glossInstructions: """
             Du hjælper en engelsktalende, der lærer dansk. Du får en dansk sætning og en nummereret liste af ord fra den.
@@ -111,6 +116,8 @@ public extension SourceLanguage {
             1. gik = went
             2. hjem = home
             3. træt = tired
+
+            Danske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: "Det ved du jo" = jo → you know; "Kom nu!" = nu → come on; "Han kommer nok" = nok → probably; "Det er vel rigtigt" = vel → I suppose.
             """,
         explainInstructions: """
             Du hjælper en engelsktalende, der lærer dansk. Du får en dansk sætning og ét ord fra den.
@@ -128,6 +135,8 @@ public extension SourceLanguage {
             1. gik = went
             opslagsform: gå
             forklaring: At bevæge sig til fods fra et sted til et andet.
+
+            Danske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: "Det ved du jo" = jo → you know; "Kom nu!" = nu → come on; "Han kommer nok" = nok → probably; "Det er vel rigtigt" = vel → I suppose.
             """,
         sentenceLabel: "Sætning",
         wordsLabel: "Ord",

@@ -91,10 +91,19 @@ final class ContextualGlossCoordinator {
 
     private var running: Task<Void, Never>?
     private var waiting: (ContextualGlossRequest, @MainActor () -> Void)?
-    /// Set once the worker has failed, so a session does not pay for a model
-    /// that will not load on every word it reads. Cleared when engines are
-    /// checked again.
-    private(set) var hasFailed = false
+    /// Failures since the last answer. One failure used to switch the model
+    /// off until the app was relaunched, so a single sentence it could not
+    /// answer left the reader on word-at-a-time translation for the rest of
+    /// the day, with nothing on screen saying why the meanings had got worse.
+    private var consecutiveFailures = 0
+    private static let failuresBeforeGivingUp = 3
+
+    /// Whether the worker has failed often enough in a row that a session
+    /// should stop paying for a model that will not answer. Cleared when
+    /// reading starts again and when engines are checked.
+    var hasFailed: Bool {
+        consecutiveFailures >= Self.failuresBeforeGivingUp
+    }
 
     init(
         service: ContextualGlossService,
@@ -153,7 +162,7 @@ final class ContextualGlossCoordinator {
     }
 
     func resetFailure() {
-        hasFailed = false
+        consecutiveFailures = 0
     }
 
     private func startNextIfIdle() {
@@ -189,6 +198,7 @@ final class ContextualGlossCoordinator {
             self.running = nil
             switch result {
             case let .success(gloss):
+                self.consecutiveFailures = 0
                 self.remember(
                     gloss,
                     words: words,
@@ -199,10 +209,12 @@ final class ContextualGlossCoordinator {
                     answered()
                 }
             case let .failure(error):
-                self.hasFailed = true
-                self.waiting = nil
-                self.onFailure(error)
-                return
+                self.consecutiveFailures += 1
+                if self.hasFailed {
+                    self.waiting = nil
+                    self.onFailure(error)
+                    return
+                }
             }
             self.startNextIfIdle()
         }

@@ -29,6 +29,11 @@ struct BabelstaarnetApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("Word Book", id: WordBookView.windowID) {
+            WordBookView(model: model)
+        }
+        .defaultSize(width: 560, height: 520)
+
         Settings {
             SettingsView(model: model)
         }

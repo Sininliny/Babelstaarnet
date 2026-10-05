@@ -124,6 +124,10 @@ class Glosser:
         batch_generate = importlib.import_module("mlx_lm.generate").batch_generate
 
         sentence = sentence[:MAX_SENTENCE_CHARACTERS]
+        # The app reads one answer per word it asked about. Words past the
+        # limit are answered with nothing rather than dropped, since a shorter
+        # list than the one sent is an answer the app cannot line up.
+        asked = len(words)
         words = words[:MAX_WORDS]
         chunks = [
             words[start : start + CHUNK_SIZE]
@@ -141,7 +145,7 @@ class Glosser:
             caches.append(copy.deepcopy(self.gloss_prefix))
             limits.append(14 * len(chunk) + 20)
         if not prompts:
-            return {"glosses": [], "focus": None}
+            return {"glosses": [""] * asked, "focus": None}
 
         texts = batch_generate(
             self.model,
@@ -158,6 +162,7 @@ class Glosser:
         glosses: list[str] = []
         for chunk, text in zip(chunks, texts):
             glosses.extend(parse_glosses(text, chunk))
+        glosses.extend([""] * (asked - len(glosses)))
         return {"glosses": glosses, "focus": answer}
 
 
@@ -245,13 +250,19 @@ def main() -> int:
             for line in sys.stdin:
                 if not line.strip():
                     continue
-                request = json.loads(line)
-                sentence = str(request.get("sentence", ""))
-                words = [str(word) for word in request.get("words", [])]
-                focus = request.get("focus")
-                answer = glosser.gloss(
-                    sentence, words, str(focus) if focus else None
-                )
+                # One request that cannot be answered is answered with its
+                # error. Raised, it ended the worker, and the app paid seconds
+                # reloading the model and then gave up on it for the session.
+                try:
+                    request = json.loads(line)
+                    sentence = str(request.get("sentence", ""))
+                    words = [str(word) for word in request.get("words", [])]
+                    focus = request.get("focus")
+                    answer = glosser.gloss(
+                        sentence, words, str(focus) if focus else None
+                    )
+                except Exception as error:
+                    answer = {"error": str(error) or type(error).__name__}
                 print(json.dumps(answer, ensure_ascii=False), flush=True)
             return 0
 
