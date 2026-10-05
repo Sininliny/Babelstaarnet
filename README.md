@@ -97,6 +97,16 @@ Every word you mark **unknown** or pin goes into your **Word Book**, with the
 meaning the bubble gave and the sentence you met it in. Open it from the menu
 bar to search it, hear a word again, or export it as CSV for flash cards.
 
+When you want to, press **Review** there to go through the words whose time has
+come round: the word in its sentence, then its meaning, then whether you knew
+it. A word you knew comes back later each time, from a day up to two months; a
+word you missed comes back within the hour. Reading never asks — the menu bar
+only counts what is due.
+
+What you learn about a word carries to its other forms. Once the language model
+has said that `gik` is a form of `gå`, knowing `gå` means `gik` is left in
+Danish the first time you meet it, with its meaning still a hover away.
+
 For translations that follow the sentence — `får` as "gets" rather than
 "sheep" — download the optional language model under **Settings → Contextual
 meanings**. It runs on your Mac, like everything else here.

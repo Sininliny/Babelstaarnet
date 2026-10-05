@@ -156,16 +156,18 @@ public final class AppModel: ObservableObject {
             guard let self else {
                 return
             }
+            let key = self.learnerProfileStore.normalizedKey(
+                for: word.sourceText
+            )
             self.wordBook.save(
-                key: self.learnerProfileStore.normalizedKey(
-                    for: word.sourceText
-                ),
+                key: key,
                 word: word.sourceText.trimmingCharacters(
                     in: .whitespacesAndNewlines
                         .union(.punctuationCharacters)
                 ),
                 meaning: word.translatedText,
-                sentence: sentence
+                sentence: sentence,
+                lemma: self.learnerProfileStore.lemma(forKey: key)
             )
         }
     )
@@ -636,6 +638,50 @@ public final class AppModel: ObservableObject {
         learnerProfileStore.progress(forKey: entry.id).level()
     }
 
+    /// The words in the book whose time has come round again, longest
+    /// waiting first.
+    func dueWordBookEntries(at date: Date = Date()) -> [WordBookEntry] {
+        wordBook.entries
+            .map { entry in
+                (
+                    entry,
+                    WordReviewPolicy.dueDate(
+                        for: learnerProfileStore.progress(
+                            forKey: entry.id,
+                            at: date
+                        ),
+                        savedAt: entry.savedAt,
+                        at: date
+                    )
+                )
+            }
+            .filter { $0.1 <= date }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
+    }
+
+    var wordBookDueCount: Int {
+        dueWordBookEntries().count
+    }
+
+    /// When `entry` next comes up for review.
+    func wordBookDueDate(for entry: WordBookEntry) -> Date {
+        WordReviewPolicy.dueDate(
+            for: learnerProfileStore.progress(forKey: entry.id),
+            savedAt: entry.savedAt
+        )
+    }
+
+    func reviewWordBookEntry(_ entry: WordBookEntry, remembered: Bool) {
+        learnerProfileStore.recordReview(
+            for: entry.id,
+            remembered: remembered
+        )
+        refreshLearnerProfileSummary()
+        refreshOverlayPreferences()
+        objectWillChange.send()
+    }
+
     func speakWordBookEntry(_ entry: WordBookEntry) {
         speechService.speak(
             entry.word,
@@ -1080,6 +1126,9 @@ public final class AppModel: ObservableObject {
         guard !Task.isCancelled,
               generation == scanGeneration else {
             return
+        }
+        if let contextual, let lemma = contextual.lemma {
+            learnerProfileStore.recordLemma(lemma, forForm: contextual.focusKey)
         }
         if bridgeConfiguration.showsWordBridge,
            let contextual,

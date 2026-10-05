@@ -119,6 +119,59 @@ enum AdaptiveKnowledgePolicy {
     }
 }
 
+/// When a word the reader saved should come back to them.
+///
+/// Each step up is a longer wait, so a word that is remembered is asked about
+/// less and less often, and each wait is shorter than the time the same level
+/// takes to fade in `LearnerWordProgress.effectiveKnowledgeLevel`: a word comes
+/// back while it can still be remembered, not after it has gone.
+enum WordReviewPolicy {
+    static func interval(forLevel level: Int) -> TimeInterval {
+        let hour: TimeInterval = 60 * 60
+        let day = 24 * hour
+        switch level {
+        case ...0: return hour
+        case 1: return day
+        case 2: return 3 * day
+        case 3: return 7 * day
+        case 4: return 21 * day
+        default: return 60 * day
+        }
+    }
+
+    static func dueDate(
+        for progress: LearnerWordProgress,
+        savedAt: Date,
+        at date: Date = Date()
+    ) -> Date {
+        (progress.lastReviewedAt ?? savedAt).addingTimeInterval(
+            interval(forLevel: progress.effectiveKnowledgeLevel(at: date))
+        )
+    }
+
+    /// One step up for a word remembered, back to the start for one that was
+    /// not. A remembered word climbs a level at a time rather than jumping to
+    /// known, as "Knew" in the bubble does, because remembering it once on a
+    /// card is weaker evidence than reading past it on a page.
+    static func levelAfterReview(currentLevel: Int, remembered: Bool) -> Int {
+        guard remembered else {
+            return 0
+        }
+        return min(
+            max(currentLevel, 0) + 1,
+            LearnerWordProgress.maximumKnowledgeLevel
+        )
+    }
+
+    /// What knowing a word's dictionary form says about a form of it not
+    /// met yet: one level less, and never more than the level at which a word
+    /// is left in Danish without being treated as known. Knowing "gå" makes
+    /// "gik" worth trying in Danish; it does not make it known.
+    static func transferredLevel(fromLemmaLevel level: Int) -> Int {
+        min(max(level - 1, 0), AdaptiveKnowledgePolicy.passiveLearningLimit)
+    }
+}
+
 enum VocabularyPrior {
     /// The words the pack says a reader already knows start out known, so the
     /// frame of the sentence survives the first scan.
@@ -361,6 +414,11 @@ final class LearnerProfileStore {
         qos: .utility
     )
     private var entries: [String: LearnerWordProgress]
+    /// The dictionary form of each form whose one the contextual glosser has
+    /// given, so what is known about "gå" can carry to "gik".
+    private var lemmaByForm: [String: String]
+    private let lemmaStorageKey: String
+    static let maximumStoredLemmaCount = 20_000
     private var pendingEncounterSaves = 0
     private var lastSavedAt = Date.distantPast
 
@@ -372,6 +430,10 @@ final class LearnerProfileStore {
         self.language = language
         self.defaults = defaults
         self.storageKey = storageKey
+        self.lemmaStorageKey = storageKey + ".lemmas"
+        lemmaByForm = defaults.data(forKey: storageKey + ".lemmas").flatMap {
+            try? JSONDecoder().decode([String: String].self, from: $0)
+        } ?? [:]
         if let data = defaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode(
                [String: LearnerWordProgress].self,
@@ -420,12 +482,24 @@ final class LearnerProfileStore {
         forKey key: String,
         at date: Date = Date()
     ) -> LearnerWordProgress {
-        entries[key] ?? LearnerWordProgress(
+        if let entry = entries[key] {
+            return entry
+        }
+        var level = VocabularyPrior.initialKnowledgeLevel(
+            for: key,
+            in: language
+        )
+        if let lemma = lemmaByForm[key], let lemmaEntry = entries[lemma] {
+            level = max(
+                level,
+                WordReviewPolicy.transferredLevel(
+                    fromLemmaLevel: lemmaEntry.effectiveKnowledgeLevel(at: date)
+                )
+            )
+        }
+        return LearnerWordProgress(
             word: key,
-            knowledgeLevel: VocabularyPrior.initialKnowledgeLevel(
-                for: key,
-                in: language
-            ),
+            knowledgeLevel: level,
             encounterCount: 0,
             moreEnglishCount: 0,
             knownConfirmationCount: 0,
@@ -521,6 +595,70 @@ final class LearnerProfileStore {
         save()
     }
 
+    /// The dictionary form of `key`, when one is known and differs from it.
+    func lemma(forKey key: String) -> String? {
+        lemmaByForm[key]
+    }
+
+    /// Remembers that `form` is a form of `lemma`. Ignored unless the lemma
+    /// looks like one word, since the model's answer is free text.
+    func recordLemma(_ lemma: String, forForm form: String) {
+        let formKey = normalizedKey(for: form)
+        let lemmaKey = normalizedKey(for: lemma)
+        guard !formKey.isEmpty,
+              !lemmaKey.isEmpty,
+              formKey != lemmaKey,
+              lemmaKey.count <= 40,
+              lemmaKey.allSatisfy({ $0.isLetter || $0 == "-" }),
+              lemmaByForm[formKey] != lemmaKey else {
+            return
+        }
+        if lemmaByForm.count >= Self.maximumStoredLemmaCount,
+           let evicted = lemmaByForm.keys.first {
+            lemmaByForm.removeValue(forKey: evicted)
+        }
+        lemmaByForm[formKey] = lemmaKey
+        let snapshot = lemmaByForm
+        let defaults = self.defaults
+        let lemmaStorageKey = self.lemmaStorageKey
+        persistenceQueue.async {
+            guard let data = try? JSONEncoder().encode(snapshot) else {
+                return
+            }
+            defaults.set(data, forKey: lemmaStorageKey)
+        }
+    }
+
+    /// The answer to a review card in the word book.
+    func recordReview(
+        for word: String,
+        remembered: Bool,
+        at date: Date = Date()
+    ) {
+        let key = normalizedKey(for: word)
+        guard !key.isEmpty else {
+            return
+        }
+        makeRoomIfNeeded(for: key)
+        var entry = progress(for: key, at: date)
+        entry.knowledgeLevel = WordReviewPolicy.levelAfterReview(
+            currentLevel: entry.effectiveKnowledgeLevel(at: date),
+            remembered: remembered
+        )
+        if remembered {
+            entry.knownConfirmationCount += 1
+        } else {
+            entry.moreEnglishCount += 1
+            entry.spacedEncounterCount = 0
+            entry.lastSpacedEncounterAt = nil
+            entry.lastContextSignature = nil
+        }
+        entry.lastSeen = date
+        entry.lastReviewedAt = date
+        entries[key] = entry
+        save()
+    }
+
     /// Every word the reader has said they did not know, most recent first.
     func wordsMarkedUnknown() -> [LearnerWordProgress] {
         entries.values
@@ -531,6 +669,8 @@ final class LearnerProfileStore {
     func reset() {
         flushPersistence()
         entries.removeAll()
+        lemmaByForm.removeAll()
+        defaults.removeObject(forKey: lemmaStorageKey)
         pendingEncounterSaves = 0
         lastSavedAt = Date.distantPast
         defaults.removeObject(forKey: storageKey)

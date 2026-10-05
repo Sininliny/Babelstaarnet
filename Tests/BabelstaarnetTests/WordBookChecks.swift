@@ -55,8 +55,8 @@ enum WordBookChecks {
         precondition(reopened.entries == book.entries)
 
         let csv = reopened.csv()
-        precondition(csv.hasPrefix("word,meaning,sentence,saved\n"))
-        precondition(csv.contains("\"masse\",\"lot\",\"\","))
+        precondition(csv.hasPrefix("word,dictionary form,meaning,sentence,saved\n"))
+        precondition(csv.contains("\"masse\",\"\",\"lot\",\"\","))
 
         reopened.remove("får")
         precondition(!reopened.contains("får"))

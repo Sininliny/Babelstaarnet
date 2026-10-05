@@ -20,6 +20,7 @@ public struct WordBookView: View {
     private final class Query: ObservableObject {
         @Published var search = ""
         @Published var filter = Filter.all
+        @Published var review: WordReviewSession?
     }
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -31,6 +32,22 @@ public struct WordBookView: View {
     }
 
     public var body: some View {
+        Group {
+            if let review = query.review {
+                WordReviewView(model: model, session: review) {
+                    query.review = nil
+                }
+            } else {
+                list
+            }
+        }
+        .frame(minWidth: 460, minHeight: 360)
+        .task {
+            await model.fillMissingWordBookMeanings()
+        }
+    }
+
+    private var list: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
@@ -46,10 +63,6 @@ public struct WordBookView: View {
                 }
                 .listStyle(.inset)
             }
-        }
-        .frame(minWidth: 460, minHeight: 360)
-        .task {
-            await model.fillMissingWordBookMeanings()
         }
     }
 
@@ -78,6 +91,18 @@ public struct WordBookView: View {
                 model.exportWordBook()
             }
             .disabled(book.entries.isEmpty)
+
+            let due = model.dueWordBookEntries()
+            Button(due.isEmpty ? "Review" : "Review (\(due.count))") {
+                query.review = WordReviewSession(entries: due)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(due.isEmpty)
+            .help(
+                due.isEmpty
+                    ? "No word is due. Words come back on their own as their time comes round."
+                    : "Go through the words whose time has come round"
+            )
         }
         .padding(12)
     }
@@ -108,6 +133,11 @@ public struct WordBookView: View {
                     Text(entry.word)
                         .font(.system(size: 14, weight: .semibold))
                         .textSelection(.enabled)
+                    if let lemma = entry.lemma {
+                        Text("(\(lemma))")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                    }
                     Text(entry.meaning.isEmpty ? "…" : entry.meaning)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -124,15 +154,20 @@ public struct WordBookView: View {
 
             Spacer(minLength: 8)
 
-            Text(familiarity.title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    .quaternary.opacity(0.5),
-                    in: RoundedRectangle(cornerRadius: 4)
-                )
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(familiarity.title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        .quaternary.opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: 4)
+                    )
+                Text(dueLabel(for: entry))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
 
             Button {
                 model.speakWordBookEntry(entry)
@@ -155,6 +190,14 @@ public struct WordBookView: View {
                 model.removeWordBookEntry(entry)
             }
         }
+    }
+
+    private func dueLabel(for entry: WordBookEntry) -> String {
+        let due = model.wordBookDueDate(for: entry)
+        guard due > Date() else {
+            return "Due now"
+        }
+        return "Next " + due.formatted(.relative(presentation: .named))
     }
 
     private var countLabel: String {

@@ -171,6 +171,14 @@ public struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+                LabeledContent(
+                    "In your word book",
+                    value: wordCountDescription(model.wordBook.entries.count)
+                        + (model.wordBookDueCount > 0
+                            ? ", \(model.wordBookDueCount) to review"
+                            : "")
+                )
+
                 Button("Open Word Book") {
                     openWindow(id: WordBookView.windowID)
                     NSApp.activate(ignoringOtherApps: true)

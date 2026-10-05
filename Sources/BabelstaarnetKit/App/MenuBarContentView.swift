@@ -76,9 +76,7 @@ public struct MenuBarContentView: View {
                     NSApp.activate(ignoringOtherApps: true)
                 } label: {
                     Label(
-                        wordBook.entries.isEmpty
-                            ? "Word Book"
-                            : "Word Book (\(wordBook.entries.count))",
+                        wordBookTitle,
                         systemImage: "book.closed"
                     )
                 }
@@ -102,6 +100,19 @@ public struct MenuBarContentView: View {
         }
         .padding(14)
         .frame(width: 290)
+    }
+
+    /// The book's size, and how many of its words are waiting to be
+    /// reviewed — the one place outside the book that says so, and only as
+    /// a count; nothing interrupts reading to ask.
+    private var wordBookTitle: String {
+        guard !wordBook.entries.isEmpty else {
+            return "Word Book"
+        }
+        let due = model.wordBookDueCount
+        return due == 0
+            ? "Word Book (\(wordBook.entries.count))"
+            : "Word Book (\(wordBook.entries.count) · \(due) to review)"
     }
 
     private var header: some View {
