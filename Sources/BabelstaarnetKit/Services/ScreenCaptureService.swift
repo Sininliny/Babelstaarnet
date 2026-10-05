@@ -51,6 +51,37 @@ actor ScreenCaptureService {
         velocity: CursorVelocity,
         expansion: CGFloat = 1
     ) async throws -> CapturedDisplay {
+        do {
+            return try await captureRegionOnce(
+                around: cursor,
+                estimatedTextHeight: estimatedTextHeight,
+                velocity: velocity,
+                expansion: expansion
+            )
+        } catch ScreenCaptureError.permissionDenied {
+            throw ScreenCaptureError.permissionDenied
+        } catch {
+            // The display list is kept for minutes, and after the Mac sleeps
+            // or a display is attached the display it names can be gone. The
+            // capture then failed, and reading stopped, until the cache ran
+            // out. Asked once more against a fresh list instead.
+            cachedContent = nil
+            cachedScreens.removeAll()
+            return try await captureRegionOnce(
+                around: cursor,
+                estimatedTextHeight: estimatedTextHeight,
+                velocity: velocity,
+                expansion: expansion
+            )
+        }
+    }
+
+    private func captureRegionOnce(
+        around cursor: CGPoint,
+        estimatedTextHeight: CGFloat?,
+        velocity: CursorVelocity,
+        expansion: CGFloat
+    ) async throws -> CapturedDisplay {
         guard CGPreflightScreenCaptureAccess() else {
             throw ScreenCaptureError.permissionDenied
         }

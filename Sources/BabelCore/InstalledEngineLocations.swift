@@ -38,11 +38,33 @@ public enum InstalledEngineLocations {
     }
 
     public static var python: [String] {
-        let managed = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(
-                "Library/Application Support/Babelstaarnet/argos-venv/bin/python3"
-            ).path
-        return [managed]
+        [managedPython]
             + packageManagerDirectories.map { $0 + "/python3" }
+    }
+
+    /// The interpreter in the environment the installer creates, and nothing
+    /// else. The contextual glosser needs packages only that environment has,
+    /// so a system Python is not a fallback for it but a way to fail later.
+    public static var managedPython: String {
+        supportDirectory
+            .appendingPathComponent("argos-venv/bin/python3").path
+    }
+
+    /// Where the installer puts the language model for contextual glosses. A
+    /// directory, not a model name: the worker loads from disk and is never
+    /// told anything it could look up.
+    public static var contextualGlossModel: URL {
+        supportDirectory.appendingPathComponent(
+            "Models/gemma-3-text-4b-it-4bit",
+            isDirectory: true
+        )
+    }
+
+    private static var supportDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Babelstaarnet",
+                isDirectory: true
+            )
     }
 }

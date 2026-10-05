@@ -1,4 +1,4 @@
-.PHONY: build test test-runtime benchmark-ocr app release run install install-engines readme-images clean
+.PHONY: build test test-runtime benchmark-ocr app release run install install-engines install-contextual-glosses readme-images clean
 
 build:
 	swift build
@@ -26,6 +26,9 @@ install:
 
 install-engines:
 	./Scripts/install-local-engines.sh
+
+install-contextual-glosses:
+	./Scripts/install-contextual-glosses.sh
 
 readme-images:
 	swift ./Scripts/generate-readme-images.swift ./docs/images

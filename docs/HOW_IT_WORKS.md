@@ -113,6 +113,27 @@ bubbles.
   failure on one word cannot take the pointer's word with it
 - Danish → English translation with
   [Argos Translate](https://github.com/argosopentech/argos-translate)
+- Optional contextual glosses from a small language model running on the Mac.
+  Argos is asked about one word at a time, and one word is not enough to
+  translate: on its own `får` is "sheep", `lide` is "suffer", `tag` is "roof",
+  `laver` is "lichen", and `sal` came back as "lon". Measured on 31 Danish words
+  whose meaning the sentence decides, word-at-a-time translation was right 6
+  times. Given the sentence, a 4-bit Gemma 3 4B on MLX was right 29 times, and
+  it also gives the word's dictionary form (`gik` → `gå`) and a one-line Danish
+  explanation, which replaces the one assembled from an English dictionary
+  definition translated back into Danish. The page is shown at once with the
+  word-at-a-time answer, and the sentence's answer replaces it when it arrives
+  — about a second after the first word of a new sentence, and immediately for
+  the rest of it, since answers are kept per sentence. That replacement is the
+  one change a still bubble accepts: a rescan never alters a held snapshot, but
+  the snapshot was only ever standing in for this answer. The sentence is
+  glossed in chunks of six words generated side by side, which took a 23-word
+  sentence from 3.5 s to 1.3 s. The model is asked about the word under the
+  pointer separately, for its explanation, and that answer is the weaker of
+  the two (26 of 31), so the sentence gloss is always the meaning shown; the
+  explanation is kept only when the two agree on the sense and it is actually
+  in Danish. Handed "Hun tog toget", the single-word answer explained trains
+  to a reader who had pointed at the word for "took"
 - Meaning-first bubbles with no mode selection: the English answer is the
   headline, the Danish word sits under it, and familiar words simply need less
   English than new ones
@@ -240,7 +261,14 @@ bubbles.
 - Per-word OCR bounds and pointer tracking for selectable text and text in images
 - Optional extra English help from the local macOS Dictionary after **Don’t
   know** feedback
-- Danish pronunciation through the local AVSpeechSynthesizer voice
+- Danish pronunciation through the best installed AVSpeechSynthesizer voice.
+  Asking for a voice by language returns the system default, which for Danish
+  is the compact voice every Mac ships with, so a reader who had downloaded an
+  enhanced or premium voice was still hearing the compact one. The voice is now
+  chosen by quality, novelty and Personal Voice voices are never used, and
+  Settings names the voice and says where to download a better one when only
+  the compact voice is installed. A voice downloaded while the app is running
+  is picked up without a relaunch
 - Bubbles keep clear of every line the sentence is printed on, not only the line
   under the pointer, so the panel explaining a wrapped sentence no longer lands
   on the rest of it
@@ -292,6 +320,8 @@ cursor movement → adaptive local crop → accurate Vision OCR
                                              │
                               cached warmed Argos translation
                                              │
+                            contextual glosses, when installed
+                                             │
                          adaptive Danish + English sentence bridge
                                              │
                               nonactivating hover bubble
@@ -309,9 +339,9 @@ layout, and app state are separate targets rather than separate folders:
 | --- | --- | --- |
 | `BabelCore` | recognized text, the language-pack value types, shared helpers | — |
 | `BabelOCR` | Vision and Tesseract adapters, routing and quality policies | `BabelCore` |
-| `BabelTranslate` | the local Argos worker, translation quality | `BabelCore` |
+| `BabelTranslate` | the local Argos worker, the contextual glosser, translation quality | `BabelCore` |
 | `BabelLexicon` | the system dictionary | `BabelCore` |
-| `BabelSpeech` | speech synthesis | — |
+| `BabelSpeech` | speech synthesis and voice choice | — |
 | `LanguageDanish` | Danish, as data | `BabelCore` |
 | `BabelstaarnetKit` | overlay, learner profile, capture, app state | all of the above |
 
@@ -462,6 +492,40 @@ This is a one-time optional setup. After the packages are installed, both
 engines work without network access. If you skip it, Babelstårnet remains
 functional with Apple's on-device Vision and Translation frameworks.
 
+### Contextual glosses
+
+Once the engines above are installed, **Settings → Contextual meanings →
+Download language model** adds the contextual glosser, or from the repository:
+
+```sh
+make install-contextual-glosses
+```
+
+It installs `mlx-lm` at a pinned version into the same private environment and
+downloads a 4-bit Gemma 3 4B (2.6 GB) from one fixed revision, checking every
+file against a SHA-256 recorded in the script before moving the model into
+place. It needs Apple silicon. The model is Google's, used under the
+[Gemma Terms of Use](https://ai.google.dev/gemma/terms).
+
+While reading, the worker holds about 3 GB of memory. It loads when reading
+starts — a few seconds, during which reading proceeds on word-at-a-time
+translation — and is released with the other workers 20 seconds after reading
+stops. **Translate words in their sentence** turns it off without uninstalling
+it.
+
+The instructions the model is given live in the language pack
+(`ContextualGlossPrompts` on `SourceLanguage`), written in Danish: written in
+English, the model answered a request for a Danish explanation in English about
+one time in three. A pack that supplies no prompts reads with word-at-a-time
+translation only.
+
+Two models were measured on the same 31 words before choosing, on an M5 with
+16 GB: Qwen3 4B Instruct was nearly as accurate on sentence glosses (27 against
+28) but mistook `får` for "goats" and wrote several of its Danish explanations
+in English; Gemma 3 4B did neither. The benchmark script is not part of the repository; the runtime check
+`make test-runtime` asserts the three cases that decide whether the glosser
+works at all, and skips itself when the model is not installed.
+
 Argos state is kept under:
 
 ```text
@@ -472,5 +536,12 @@ Argos state is kept under:
 
 - The first release installs open-source engines separately rather than
   embedding their large binaries and language models in the `.app`.
+- Contextual glosses cover the sentence under the pointer and nothing else on
+  screen, and they are not used on the Apple Translation fallback path, which
+  runs only when Argos is not installed — and the glosser needs the same
+  environment Argos does.
+- Idioms the model does not know are still glossed word by word. `Der er rift
+  om billetterne` — the tickets are in great demand — came back as "rush" for
+  `rift`, which is closer than "scratch" but not right.
 - macOS may need the app to be relaunched after Screen Recording permission is
   changed.

@@ -56,6 +56,9 @@ final class OverlayWindowController {
     private var bridgeConfiguration = LearningBridgeConfiguration.both
     private let onSpeakSourceWord: (String) -> Void
     private let onLearnerProfileChanged: (Bool) -> Void
+    /// A word the reader asked about, with the sentence it was read in, for
+    /// the word book.
+    private let onSaveWord: (WordRegion, String) -> Void
     private lazy var bubbleHotKeyService = BubbleHotKeyService {
         [weak self] action in
         self?.performBubbleAction(action)
@@ -90,7 +93,8 @@ final class OverlayWindowController {
         languages: LanguagePair,
         learnerProfile: LearnerProfileStore,
         onSpeakSourceWord: @escaping (String) -> Void,
-        onLearnerProfileChanged: @escaping (Bool) -> Void
+        onLearnerProfileChanged: @escaping (Bool) -> Void,
+        onSaveWord: @escaping (WordRegion, String) -> Void
     ) {
         self.languages = languages
         self.dictionary = DictionaryService(target: languages.target)
@@ -110,6 +114,7 @@ final class OverlayWindowController {
         self.learnerProfile = learnerProfile
         self.onSpeakSourceWord = onSpeakSourceWord
         self.onLearnerProfileChanged = onLearnerProfileChanged
+        self.onSaveWord = onSaveWord
         bubbleState.onKnown = { [weak self] in
             self?.markCurrentWordKnown()
         }
@@ -121,12 +126,21 @@ final class OverlayWindowController {
         }
     }
 
+    /// Shows a newly read page.
+    ///
+    /// `answersVisibleWord` is for a page that is the same reading as the one
+    /// on screen with a better answer: the translation the sentence gave, in
+    /// place of the one the word gave on its own. A bubble held still keeps
+    /// its snapshot against every other new page — a rescan must not change
+    /// what the reader is looking at — but this one it takes, once, because
+    /// it is the answer the snapshot was standing in for.
     func show(
         regions: [TextRegion],
         autoSpeak: Bool,
         hoverDelay: Double,
         hotKeyConfiguration: HotKeyConfiguration,
-        bridgeConfiguration: LearningBridgeConfiguration
+        bridgeConfiguration: LearningBridgeConfiguration,
+        answersVisibleWord: Bool = false
     ) {
         let presentationChanged = self.hotKeyConfiguration
             != hotKeyConfiguration
@@ -163,6 +177,22 @@ final class OverlayWindowController {
            currentWord != nil,
            currentRegion != nil {
             refreshCurrentCard(preservePosition: false)
+            return
+        }
+        if answersVisibleWord,
+           bubblesAreVisible,
+           let currentWord,
+           let replacement = HoverHitTesting.replacement(
+            for: currentWord,
+            in: overlays.values.flatMap(\.regions)
+           ),
+           let replacementRegion = region(
+            containing: replacement,
+            in: overlays.values.flatMap(\.regions)
+           ) {
+            self.currentWord = replacement
+            currentRegion = replacementRegion
+            refreshCurrentCard(preservePosition: true)
             return
         }
         if bubblesAreVisible, let currentWord {
@@ -793,6 +823,7 @@ final class OverlayWindowController {
             for: currentWord.sourceText
         )
         learnerProfile.recordUnknown(for: currentWord.sourceText)
+        saveCurrentWord()
         if expandedEnglishWords.count >= 256,
            !expandedEnglishWords.contains(key),
            let evictionCandidate = expandedEnglishWords.first {
@@ -803,6 +834,20 @@ final class OverlayWindowController {
         remember(.englishRestored, for: currentWord.sourceText)
         refreshCurrentCard(preservePosition: true)
         bubbleState.showFeedback(.englishRestored)
+    }
+
+    private func saveCurrentWord() {
+        guard let currentWord else {
+            return
+        }
+        let sentence = currentRegion.map {
+            sentenceAssembly.sentence(
+                containing: currentWord,
+                in: $0,
+                among: overlays[currentWord.displayID]?.regions ?? [$0]
+            ).text
+        } ?? ""
+        onSaveWord(currentWord, sentence)
     }
 
     private func markCurrentWordKnown() {
@@ -1028,6 +1073,7 @@ final class OverlayWindowController {
         } else {
             pinnedByUser = true
             temporarilyHeldForIdle = false
+            saveCurrentWord()
         }
         bubbleState.setPinned(pinnedByUser)
         refreshCurrentCard(preservePosition: true)

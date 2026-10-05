@@ -521,6 +521,13 @@ final class LearnerProfileStore {
         save()
     }
 
+    /// Every word the reader has said they did not know, most recent first.
+    func wordsMarkedUnknown() -> [LearnerWordProgress] {
+        entries.values
+            .filter { $0.moreEnglishCount > 0 && $0.word.contains(where: \.isLetter) }
+            .sorted { $0.lastSeen > $1.lastSeen }
+    }
+
     func reset() {
         flushPersistence()
         entries.removeAll()

@@ -18,7 +18,18 @@ enum EngineInstallerError: LocalizedError {
 
 actor EngineInstallerService {
     func install() async throws -> String {
-        guard let installerURL = Self.installerURL else {
+        try await run(script: "install-local-engines.sh")
+    }
+
+    /// Downloads the language model for contextual glosses into the
+    /// environment `install()` created, and checks it against the hashes the
+    /// script pins before putting it where the app will load it from.
+    func installContextualGlosses() async throws -> String {
+        try await run(script: "install-contextual-glosses.sh")
+    }
+
+    private func run(script: String) async throws -> String {
+        guard let installerURL = Self.installerURL(named: script) else {
             throw EngineInstallerError.installerMissing
         }
 
@@ -61,17 +72,15 @@ actor EngineInstallerService {
     /// the convenience because a developer already chose the directory they
     /// ran from; shipped builds read the installer only from inside the
     /// bundle.
-    private static var installerURL: URL? {
+    private static func installerURL(named script: String) -> URL? {
         var candidates = [
             Bundle.main.resourceURL?
-                .appendingPathComponent(
-                    "LocalEngines/install-local-engines.sh"
-                )
+                .appendingPathComponent("LocalEngines/\(script)")
         ].compactMap { $0 }
 #if DEBUG
         candidates.append(
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent("Scripts/install-local-engines.sh")
+                .appendingPathComponent("Scripts/\(script)")
         )
 #endif
 

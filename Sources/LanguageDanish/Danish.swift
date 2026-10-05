@@ -87,7 +87,64 @@ public extension SourceLanguage {
             "om", "på", "sig", "sin", "sit", "skal", "som", "til",
             "var", "ved", "vi", "vil"
         ],
+        contextualGlossPrompts: Self.danishContextualGlossPrompts,
         meansPhrase: { meaning in "Betyder “\(meaning)”." }
+    )
+
+    /// One worked example each, on a sentence whose verb is inflected, so the
+    /// model sees a gloss in the form the word takes ("went", not "go") and a
+    /// dictionary form that is actually the dictionary form ("gå", not "gik").
+    /// Without the example the lemma came back as the word itself.
+    ///
+    /// The note on particles is there because the model otherwise gave them
+    /// their first dictionary sense: "Og så taler hun jo norsk" came back as
+    /// "also" for "jo", and "Han kommer nok" as "maybe"; with it, "you know"
+    /// and "probably". Nothing else in a twelve-sentence check changed.
+    private static let danishContextualGlossPrompts = ContextualGlossPrompts(
+        glossInstructions: """
+            Du hjælper en engelsktalende, der lærer dansk. Du får en dansk sætning og en nummereret liste af ord fra den.
+
+            Svar med præcis én linje per ord, i listens rækkefølge, som `N. ord = engelsk`. Den engelske glose skal være den betydning og form, ordet har i NETOP denne sætning, på 1-3 engelske ord. Intet andet.
+
+            Eksempel
+            Sætning: Hun gik hjem, fordi hun var træt.
+            Ord:
+            1. gik
+            2. hjem
+            3. træt
+            Svar:
+            1. gik = went
+            2. hjem = home
+            3. træt = tired
+
+            Danske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: "Det ved du jo" = jo → you know; "Kom nu!" = nu → come on; "Han kommer nok" = nok → probably; "Det er vel rigtigt" = vel → I suppose.
+            """,
+        explainInstructions: """
+            Du hjælper en engelsktalende, der lærer dansk. Du får en dansk sætning og ét ord fra den.
+
+            Svar med præcis tre linjer:
+            1. ord = <den engelske betydning, ordet har i NETOP denne sætning, på 1-3 engelske ord>
+            opslagsform: <ordets grundform i en dansk ordbog>
+            forklaring: <én kort, enkel sætning PÅ DANSK, som forklarer ordet for en begynder>
+
+            Eksempel
+            Sætning: Hun gik hjem, fordi hun var træt.
+            Ord:
+            1. gik
+            Svar:
+            1. gik = went
+            opslagsform: gå
+            forklaring: At bevæge sig til fods fra et sted til et andet.
+
+            Danske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: "Det ved du jo" = jo → you know; "Kom nu!" = nu → come on; "Han kommer nok" = nok → probably; "Det er vel rigtigt" = vel → I suppose.
+            """,
+        sentenceLabel: "Sætning",
+        wordsLabel: "Ord",
+        answerLabel: "Svar",
+        lemmaLabel: "opslagsform",
+        explanationLabel: "forklaring",
+        checkSentence: "Kan du lide æbler?",
+        checkWord: "lide"
     )
 
     /// Danish's closed classes, in the folded ASCII form `folded` produces.

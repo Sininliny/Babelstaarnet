@@ -1,7 +1,10 @@
+import AppKit
+import BabelSpeech
 import SwiftUI
 
 public struct SettingsView: View {
     @ObservedObject var model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     public init(model: AppModel) {
         self.model = model
@@ -37,6 +40,20 @@ public struct SettingsView: View {
                 .foregroundStyle(.secondary)
 
                 Toggle("Speak Danish on hover", isOn: $model.autoSpeak)
+
+                LabeledContent(
+                    "Voice",
+                    value: model.speechVoice.map(voiceDescription)
+                        ?? "No Danish voice installed"
+                )
+
+                if (model.speechVoice?.quality ?? .basic) == .basic {
+                    Text(
+                        "This is the compact voice every Mac ships with. A clearer Danish voice is a free download: System Settings → Accessibility → Spoken Content → System voice → Manage Voices, then pick a Danish voice marked Enhanced or Premium. Babelstårnet switches to it on its own."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
 
                 // This slider only ever delayed the pronunciation. Under its
                 // old name, in its own section, it read as a delay on the
@@ -154,6 +171,11 @@ public struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+                Button("Open Word Book") {
+                    openWindow(id: WordBookView.windowID)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+
                 HStack {
                     Button("Export Profile") {
                         model.exportLearnerProfile()
@@ -208,6 +230,42 @@ public struct SettingsView: View {
                 .disabled(model.isInstallingEngines)
             }
 
+            Section("Contextual meanings") {
+                Toggle(
+                    "Translate words in their sentence",
+                    isOn: $model.contextualGlossesEnabled
+                )
+                .disabled(!model.contextualGlossesInstalled)
+
+                LabeledContent("Language model", value: model.contextualGlossStatus)
+
+                Text(
+                    "Word-at-a-time translation cannot tell “får” the verb (gets) from “får” the animal (sheep). A small language model running on this Mac reads the whole sentence and answers with the sense the word has there, plus its dictionary form and a short Danish explanation. The first answer for a new sentence arrives about a second after the bubble and replaces the word-at-a-time one. It uses about 3 GB of memory while reading and makes no network connection."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                if !model.contextualGlossesInstalled {
+                    Button("Download language model (2.6 GB)") {
+                        Task {
+                            await model.installContextualGlosses()
+                        }
+                    }
+                    .disabled(
+                        model.isInstallingContextualGlosses
+                            || !model.openSourceEnginesReady
+                    )
+
+                    Text(
+                        model.openSourceEnginesReady
+                            ? "Gemma 3 4B from Google, used under the Gemma Terms of Use; the download is checked against pinned hashes before it is used."
+                            : "Install the local engines above first; the model runs in the same private Python environment."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Access") {
                 LabeledContent(
                     "Screen Recording",
@@ -224,6 +282,9 @@ public struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            model.refreshSpeechVoice()
+        }
         // A fixed 760-point height does not fit under the menu bar on a 13"
         // display at its default scaling, which put the last section — the one
         // holding screen access — off the bottom of the window with no way to
@@ -234,6 +295,14 @@ public struct SettingsView: View {
             idealHeight: 760,
             maxHeight: .infinity
         )
+    }
+
+    private func voiceDescription(_ voice: SpeechVoiceCandidate) -> String {
+        switch voice.quality {
+        case .basic: "\(voice.name) (compact)"
+        case .enhanced: "\(voice.name) (enhanced)"
+        case .premium: "\(voice.name) (premium)"
+        }
     }
 
     private func wordCountDescription(_ count: Int) -> String {

@@ -58,10 +58,34 @@ public final class AppModel: ObservableObject {
             refreshOverlayPreferences()
         }
     }
+    /// Whether an installed contextual glosser is used. Off, reading goes back
+    /// to word-at-a-time translation and the model's memory is released.
+    @Published var contextualGlossesEnabled = true {
+        didSet {
+            UserDefaults.standard.set(
+                contextualGlossesEnabled,
+                forKey: Keys.contextualGlossesEnabled
+            )
+            if !contextualGlossesEnabled {
+                contextualGlossCoordinator.cancelWaiting()
+                Task {
+                    await contextualGlossService.shutdown()
+                }
+            }
+        }
+    }
+    @Published private(set) var contextualGlossesInstalled = false
+    @Published private(set) var contextualGlossStatus = "Not installed"
+    @Published private(set) var isInstallingContextualGlosses = false
     @Published private(set) var hotKeyConfiguration =
         HotKeyConfiguration.defaults
     @Published private(set) var bridgeConfiguration =
         LearningBridgeConfiguration.both
+    /// The voice a hovered word is spoken with. Settings says which one it is,
+    /// and says so plainly when it is only the compact voice every Mac ships
+    /// with, because a better one is a free download the reader would not
+    /// otherwise know to look for.
+    @Published private(set) var speechVoice: SpeechVoiceCandidate?
 
     /// The one place a language is named. Everything below is handed this
     /// pair rather than reaching for Danish itself, so a second language is a
@@ -82,6 +106,20 @@ public final class AppModel: ObservableObject {
     private lazy var adaptiveWordBridgeService =
         AdaptiveSentenceBridgeService(language: languages.source)
     private lazy var translationQualityService = TranslationQualityService(
+        language: languages.source
+    )
+    private lazy var contextualGlossService = ContextualGlossService(
+        language: languages.source
+    )
+    private lazy var contextualGlossCoordinator = ContextualGlossCoordinator(
+        service: contextualGlossService,
+        languages: languages,
+        onFailure: { [weak self] error in
+            self?.contextualGlossStatus =
+                "Stopped: \(error.localizedDescription)"
+        }
+    )
+    private lazy var sentenceAssemblyPolicy = SentenceAssemblyPolicy(
         language: languages.source
     )
     private lazy var focusedRegionSelectionPolicy =
@@ -113,8 +151,28 @@ public final class AppModel: ObservableObject {
             self?.refreshLearnerProfileSummary(
                 recalculateFamiliar: masteryChanged
             )
+        },
+        onSaveWord: { [weak self] word, sentence in
+            guard let self else {
+                return
+            }
+            self.wordBook.save(
+                key: self.learnerProfileStore.normalizedKey(
+                    for: word.sourceText
+                ),
+                word: word.sourceText.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                        .union(.punctuationCharacters)
+                ),
+                meaning: word.translatedText,
+                sentence: sentence
+            )
         }
     )
+    /// The words the reader asked about, with what they meant. Opened from
+    /// the menu bar.
+    let wordBook = WordBookStore()
+    private var isFillingWordBookMeanings = false
     private lazy var hotKeyService = HotKeyService { [weak self] in
         Task {
             await self?.toggleLearningMode()
@@ -123,6 +181,7 @@ public final class AppModel: ObservableObject {
     private var liveTask: Task<Void, Never>?
     private var scanTask: Task<Void, Never>?
     private var activationWarmUpTask: Task<Void, Never>?
+    private var contextualWarmUpTask: Task<Void, Never>?
     private var translationShutdownTask: Task<Void, Never>?
     private var activeScanOrigin: CGPoint?
     private var translatedRegions: [TextRegion] = []
@@ -135,6 +194,12 @@ public final class AppModel: ObservableObject {
     private var lastCapturePoint: CGPoint?
     private var lastCaptureDate: Date?
     private var lastCompletedScanDate: Date?
+    /// Scans that failed since the last one that did not. One failed capture
+    /// or recognition used to end the session: the menu bar icon went back to
+    /// inactive and hovering stopped answering, while the reader, who had
+    /// switched reading on and never off, saw no reason it should have.
+    private var consecutiveScanFailures = 0
+    private static let scanFailuresBeforeStopping = 5
     private let translationCache = BoundedCache<String, String>(capacity: 4_096)
     private let beginnerExplanationCache = BoundedCache<String, String>(
         capacity: 2_048
@@ -154,6 +219,9 @@ public final class AppModel: ObservableObject {
         )
         autoSpeak = defaults.object(forKey: Keys.autoSpeak) as? Bool ?? true
         hoverDelay = defaults.object(forKey: Keys.hoverDelay) as? Double ?? 0.45
+        contextualGlossesEnabled = defaults.object(
+            forKey: Keys.contextualGlossesEnabled
+        ) as? Bool ?? true
         liveMode = defaults.object(forKey: Keys.liveMode) as? Bool ?? true
         powerSavingEnabled = defaults.object(
             forKey: Keys.powerSavingEnabled
@@ -174,10 +242,17 @@ public final class AppModel: ObservableObject {
         }
         Self.removeObsoleteLearningPreferences(from: defaults)
         refreshLearnerProfileSummary()
+        adoptEarlierUnknownWords(defaults: defaults)
 
         Task { @MainActor [weak self] in
             self?.start()
         }
+    }
+
+    func refreshSpeechVoice() {
+        speechVoice = speechService.installedVoice(
+            for: languages.source.speechVoice
+        )
     }
 
     func start() {
@@ -186,6 +261,7 @@ public final class AppModel: ObservableObject {
         }
         hasStarted = true
         screenPermissionGranted = captureService.hasPermission
+        refreshSpeechVoice()
         hotKeyService.register(
             shortcut: hotKeyConfiguration.toggleLearning
         )
@@ -196,6 +272,9 @@ public final class AppModel: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshScreenPermission()
+                // Coming back from System Settings is also how a newly
+                // downloaded voice arrives.
+                self?.refreshSpeechVoice()
             }
         }
         terminationObserver = NotificationCenter.default.addObserver(
@@ -255,6 +334,44 @@ public final class AppModel: ObservableObject {
         case (true, true, false):
             engineSetupMessage = "Install the local adaptive word-bridge resources."
         }
+        contextualGlossCoordinator.resetFailure()
+        refreshContextualGlossStatus()
+    }
+
+    /// Whether the contextual glosser is on disk, without starting it: the
+    /// model is loaded when reading starts, not when the app does.
+    private func refreshContextualGlossStatus() {
+        contextualGlossesInstalled = contextualGlossService.isInstalled
+        contextualGlossStatus = contextualGlossesInstalled
+            ? "Installed — loads when reading starts"
+            : "Not installed"
+    }
+
+    func installContextualGlosses() async {
+        guard !isInstallingContextualGlosses else {
+            return
+        }
+        isInstallingContextualGlosses = true
+        contextualGlossStatus = "Downloading the language model"
+        do {
+            _ = try await engineInstallerService.installContextualGlosses()
+            await contextualGlossService.shutdown()
+            contextualGlossCoordinator.resetFailure()
+            refreshContextualGlossStatus()
+            if contextualGlossesInstalled {
+                contextualGlossStatus = "Starting the model"
+                let ready = await contextualGlossService.isReady(
+                    keepWarm: learningModeActive
+                )
+                contextualGlossStatus = ready
+                    ? "Ready"
+                    : "Installed, but the model did not start"
+            }
+        } catch {
+            contextualGlossStatus =
+                "Installation failed: \(error.localizedDescription)"
+        }
+        isInstallingContextualGlosses = false
     }
 
     func installOpenSourceEngines() async {
@@ -500,6 +617,94 @@ public final class AppModel: ObservableObject {
         }
     }
 
+    /// Puts the words marked "Don't know" before the word book existed into
+    /// it, once, so a reader who had been marking words finds them there.
+    private func adoptEarlierUnknownWords(defaults: UserDefaults) {
+        guard !defaults.bool(forKey: Keys.wordBookAdoptedProfile) else {
+            return
+        }
+        wordBook.adopt(
+            learnerProfileStore.wordsMarkedUnknown().map {
+                (key: $0.word, word: $0.word, seenAt: $0.lastSeen)
+            }
+        )
+        defaults.set(true, forKey: Keys.wordBookAdoptedProfile)
+    }
+
+    /// How well the reader knows a word in the book now.
+    func wordBookFamiliarity(for entry: WordBookEntry) -> LearnerFamiliarity {
+        learnerProfileStore.progress(forKey: entry.id).level()
+    }
+
+    func speakWordBookEntry(_ entry: WordBookEntry) {
+        speechService.speak(
+            entry.word,
+            language: languages.source.speechVoice
+        )
+    }
+
+    func markWordBookEntryKnown(_ entry: WordBookEntry) {
+        learnerProfileStore.recordKnown(for: entry.id)
+        refreshLearnerProfileSummary()
+        refreshOverlayPreferences()
+        objectWillChange.send()
+    }
+
+    func removeWordBookEntry(_ entry: WordBookEntry) {
+        wordBook.remove(entry.id)
+    }
+
+    /// Meanings for words saved without one — only those adopted from the
+    /// profile, since a word saved from a bubble keeps the bubble's meaning —
+    /// from the same local engine that translates the page.
+    func fillMissingWordBookMeanings() async {
+        guard !isFillingWordBookMeanings else {
+            return
+        }
+        let missing = wordBook.entries.filter { $0.meaning.isEmpty }
+        guard !missing.isEmpty else {
+            return
+        }
+        isFillingWordBookMeanings = true
+        defer { isFillingWordBookMeanings = false }
+        if let translations = try? await translationsWithLocalRecovery(
+            missing.map(\.word)
+        ) {
+            for (entry, meaning) in zip(missing, translations)
+            where !translationQualityService.needsRetry(
+                source: entry.word,
+                translation: meaning
+            ) {
+                wordBook.setMeaning(meaning, for: entry.id)
+            }
+        }
+        if !learningModeActive {
+            scheduleTranslationWorkerShutdown()
+        }
+    }
+
+    func exportWordBook() {
+        let panel = NSSavePanel()
+        panel.title = "Export Word Book"
+        panel.prompt = "Export"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue =
+            "Babelstaarnet-Word-Book-\(Self.exportDateString()).csv"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+        do {
+            try Data(wordBook.csv().utf8).write(to: url, options: .atomic)
+        } catch {
+            showLearnerProfileError(
+                title: "Couldn’t Export Word Book",
+                error: error
+            )
+        }
+    }
+
     func toggleLearningMode() async {
         if learningModeActive || phase.isWorking {
             deactivateLearningMode()
@@ -514,6 +719,8 @@ public final class AppModel: ObservableObject {
 
         learningModeActive = true
         detectionSuspendedForIdle = false
+        consecutiveScanFailures = 0
+        contextualGlossCoordinator.resetFailure()
         translationShutdownTask?.cancel()
         translationShutdownTask = nil
         warmResourcesForActivation()
@@ -549,6 +756,7 @@ public final class AppModel: ObservableObject {
         lastCaptureDate = nil
         lastCompletedScanDate = nil
         phase = .idle
+        contextualGlossCoordinator.cancelWaiting()
         learnerProfileStore.flushPersistence()
         scheduleTranslationWorkerShutdown()
     }
@@ -602,6 +810,7 @@ public final class AppModel: ObservableObject {
     private func presentNoReadableText() {
         translatedRegions = []
         lastCompletedScanDate = Date()
+        consecutiveScanFailures = 0
         overlayController.show(
             regions: [],
             autoSpeak: autoSpeak,
@@ -751,92 +960,210 @@ public final class AppModel: ObservableObject {
             pendingGeneration = generation
             phase = .translating
 
-            do {
-                let translationStartedAt = latencyClock.now
-                let missingTexts = uniqueTexts.filter {
-                    translationCache[$0.lowercased()] == nil
-                }
-                if !missingTexts.isEmpty {
-                    let translations = try await translationsWithLocalRecovery(
-                        missingTexts
-                    )
-                    guard !Task.isCancelled,
-                          generation == scanGeneration else {
-                        return
-                    }
-                    for (source, translation) in zip(
-                        missingTexts,
-                        translations
-                    ) {
-                        if !translationQualityService.needsRetry(
-                            source: source,
-                            translation: translation
-                        ) {
-                            translationCache[source.lowercased()] = translation
-                        }
-                    }
-                }
-                var translated: [String: String] = [:]
-                var sourceTranslations: [String: String] = [:]
-                translated.reserveCapacity(uniqueTexts.count)
-                sourceTranslations.reserveCapacity(uniqueTexts.count)
-                for text in uniqueTexts {
-                    let key = text.lowercased()
-                    // Two views of the same answer: what was translated, which
-                    // a word falls back to its own spelling for, and every
-                    // word paired with something to explain, which is that
-                    // spelling when nothing translated it.
-                    if let translation = translationCache[key] {
-                        translated[key] = translation
-                    }
-                    sourceTranslations[key] = translated[key] ?? text
-                }
-                let focusedSourceKeys = focusedRegionSelectionPolicy
-                    .focusedSourceKeys(in: allRegions, at: cursor)
-                let focusedTranslations = focusedSourceKeys.isEmpty
-                    ? sourceTranslations
-                    : sourceTranslations.filter {
-                        focusedSourceKeys.contains($0.key)
-                    }
-                let explanations = bridgeConfiguration.showsWordBridge
-                    ? await beginnerExplanations(for: focusedTranslations)
-                    : [:]
-                guard !Task.isCancelled,
-                      generation == scanGeneration else {
-                    return
-                }
-                let wordBridges = bridgeConfiguration.showsWordBridge
-                    ? await adaptiveWordBridges(from: explanations)
-                    : [:]
-                guard !Task.isCancelled,
-                      generation == scanGeneration else {
-                    return
-                }
-                logLatency("bridges", since: translationStartedAt)
-                logLatency("total", since: scanStartedAt)
-                translationEngineName = "Argos Translate"
-                apply(
-                    translations: translated,
-                    explanations: explanations,
-                    wordBridges: wordBridges,
-                    to: allRegions,
-                    generation: generation
-                )
-            } catch {
-                guard generation == scanGeneration else {
-                    return
-                }
-                translationEngineName = "Apple Translation fallback"
-                translationConfiguration.invalidate()
-            }
+            await translateAndPresent(
+                allRegions,
+                uniqueTexts: uniqueTexts,
+                cursor: cursor,
+                generation: generation,
+                scanStartedAt: scanStartedAt
+            )
         } catch is CancellationError {
             return
         } catch {
             guard generation == scanGeneration else {
                 return
             }
-            stopAfterFailure(error.localizedDescription)
+            consecutiveScanFailures += 1
+            if case ScreenCaptureError.permissionDenied = error {
+                stopAfterFailure(error.localizedDescription)
+            } else if consecutiveScanFailures
+                        >= Self.scanFailuresBeforeStopping {
+                stopAfterFailure(error.localizedDescription)
+            } else {
+                // Left to the next poll, which scans again where the
+                // pointer is then. The page already shown stays hoverable.
+                phase = translatedRegions.isEmpty
+                    ? .idle
+                    : .showing(regionCount: wordCount(in: translatedRegions))
+                pendingRegions = []
+                pendingGeneration = nil
+                lastCapturePoint = nil
+                if liveMode, liveTask == nil {
+                    updateLiveMode()
+                }
+            }
         }
+    }
+
+    /// Translates a page that has been read and shows it.
+    ///
+    /// Run once per scan, and once more for the same page if the contextual
+    /// glosser answers about its sentence after the page was first shown: the
+    /// page is shown straight away with word-at-a-time translations, and the
+    /// translations the sentence gives replace them when they arrive. Every
+    /// other answer on the page is served from a cache the first run filled,
+    /// so the second run costs only the bubbles.
+    private func translateAndPresent(
+        _ allRegions: [TextRegion],
+        uniqueTexts: [String],
+        cursor: CGPoint,
+        generation: UUID,
+        scanStartedAt: ContinuousClock.Instant,
+        answersVisibleWord: Bool = false
+    ) async {
+        let translationStartedAt = latencyClock.now
+        let missingTexts = uniqueTexts.filter {
+            translationCache[$0.lowercased()] == nil
+        }
+        if !missingTexts.isEmpty {
+            // A failed batch leaves its words untranslated on this page
+            // rather than holding the page back. It used to hand the scan
+            // to Apple's translator, which has no Danish, so the session
+            // stopped — or, if that never answered, sat in "translating"
+            // with no bubble until the pointer moved a long way.
+            let translations = (try? await translationsWithLocalRecovery(
+                missingTexts
+            )) ?? []
+            guard !Task.isCancelled,
+                  generation == scanGeneration else {
+                return
+            }
+            for (source, translation) in zip(
+                missingTexts,
+                translations
+            ) {
+                if !translationQualityService.needsRetry(
+                    source: source,
+                    translation: translation
+                ) {
+                    translationCache[source.lowercased()] = translation
+                }
+            }
+        }
+        let contextual = contextualAnswer(
+            for: allRegions,
+            uniqueTexts: uniqueTexts,
+            cursor: cursor,
+            generation: generation,
+            scanStartedAt: scanStartedAt
+        )
+        var translated: [String: String] = [:]
+        var sourceTranslations: [String: String] = [:]
+        translated.reserveCapacity(uniqueTexts.count)
+        sourceTranslations.reserveCapacity(uniqueTexts.count)
+        for text in uniqueTexts {
+            let key = text.lowercased()
+            // Two views of the same answer: what was translated, which
+            // a word falls back to its own spelling for, and every
+            // word paired with something to explain, which is that
+            // spelling when nothing translated it. The sentence's own
+            // gloss for a word wins over the one the word got alone.
+            if let gloss = contextual?.glossesByWord[
+                languages.source.normalized(text)
+            ] {
+                translated[key] = gloss
+            } else if let translation = translationCache[key] {
+                translated[key] = translation
+            }
+            sourceTranslations[key] = translated[key] ?? text
+        }
+        let focusedSourceKeys = focusedRegionSelectionPolicy
+            .focusedSourceKeys(in: allRegions, at: cursor)
+        let focusedTranslations = focusedSourceKeys.isEmpty
+            ? sourceTranslations
+            : sourceTranslations.filter {
+                focusedSourceKeys.contains($0.key)
+            }
+        var explanations = bridgeConfiguration.showsWordBridge
+            ? await beginnerExplanations(for: focusedTranslations)
+            : [:]
+        guard !Task.isCancelled,
+              generation == scanGeneration else {
+            return
+        }
+        if bridgeConfiguration.showsWordBridge,
+           let contextual,
+           let explanation = contextual.explanation {
+            for key in focusedTranslations.keys
+            where languages.source.normalized(key) == contextual.focusKey {
+                explanations[key] = explanation
+            }
+        }
+        let wordBridges = bridgeConfiguration.showsWordBridge
+            ? await adaptiveWordBridges(from: explanations)
+            : [:]
+        guard !Task.isCancelled,
+              generation == scanGeneration else {
+            return
+        }
+        logLatency("bridges", since: translationStartedAt)
+        logLatency("total", since: scanStartedAt)
+        translationEngineName = contextual == nil
+            ? "Argos Translate"
+            : "Argos Translate, with contextual glosses"
+        apply(
+            translations: translated,
+            explanations: explanations,
+            wordBridges: wordBridges,
+            to: allRegions,
+            generation: generation,
+            answersVisibleWord: answersVisibleWord
+        )
+    }
+
+    /// What the contextual glosser has said about the sentence under the
+    /// pointer, if it has answered already.
+    ///
+    /// When it has not, it is asked, and the page is translated again when it
+    /// answers — provided nothing newer has been read in the meantime. A page
+    /// that has been replaced by the time its answer arrives is not shown
+    /// again; the answer is kept, and serves the next page that reads the
+    /// same sentence.
+    private func contextualAnswer(
+        for regions: [TextRegion],
+        uniqueTexts: [String],
+        cursor: CGPoint,
+        generation: UUID,
+        scanStartedAt: ContinuousClock.Instant
+    ) -> ContextualGlossAnswer? {
+        guard contextualGlossesEnabled,
+              bridgeConfiguration.hasVisibleBridge,
+              let focused = focusedRegionSelectionPolicy.focusedWord(
+                in: regions,
+                at: cursor
+              ),
+              let request = ContextualGlossRequest(
+                containing: focused.word,
+                in: focused.region,
+                among: regions,
+                language: languages.source,
+                assembly: sentenceAssemblyPolicy
+              ) else {
+            return nil
+        }
+        if let answer = contextualGlossCoordinator.cachedAnswer(for: request) {
+            return answer
+        }
+        let askedAt = latencyClock.now
+        contextualGlossCoordinator.ask(request) { [weak self] in
+            guard let self,
+                  self.learningModeActive,
+                  generation == self.scanGeneration else {
+                return
+            }
+            self.logLatency("contextual", since: askedAt)
+            Task {
+                await self.translateAndPresent(
+                    regions,
+                    uniqueTexts: uniqueTexts,
+                    cursor: cursor,
+                    generation: generation,
+                    scanStartedAt: scanStartedAt,
+                    answersVisibleWord: true
+                )
+            }
+        }
+        return nil
     }
 
     private func translationRequests(
@@ -920,7 +1247,8 @@ public final class AppModel: ObservableObject {
         explanations: [String: String] = [:],
         wordBridges: [String: AdaptiveSentenceBridge] = [:],
         to regions: [TextRegion],
-        generation: UUID
+        generation: UUID,
+        answersVisibleWord: Bool = false
     ) {
         guard learningModeActive, generation == scanGeneration else {
             return
@@ -972,7 +1300,8 @@ public final class AppModel: ObservableObject {
         pendingGeneration = nil
         activeScanOrigin = nil
         lastCompletedScanDate = Date()
-        showOverlay()
+        consecutiveScanFailures = 0
+        showOverlay(answersVisibleWord: answersVisibleWord)
         phase = .showing(regionCount: wordCount(in: translatedRegions))
         if liveMode, liveTask == nil {
             updateLiveMode()
@@ -982,15 +1311,23 @@ public final class AppModel: ObservableObject {
     private func beginnerExplanations(
         for sourceTranslations: [String: String]
     ) async -> [String: String] {
+        // Kept by the word and the English it was explained from, not by the
+        // word alone. With sentence glosses one Danish word can arrive with
+        // two senses — "får" as "gets" in one sentence and "sheep" in the
+        // next — and the first explanation built would otherwise have been
+        // shown for both.
+        func cacheKey(_ source: String) -> String {
+            source + "\u{1F}" + (sourceTranslations[source] ?? source)
+        }
         var result: [String: String] = [:]
         for source in sourceTranslations.keys {
-            if let cached = beginnerExplanationCache[source] {
+            if let cached = beginnerExplanationCache[cacheKey(source)] {
                 result[source] = cached
             } else if let local = beginnerGlossService.localExplanation(
                 for: source
             ) {
                 result[source] = local
-                beginnerExplanationCache[source] = local
+                beginnerExplanationCache[cacheKey(source)] = local
             }
         }
 
@@ -1018,7 +1355,7 @@ public final class AppModel: ObservableObject {
                     continue
                 }
                 result[source] = cleaned
-                beginnerExplanationCache[source] = cleaned
+                beginnerExplanationCache[cacheKey(source)] = cleaned
             }
         } catch {
             wordBridgeEngineReady = false
@@ -1089,13 +1426,14 @@ public final class AppModel: ObservableObject {
         return LanguageTransferState.forKnowledgeLevel(level)
     }
 
-    private func showOverlay() {
+    private func showOverlay(answersVisibleWord: Bool = false) {
         overlayController.show(
             regions: translatedRegions,
             autoSpeak: autoSpeak,
             hoverDelay: hoverDelay,
             hotKeyConfiguration: hotKeyConfiguration,
-            bridgeConfiguration: bridgeConfiguration
+            bridgeConfiguration: bridgeConfiguration,
+            answersVisibleWord: answersVisibleWord
         )
     }
 
@@ -1344,6 +1682,7 @@ public final class AppModel: ObservableObject {
             }
             if !translationNeeded {
                 await argosTranslationService.shutdown()
+                await contextualGlossService.shutdown()
             }
         }
     }
@@ -1352,6 +1691,28 @@ public final class AppModel: ObservableObject {
         activationWarmUpTask?.cancel()
         let needsTranslation = bridgeConfiguration.hasVisibleBridge
         let needsWordBridge = bridgeConfiguration.showsWordBridge
+        // Loading the model takes a few seconds and happens off to the side:
+        // reading starts on word-at-a-time translation and picks up sentence
+        // glosses once the model answers.
+        contextualWarmUpTask?.cancel()
+        if needsTranslation,
+           contextualGlossesEnabled,
+           contextualGlossService.isInstalled,
+           !contextualGlossCoordinator.hasFailed {
+            contextualWarmUpTask = Task { [weak self] in
+                guard let self else {
+                    return
+                }
+                contextualGlossStatus = "Starting the model"
+                let ready = await contextualGlossService.isReady()
+                guard !Task.isCancelled else {
+                    return
+                }
+                contextualGlossStatus = ready
+                    ? "Ready"
+                    : "Could not start the model"
+            }
+        }
         activationWarmUpTask = Task { [weak self] in
             guard let self else {
                 return
@@ -1382,6 +1743,8 @@ public final class AppModel: ObservableObject {
     private func scheduleTranslationWorkerShutdown() {
         activationWarmUpTask?.cancel()
         activationWarmUpTask = nil
+        contextualWarmUpTask?.cancel()
+        contextualWarmUpTask = nil
         translationShutdownTask?.cancel()
         translationShutdownTask = Task { [weak self] in
             do {
@@ -1394,6 +1757,10 @@ public final class AppModel: ObservableObject {
             }
             await argosTranslationService.shutdown()
             await wordBridgeTranslationService.shutdown()
+            await contextualGlossService.shutdown()
+            if contextualGlossesInstalled {
+                refreshContextualGlossStatus()
+            }
             translationShutdownTask = nil
         }
     }
@@ -1454,5 +1821,7 @@ public final class AppModel: ObservableObject {
         static let hotKeyConfiguration = "hotKeyConfiguration"
         static let bridgeConfiguration = "learningBridgeConfiguration"
         static let screenPermissionWasRequested = "screenPermissionWasRequested"
+        static let contextualGlossesEnabled = "contextualGlossesEnabled"
+        static let wordBookAdoptedProfile = "wordBook.adoptedProfile"
     }
 }
