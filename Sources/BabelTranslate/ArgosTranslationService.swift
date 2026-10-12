@@ -1,5 +1,7 @@
 import BabelCore
+import Darwin
 import Foundation
+import Synchronization
 
 public enum ArgosTranslationError: LocalizedError {
     case unavailable
@@ -20,15 +22,35 @@ public enum ArgosTranslationError: LocalizedError {
 
 public actor ArgosTranslationService {
     private let languages: LanguagePair
+    private let pythonPathOverride: String?
+    private let bridgeURLOverride: URL?
+    private let responseTimeout: TimeInterval
 
     public init(languages: LanguagePair) {
         self.languages = languages
+        pythonPathOverride = nil
+        bridgeURLOverride = nil
+        responseTimeout = 30
+    }
+
+    /// A controlled worker for checks, without changing shipped engine lookup.
+    init(
+        languages: LanguagePair,
+        pythonPath: String,
+        bridgeURL: URL,
+        responseTimeout: TimeInterval
+    ) {
+        self.languages = languages
+        pythonPathOverride = pythonPath
+        bridgeURLOverride = bridgeURL
+        self.responseTimeout = responseTimeout
     }
 
     private var process: Process?
     private var input: FileHandle?
     private var output: FileHandle?
     private var errors: FileHandle?
+    private var recentErrors = ArgosWorkerErrors()
     private var responseBuffer = Data()
     private var activeLanguagePair: (source: String, target: String)?
 
@@ -52,11 +74,15 @@ public actor ArgosTranslationService {
     }
 
     public func warmUp() async {
-        _ = try? request(
-            texts: [],
-            source: languages.source.code,
-            target: languages.target.code
-        )
+        do {
+            _ = try request(
+                texts: [],
+                source: languages.source.code,
+                target: languages.target.code
+            )
+        } catch {
+            resetServer()
+        }
     }
 
     public func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
@@ -74,11 +100,15 @@ public actor ArgosTranslationService {
 
     /// Warms the reverse direction, which is the one the word bridge asks in.
     public func warmUpWordBridge() async {
-        _ = try? request(
-            texts: [],
-            source: languages.target.code,
-            target: languages.source.code
-        )
+        do {
+            _ = try request(
+                texts: [],
+                source: languages.target.code,
+                target: languages.source.code
+            )
+        } catch {
+            resetServer()
+        }
     }
 
     /// Explains words of the target language in the language being learned,
@@ -179,6 +209,7 @@ public actor ArgosTranslationService {
         source: String,
         target: String
     ) throws {
+        try Task.checkCancellation()
         if let process,
            process.isRunning,
            activeLanguagePair?.source == source,
@@ -187,8 +218,9 @@ public actor ArgosTranslationService {
         }
         resetServer()
 
-        guard let pythonURL = Self.pythonURL,
-              let bridgeURL = Self.bridgeURL else {
+        guard let pythonURL = pythonPathOverride.map(URL.init(fileURLWithPath:))
+                ?? Self.pythonURL,
+              let bridgeURL = bridgeURLOverride ?? Self.bridgeURL else {
             throw ArgosTranslationError.unavailable
         }
 
@@ -219,9 +251,23 @@ public actor ArgosTranslationService {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
+        // Python can emit enough startup warnings to fill stderr before it
+        // reads stdin. Drain it independently of the response, retaining only
+        // a bounded tail for diagnostics.
+        let recentErrors = ArgosWorkerErrors()
+        self.recentErrors = recentErrors
+        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            recentErrors.append(data)
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+            }
+        }
+
         do {
             try process.run()
         } catch {
+            errorPipe.fileHandleForReading.readabilityHandler = nil
             throw ArgosTranslationError.unavailable
         }
 
@@ -235,20 +281,55 @@ public actor ArgosTranslationService {
     private func readResponseLine(
         from output: FileHandle
     ) throws -> Data {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(responseTimeout))
         while true {
+            try Task.checkCancellation()
             if let newline = responseBuffer.firstIndex(of: 0x0A) {
                 let line = responseBuffer[..<newline]
                 responseBuffer.removeSubrange(...newline)
                 return Data(line)
             }
 
+            guard clock.now < deadline else {
+                throw ArgosTranslationError.executionFailed(
+                    "translation worker timed out"
+                )
+            }
+            let remaining = clock.now.duration(to: deadline).components
+            let milliseconds = remaining.seconds * 1_000
+                + remaining.attoseconds / 1_000_000_000_000_000
+            var descriptor = pollfd(
+                fd: output.fileDescriptor,
+                events: Int16(POLLIN),
+                revents: 0
+            )
+            // Poll in short intervals so cancellation can also stop a worker
+            // that remains alive without sending a complete JSON line.
+            let status = poll(
+                &descriptor,
+                1,
+                Int32(max(1, min(250, milliseconds)))
+            )
+            if status < 0 {
+                if errno == EINTR {
+                    continue
+                }
+                throw ArgosTranslationError.executionFailed(
+                    "could not read translation worker response"
+                )
+            }
+            if status == 0 {
+                continue
+            }
+            guard descriptor.revents & Int16(POLLNVAL) == 0 else {
+                throw ArgosTranslationError.executionFailed(
+                    "translation worker output closed"
+                )
+            }
             let chunk = output.availableData
             guard !chunk.isEmpty else {
-                let message = errors
-                    .map { String(decoding: $0.availableData, as: UTF8.self) }
-                    .map {
-                        $0.trimmingCharacters(in: .whitespacesAndNewlines)
-                    } ?? ""
+                let message = recentErrors.text
                 throw ArgosTranslationError.executionFailed(
                     message.isEmpty ? "translation worker stopped" : message
                 )
@@ -261,6 +342,7 @@ public actor ArgosTranslationService {
         if process?.isRunning == true {
             process?.terminate()
         }
+        errors?.readabilityHandler = nil
         try? input?.close()
         try? output?.close()
         try? errors?.close()
@@ -320,6 +402,30 @@ public actor ArgosTranslationService {
             .appendingPathComponent("config").path
         environment["XDG_CACHE_HOME"] = root
             .appendingPathComponent("cache").path
+    }
+}
+
+private final class ArgosWorkerErrors: Sendable {
+    private let buffer = Mutex(Data())
+    private let limit = 4_096
+
+    func append(_ data: Data) {
+        guard !data.isEmpty else {
+            return
+        }
+        buffer.withLock {
+            $0.append(data)
+            if $0.count > limit {
+                $0.removeFirst($0.count - limit)
+            }
+        }
+    }
+
+    var text: String {
+        buffer.withLock {
+            String(decoding: $0, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 }
 
