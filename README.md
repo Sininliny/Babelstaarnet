@@ -18,7 +18,7 @@
 
 <p align="center"><sub>Rendered from the app's own interface constants.</sub></p>
 
-Babelstårnet is a local-first macOS translator for Danish. Point at a word
+Babelstårnet is a local-first translator for Danish on macOS and Windows. Point at a word
 anywhere on screen — a website, a PDF, a form, text inside an image — and its
 meaning appears where you are already looking. Nothing to select, paste, or
 submit.
@@ -34,10 +34,29 @@ rather than two texts to reconcile.
 coming back to you, and hands each word back in Danish as you learn it. That is
 the only progress signal there is: no lessons, no score, nothing to answer.
 
-**Nothing leaves your Mac.** No screenshot, recognized text, definition, or audio
+**Nothing leaves your computer while reading.** No screenshot, recognized text, definition, or audio
 is sent to a remote service.
 
 ## Install
+
+### Windows
+
+Supports Windows 10 version 2004 or newer and Windows 11 (x64). Extract the
+Windows ZIP from [Releases](https://github.com/Sininliny/Babelstaarnet/releases)
+and run **Babelstaarnet.exe**. Install Danish OCR in Windows Language options,
+then use **Settings → Local engines → Install / repair translation** to install the
+local Argos engine (64-bit Python 3.12 required). After setup, reading works
+offline. Press `Ctrl+Alt+Z` to start or pause; the app lives in the system tray.
+
+Windows follows the Mac panel layout, settings, learning and review behavior.
+Optional local Gemma 3 4B adds sentence-aware meanings and Danish explanations;
+Piper provides offline Danish neural speech.
+
+For setup, Windows shortcuts, building from source, and platform differences,
+see the **[Windows guide](docs/WINDOWS.md)**. To build directly from this
+repository, run `.\Scripts\build-windows.ps1` in PowerShell.
+
+### macOS
 
 Requires macOS 15 or newer. Download the latest ZIP from
 [Releases](https://github.com/Sininliny/Babelstaarnet/releases) and open it.
@@ -58,7 +77,7 @@ Then, in the app:
 
 No account and no engine installation required.
 
-### Installing it by hand instead
+#### Installing it by hand instead
 
 Drag **Babelstaarnet.app** to **Applications** and double-click it. macOS says
 it cannot verify the developer and offers only **Move to Trash** or **Done**;
@@ -79,6 +98,9 @@ of this in the way — a bundle you built was never downloaded, so it is never
 flagged, and `make install` puts it straight into **Applications**.
 
 ## Use
+
+The shortcuts and optional contextual model below describe the macOS client.
+Windows controls and supported features are listed in the [Windows guide](docs/WINDOWS.md).
 
 Press `Fn+Z` to start reading, and again to stop. Hover a Danish word: its
 meaning appears above the pointer, and the whole line below it.

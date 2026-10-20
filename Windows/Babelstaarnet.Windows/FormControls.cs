@@ -1,0 +1,75 @@
+using System;
+using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Markup;
+
+namespace Babelstaarnet.Windows;
+
+// Keep native control semantics and automation; use the compact grouped form
+// appearance instead of the legacy rectangular Windows control templates.
+internal static class FormControls
+{
+    [ThreadStatic] private static Dictionary<string, Style>? styles;
+    internal static void Apply(Control control)
+    {
+        string kind = control.GetType().Name;
+        string? body = kind switch { nameof(CheckBox) => Check, nameof(ComboBox) => Combo, nameof(Slider) => Slide, _ => null };
+        if (body is null) return;
+        styles ??= [];
+        if (!styles.TryGetValue(kind, out var style))
+            styles[kind] = style = (Style)XamlReader.Parse("<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='" + kind + "'>" + body + "</Style>");
+        control.Style = style;
+    }
+    private const string Check = """
+      <Setter Property="Foreground" Value="#232327"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+        <Grid Background="Transparent"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+          <Border x:Name="box" Width="14" Height="14" CornerRadius="3" BorderBrush="#A5A5AC" BorderThickness="1" Background="White" VerticalAlignment="Center">
+            <Path x:Name="tick" Data="M2,6 L5,9 10,3" Stroke="White" StrokeThickness="1.7" Visibility="Collapsed" Margin="1"/>
+          </Border>
+          <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsChecked" Value="True"><Setter TargetName="box" Property="Background" Value="#3073DC"/><Setter TargetName="box" Property="BorderBrush" Value="#3073DC"/><Setter TargetName="tick" Property="Visibility" Value="Visible"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="box" Property="BorderBrush" Value="#1154BD"/><Setter TargetName="box" Property="BorderThickness" Value="2"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+      """;
+    private const string Combo = """
+      <Setter Property="MinHeight" Value="26"/><Setter Property="Foreground" Value="#232327"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
+        <Grid>
+          <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" ClickMode="Press">
+            <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
+              <Border x:Name="shell" CornerRadius="6" Background="White" BorderBrush="#DADAE0" BorderThickness="1">
+                <Path Data="M0,0 L3,3 6,0" Stroke="#707078" StrokeThickness="1.3" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,9,0"/>
+              </Border>
+              <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="shell" Property="Background" Value="#F3F5FA"/></Trigger></ControlTemplate.Triggers>
+            </ControlTemplate></ToggleButton.Template>
+          </ToggleButton>
+          <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="9,4,24,4" VerticalAlignment="Center" IsHitTestVisible="False"/>
+          <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False">
+            <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}" Background="White" BorderBrush="#DADAE0" BorderThickness="1" CornerRadius="6" Padding="3">
+              <ScrollViewer CanContentScroll="True"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer>
+            </Border>
+          </Popup>
+        </Grid>
+        <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+      """;
+    private const string Slide = """
+      <Setter Property="MinHeight" Value="24"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+        <Grid Background="Transparent">
+          <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}">
+            <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" Background="#3073DC" CornerRadius="2" VerticalAlignment="Center"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+            <Track.Thumb><Thumb Width="18" Height="18"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="White" BorderBrush="#C3C3CA" BorderThickness="1" CornerRadius="9"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+            <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" Background="#DADAE0" CornerRadius="2" VerticalAlignment="Center"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+          </Track>
+        </Grid>
+        <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+      """;
+}

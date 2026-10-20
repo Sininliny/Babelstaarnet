@@ -3,6 +3,12 @@
 Design rules, recognition pipeline, and development notes. The
 [README](../README.md) covers installing and using the app.
 
+This page describes the Swift/macOS implementation. The native .NET Windows
+client, its setup, checks, and current feature differences are documented in
+the [Windows guide](WINDOWS.md). It reuses the Argos JSON worker and the Danish
+reading approach, with Windows OCR, screen capture, tray controls, and local
+Piper neural speech. Its overlay follows the Mac word/sentence panel layout.
+
 ## Translation first
 
 The bubble answers before it teaches:

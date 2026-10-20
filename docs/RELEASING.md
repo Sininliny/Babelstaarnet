@@ -1,4 +1,17 @@
-# Publishing a macOS release
+# Publishing a release
+
+Version tags build both macOS and Windows archives. The Windows job runs
+`Scripts/test-windows.ps1` and `Scripts/package-windows.ps1` on a Windows runner;
+the macOS job downloads its ZIP and checksum and publishes both platforms in
+one GitHub release. Windows packages include the .NET 10 runtime, the Argos
+bridge and per-user setup script, the license, and the Windows setup guide.
+Python and translation models are installed separately by the reader.
+
+For a local Windows package, run `Scripts/package-windows.ps1` from PowerShell.
+The resulting `dist/Babelstaarnet-<version>-Windows-x64.zip` is unsigned.
+See [the Windows guide](WINDOWS.md) for requirements and checks.
+
+## macOS signing and installation
 
 Pushing a version tag such as `v0.4.0` builds a ZIP containing
 `Babelstaarnet.app`, `Install Babelstaarnet.command`, and `Start Here.txt`, and

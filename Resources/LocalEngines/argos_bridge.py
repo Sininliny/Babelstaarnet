@@ -9,6 +9,64 @@ import re
 import sys
 
 
+class WordTranslator:
+    """Use the installed Argos model directly for already-separated hover text.
+
+    The Windows reader supplies individual words (or one OCR line), so loading
+    SpaCy, PyTorch, Stanza and a sentence detector adds no useful processing.
+    Keep Argos' tokenizer and decoding settings, and batch independent words.
+    The existing full server remains available to the macOS client.
+    """
+
+    def __init__(self, source: str, target: str):
+        import ctranslate2
+        from argostranslate import package, settings
+
+        self.package = next(
+            (item for item in package.get_installed_packages()
+             if item.type == "translate" and item.from_code == source and item.to_code == target),
+            None,
+        )
+        if self.package is None:
+            raise RuntimeError(f"Argos language package {source} → {target} is not installed")
+        self.settings = settings
+        self.model = ctranslate2.Translator(
+            str(self.package.package_path / "model"), device="cpu",
+            inter_threads=settings.inter_threads, intra_threads=settings.intra_threads,
+            compute_type=settings.compute_type,
+        )
+
+    def translate(self, texts: list[str]) -> list[str]:
+        values = [""] * len(texts)
+        nonempty = [(index, text.strip()) for index, text in enumerate(texts) if text.strip()]
+        if not nonempty:
+            return values
+        tokenized = [self.package.tokenizer.encode(text) for _, text in nonempty]
+        prefix = self.package.target_prefix
+        results = self.model.translate_batch(
+            tokenized, target_prefix=[[prefix]] * len(tokenized) if prefix else None,
+            replace_unknowns=True, max_batch_size=self.settings.batch_size,
+            batch_type="tokens", beam_size=max(1, self.settings.beam_size),
+            num_hypotheses=1, length_penalty=0.2,
+        )
+        for (index, _), result in zip(nonempty, results):
+            value = self.package.tokenizer.decode(result.hypotheses[0])
+            if prefix and value.startswith(prefix):
+                value = value[len(prefix):]
+            values[index] = value.lstrip(" ")
+        return values
+
+
+def word_server(source: str, target: str) -> int:
+    translator = WordTranslator(source, target)
+    for line in sys.stdin:
+        if line.strip():
+            request = json.loads(line)
+            print(json.dumps({"translations": translator.translate(request.get("texts", []))},
+                             ensure_ascii=False), flush=True)
+    return 0
+
+
 def translation_for(source: str, target: str):
     import argostranslate.translate
 
@@ -23,10 +81,13 @@ def translation_for(source: str, target: str):
         return None
 
 
-def install_package(source: str, target: str) -> None:
+def install_package(source: str, target: str, direct_only: bool = False) -> None:
     import argostranslate.package
 
-    if translation_for(source, target) is not None:
+    installed = (any(item.type == "translate" and item.from_code == source and item.to_code == target
+                     for item in argostranslate.package.get_installed_packages())
+                 if direct_only else translation_for(source, target) is not None)
+    if installed:
         return
 
     argostranslate.package.update_package_index()
@@ -78,13 +139,24 @@ def main() -> int:
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--batch", action="store_true")
     parser.add_argument("--server", action="store_true")
+    parser.add_argument("--word-server", action="store_true")
+    parser.add_argument("--install-word-model", action="store_true")
+    parser.add_argument("--check-word-model", action="store_true")
     parser.add_argument("--check-word-bridge", action="store_true")
     arguments = parser.parse_args()
 
     try:
-        if arguments.install:
-            install_package(arguments.source, arguments.target)
+        if arguments.install or arguments.install_word_model:
+            install_package(arguments.source, arguments.target, direct_only=arguments.install_word_model)
             print("installed")
+            return 0
+
+        if arguments.word_server:
+            return word_server(arguments.source, arguments.target)
+
+        if arguments.check_word_model:
+            WordTranslator(arguments.source, arguments.target).translate(["æbler"])
+            print("ready")
             return 0
 
         translation = translation_for(arguments.source, arguments.target)

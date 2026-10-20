@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/Babelstaarnet.ico</ApplicationIcon>
+    <AssemblyName>Babelstaarnet</AssemblyName>
+    <Version>0.5.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/*.ico" LogicalName="Babelstaarnet.Assets.%(Filename)%(Extension)" />
+    <ProjectReference Include="../Babelstaarnet.Core/Babelstaarnet.Core.csproj" />
+    <Content Include="../../Resources/LocalEngines/argos_bridge.py" Link="LocalEngines/argos_bridge.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../Scripts/install-local-engines.ps1" Link="LocalEngines/install-local-engines.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../Resources/LocalEngines/piper_bridge.py" Link="LocalEngines/piper_bridge.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../Scripts/install-neural-voice.ps1" Link="LocalEngines/install-neural-voice.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../docs/images/logo.png" Link="logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
