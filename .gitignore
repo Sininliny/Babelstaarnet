@@ -71,3 +71,10 @@ dist/
 
 # Personal Claude Code settings (machine-specific paths)
 .claude/settings.local.json
+
+# Windows / .NET
+**/bin/
+**/obj/
+.vs/
+__pycache__/
+*.pyc

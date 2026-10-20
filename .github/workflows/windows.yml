@@ -1,0 +1,43 @@
+name: Native client checks
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify shared Danish language data
+        run: python3 Scripts/sync-windows-language.py --check
+      - name: Check Mac behavior remains compatible
+        run: make test
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Windows behavior and worker protocol
+        shell: pwsh
+        run: ./Scripts/test-windows.ps1
+      - name: Package Windows app
+        shell: pwsh
+        run: ./Scripts/package-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Babelstaarnet-Windows-x64
+          path: |
+            dist/*-Windows-x64.zip
+            dist/*-Windows-x64.zip.sha256
