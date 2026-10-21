@@ -14,8 +14,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
-      - name: Verify shared Danish language data
-        run: python3 Scripts/sync-windows-language.py --check
+      - name: Verify cross-platform repository contracts
+        run: python3 Scripts/check-repository.py
       - name: Check Mac behavior remains compatible
         run: make test
 
@@ -32,6 +32,13 @@ jobs:
       - name: Check Windows behavior and worker protocol
         shell: pwsh
         run: ./Scripts/test-windows.ps1
+      - name: Render light and dark Windows surfaces
+        shell: pwsh
+        run: dotnet run --project Tests/WindowsChecks/WindowsChecks.csproj -c Release --no-build --no-restore -- --render-ui build/windows-ci.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-UI-previews
+          path: build/windows-ci*.png
       - name: Package Windows app
         shell: pwsh
         run: ./Scripts/package-windows.ps1

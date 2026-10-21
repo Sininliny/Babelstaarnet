@@ -20,10 +20,13 @@ internal static class UiRendering
         {
             try
             {
+                WindowsTheme.Current.Apply("light", dark: false, highContrast: false);
                 Render(output, known: false, loading: false);
                 Render(Path.Combine(Path.GetDirectoryName(output)!, Path.GetFileNameWithoutExtension(output) + "-known.png"), known: true, loading: false);
                 Render(Path.Combine(Path.GetDirectoryName(output)!, Path.GetFileNameWithoutExtension(output) + "-loading.png"), known: false, loading: true);
                 RenderApplication(output);
+                string dark = Path.Combine(Path.GetDirectoryName(output)!, Path.GetFileNameWithoutExtension(output) + "-dark.png");
+                WindowsTheme.Current.Apply("dark", dark: true, highContrast: false); Render(dark, known: false, loading: false); RenderApplication(dark);
             }
             catch (Exception error) { failure = error; }
         });
@@ -48,6 +51,7 @@ internal static class UiRendering
         store.Save("anspændte", "tense", "Mette Frederiksen om den anspændte situation.", now.AddDays(-2));
         store.Save("æbler", "apples", "Jeg spiser æbler.", now.AddDays(-1)); store.Mark("æbler", true, now);
         var preferences = new ReaderPreferences(); var model = new ReaderUiModel(preferences, store, Path.Combine(fixture, "preferences.json")) { Active = true, OcrReady = true, TranslationReady = true, VoiceReady = true };
+        Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
         var settings = new SettingsPanel(model); settings.Measure(new Size(480, 3000)); settings.Arrange(new Rect(0, 0, 480, 3000)); settings.UpdateLayout();
         // Render the actual grouped form without the viewport cropping its lower sections.
         var form = (FrameworkElement)settings.Content; settings.Content = null; form.Measure(new Size(480, double.PositiveInfinity)); int formHeight = (int)Math.Ceiling(form.DesiredSize.Height);
@@ -68,7 +72,7 @@ internal static class UiRendering
         void Add(UIElement element, double x, double y) { Canvas.SetLeft(element, x); Canvas.SetTop(element, y); canvas.Children.Add(element); }
         var paper = new Border { Width = 850, Height = 340, CornerRadius = new CornerRadius(12), Background = Brushes.White, BorderBrush = Ui.ColorBrush(216, 217, 219), BorderThickness = new Thickness(1) };
         Add(paper, 55, 135);
-        TextBlock Text(string value, double size = 14, bool bold = false) => new() { Text = value, FontFamily = Ui.Font, FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, Foreground = OverlayCard.Primary };
+        TextBlock Text(string value, double size = 14, bool bold = false) => new() { Text = value, FontFamily = Ui.Font, FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, Foreground = Ui.ColorBrush(27, 27, 27) };
         Add(Text("Vejledning til ansøgere", 18, true), 85, 170);
         Add(Text("Sagsbehandlingen begynder, når alle oplysninger er modtaget."), 85, 220);
         const string source = "Ansøgningen skal indgives senest fire uger efter refleksionsperioden udløber.";
@@ -91,7 +95,7 @@ internal static class UiRendering
         var frames = OverlayLayout.Place(focus.Bounds, OverlayLayout.SourceFrame(hit), new(280, (int)Math.Ceiling(word.DesiredSize.Height)), new(420, (int)Math.Ceiling(sentence.DesiredSize.Height)), new(0, 0, width, height)) ?? throw new Exception("No safe paired layout.");
         Add(new FloatingSurface(word), frames.Word.X, frames.Word.Y); Add(new FloatingSurface(sentence), frames.Sentence.X, frames.Sentence.Y);
         var rule = OverlayLayout.FocusRule(focus.Bounds);
-        Add(new Border { Width = rule.Width, Height = rule.Height, CornerRadius = new CornerRadius(1), Background = Ui.ColorBrush(63, 113, 212) }, rule.X, rule.Y);
+        Add(new Border { Width = rule.Width, Height = rule.Height, CornerRadius = new CornerRadius(1), Background = Ui.Accent }, rule.X, rule.Y);
         canvas.Measure(new Size(width, height)); canvas.Arrange(new Rect(0, 0, width, height)); canvas.UpdateLayout();
         if (word.ActualWidth != 280 || sentence.ActualWidth != 420) throw new Exception("Mac panel dimensions changed.");
         var image = new RenderTargetBitmap(width * 2, height * 2, 192, 192, PixelFormats.Pbgra32); image.Render(canvas);

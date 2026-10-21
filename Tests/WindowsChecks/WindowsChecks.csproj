@@ -12,5 +12,6 @@
     <ProjectReference Include="../../Windows/Babelstaarnet.Windows/Babelstaarnet.Windows.csproj" />
     <Content Include="fake_worker.py" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="word_engine_checks.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../Shared/*.json" Link="Shared/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

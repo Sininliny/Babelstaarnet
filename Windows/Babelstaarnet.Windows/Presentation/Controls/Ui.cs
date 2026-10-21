@@ -10,13 +10,14 @@ namespace Babelstaarnet.Windows;
 
 internal static class Ui
 {
-    public static readonly Brush Ink = ColorBrush(35, 35, 39);
-    public static readonly Brush Muted = ColorBrush(112, 112, 120);
-    public static readonly Brush Paper = ColorBrush(243, 243, 246);
-    public static readonly Brush Surface = Brushes.White;
-    public static readonly Brush Stroke = ColorBrush(218, 218, 224);
-    public static readonly Brush Accent = ColorBrush(48, 115, 220);
-    public static readonly Brush AccentSoft = ColorBrush(234, 240, 252);
+    internal static Action<Exception>? ErrorRaised { get; set; }
+    public static Brush Ink => WindowsTheme.Current.Ink;
+    public static Brush Muted => WindowsTheme.Current.Muted;
+    public static Brush Paper => WindowsTheme.Current.Paper;
+    public static Brush Surface => WindowsTheme.Current.Surface;
+    public static Brush Stroke => WindowsTheme.Current.Stroke;
+    public static Brush Accent => WindowsTheme.Current.Accent;
+    public static Brush AccentSoft => WindowsTheme.Current.AccentSoft;
     public static readonly FontFamily Font = new("Segoe UI Variable Text, Segoe UI");
     public static Brush ColorBrush(byte r, byte g, byte b)
     { var brush = new SolidColorBrush(Color.FromRgb(r, g, b)); brush.Freeze(); return brush; }
@@ -40,7 +41,7 @@ internal static class Ui
         {
             Content = title, FontFamily = Font, FontSize = 12, FontWeight = FontWeights.SemiBold,
             Padding = new Thickness(12, 8, 12, 8), MinHeight = 34,
-            Background = primary ? Accent : Surface, Foreground = primary ? Brushes.White : Ink,
+            Background = primary ? Accent : Surface, Foreground = primary ? WindowsTheme.Current.OnAccent : Ink,
             BorderBrush = primary ? Accent : Stroke, BorderThickness = new Thickness(1),
             Cursor = System.Windows.Input.Cursors.Hand, Focusable = true
         };
@@ -55,7 +56,7 @@ internal static class Ui
         border.AppendChild(presenter);
         var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
         var hover = new Trigger { Property = System.Windows.Controls.Button.IsMouseOverProperty, Value = true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty, primary ? ColorBrush(36, 91, 181) : AccentSoft, "surface"));
+        hover.Setters.Add(new Setter(Border.BackgroundProperty, primary ? WindowsTheme.Current.Accent : WindowsTheme.Current.Hover, "surface"));
         template.Triggers.Add(hover);
         var focus = new Trigger { Property = System.Windows.Controls.Button.IsKeyboardFocusedProperty, Value = true };
         focus.Setters.Add(new Setter(Border.BorderBrushProperty, Accent, "surface"));
@@ -88,7 +89,7 @@ internal static class Ui
     public static void Try(Action action)
     {
         try { action(); }
-        catch (Exception error) { Error(error.Message); }
+        catch (Exception error) { if (ErrorRaised is { } report) report(error); else Error(error.Message); }
     }
     public static void Error(string message) => MessageBox.Show(message, "Babelstårnet", MessageBoxButton.OK, MessageBoxImage.Information);
 }

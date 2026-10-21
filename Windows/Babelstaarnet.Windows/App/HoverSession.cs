@@ -17,22 +17,24 @@ internal sealed class HoverSession : IDisposable
     private CancellationTokenSource? pending;
     private Dictionary<string, string> glosses = [];
     private readonly HashSet<string> contextualKeys = [];
+    private IReadOnlyList<BridgeToken>? projectedTokens, projectedExplanation;
     public HoveredText? Current { get; private set; }
     public string Meaning { get; private set; } = "";
     public string Explanation { get; private set; } = "";
     public bool Loading => Current is not null && Meaning.Length == 0;
     public string Bridge => string.Join(' ', Tokens.Select(t => t.Text));
-    public IReadOnlyList<BridgeToken> Tokens => Current is null ? [] : BridgePresentation.Tokens(Current, glosses, known, KnowledgeLevel);
+    public IReadOnlyList<BridgeToken> Tokens => projectedTokens ??= Current is null ? [] : BridgePresentation.Tokens(Current, glosses, known, KnowledgeLevel);
     public IReadOnlyList<BridgeToken> ExplanationTokens
     {
         get
         {
-            if (Explanation.Length == 0) return [];
+            if (projectedExplanation is not null) return projectedExplanation;
+            if (Explanation.Length == 0) return projectedExplanation = [];
             var answers = new Dictionary<string, string>();
             foreach (System.Text.RegularExpressions.Match match in ReadingPolicy.Words().Matches(Explanation))
                 if (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, match.Value, out var local)) answers[ReadingPolicy.Key(match.Value)] = local;
                 else if (cached(match.Value) is { } value) answers[ReadingPolicy.Key(match.Value)] = value;
-            return BridgePresentation.Tokens(new(new("", default), new(Explanation, [])), answers, known, KnowledgeLevel);
+            return projectedExplanation = BridgePresentation.Tokens(new(new("", default), new(Explanation, [])), answers, known, KnowledgeLevel);
         }
     }
     public event Action? Changed;
@@ -61,7 +63,7 @@ internal sealed class HoverSession : IDisposable
             else if (cached(next) is { } meaning) glosses[ReadingPolicy.Key(next)] = meaning;
         Meaning = glosses.GetValueOrDefault(ReadingPolicy.Key(word), "");
         Explanation = DanishLanguage.Shared.Beginner.GetValueOrDefault(ReadingPolicy.Key(word), "");
-        Changed?.Invoke(); ReadAloud?.Invoke(word);
+        Publish(); ReadAloud?.Invoke(word);
         return CompleteOwnedAsync(word, tokens, hit, request);
     }
     private async Task CompleteOwnedAsync(string word, string[] tokens, HoveredText hit, CancellationTokenSource request)
@@ -77,7 +79,7 @@ internal sealed class HoverSession : IDisposable
             if (Meaning.Length == 0)
             {
                 string meaning = (await translate([word], token))[0]; token.ThrowIfCancellationRequested();
-                if (!contextualKeys.Contains(ReadingPolicy.Key(word))) { Meaning = meaning; glosses[ReadingPolicy.Key(word)] = meaning; Changed?.Invoke(); }
+                if (!contextualKeys.Contains(ReadingPolicy.Key(word))) { Meaning = meaning; glosses[ReadingPolicy.Key(word)] = meaning; Publish(); }
             }
             await Task.Delay(60, token);
             if (TranslateSentence)
@@ -85,13 +87,13 @@ internal sealed class HoverSession : IDisposable
                 {
                     token.ThrowIfCancellationRequested(); var values = await translate(batch, token); token.ThrowIfCancellationRequested();
                     for (int i = 0; i < batch.Length; i++) if (!contextualKeys.Contains(ReadingPolicy.Key(batch[i]))) glosses[ReadingPolicy.Key(batch[i])] = values[i];
-                    Changed?.Invoke();
+                    Publish();
                 }
             if (TranslateMeaning && Explanation.Length > 0)
                 foreach (var batch in ReadingPolicy.Words().Matches(Explanation).Select(m => m.Value).DistinctBy(ReadingPolicy.Key)
                     .Where(w => !known(ReadingPolicy.Key(w)) && !ReadingPolicy.TryGloss(ReadingPolicy.Glosses, w, out _) && cached(w) is null).Take(12).Chunk(4))
                 {
-                    await translate(batch, token); token.ThrowIfCancellationRequested(); Changed?.Invoke();
+                    await translate(batch, token); token.ThrowIfCancellationRequested(); Publish();
                 }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -107,16 +109,18 @@ internal sealed class HoverSession : IDisposable
             if (answer.Focus.Meaning.Length > 0) { Meaning = answer.Focus.Meaning; glosses[ReadingPolicy.Key(hit.Word.Text)] = Meaning; contextualKeys.Add(ReadingPolicy.Key(hit.Word.Text)); }
             if (answer.Focus.Explanation.Length > 0) Explanation = answer.Focus.Explanation;
             if (answer.Focus.Lemma.Length > 0) LemmaFound?.Invoke(hit.Word.Text, answer.Focus.Lemma);
-            Changed?.Invoke();
+            Publish();
         }
         try { Apply(await ContextProvider(hit, token, Apply)); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception error) { if (!token.IsCancellationRequested) ContextFailed?.Invoke(error); }
     }
-    public void Refresh() => Changed?.Invoke();
+    public void InvalidateProjection() { projectedTokens = projectedExplanation = null; }
+    private void Publish() { InvalidateProjection(); Changed?.Invoke(); }
+    public void Refresh() => Publish();
     public void Clear()
     {
-        pending?.Cancel(); pending = null; Current = null; Meaning = ""; Explanation = ""; glosses = []; contextualKeys.Clear();
+        pending?.Cancel(); pending = null; Current = null; Meaning = ""; Explanation = ""; glosses = []; contextualKeys.Clear(); InvalidateProjection();
     }
     public void Dispose() => Clear();
 }

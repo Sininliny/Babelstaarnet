@@ -13,9 +13,14 @@ namespace Babelstaarnet.Windows;
 internal sealed class BrandIcons : IDisposable
 {
     private readonly Dictionary<string, Icon> icons = [];
+    // IconHelper can revisit the decoder behind a frozen BitmapFrame.
+    // Cache per dispatcher so native window icons keep their decoder owner.
+    [ThreadStatic] private static Dictionary<string, ImageSource>? images;
     internal static Stream Resource(string name) => Assembly.GetExecutingAssembly().GetManifestResourceStream("Babelstaarnet.Assets." + name) ?? throw new FileNotFoundException("Missing app icon: " + name);
     public static ImageSource AppImage => Image("Babelstaarnet.ico");
     public static ImageSource Image(string name)
+    { images ??= []; if (!images.TryGetValue(name, out var image)) images[name] = image = LoadImage(name); return image; }
+    private static ImageSource LoadImage(string name)
     {
         using var stream = Resource(name);
         var decoder = new IconBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);

@@ -84,6 +84,13 @@ internal static class ReadingParityChecks
         session.ContextProvider = (_, _, _) => throw new IOException("Model unavailable");
         await session.FocusAsync(new(new("aflysninger", default), new("aflysninger", [])));
         Check(session.Meaning == "fallback" && failures == 1, "Contextual failure must preserve ordinary offline word translation.");
+        bool familiar = false;
+        using var projection = new HoverSession(_ => "apples", (words, _) => Task.FromResult<IReadOnlyList<string>>(words.Select(_ => "apples").ToArray()), _ => familiar) { TranslateSentence = false };
+        await projection.FocusAsync(new(new("æbler", default), new("æbler", [])));
+        var firstProjection = projection.Tokens;
+        Check(ReferenceEquals(firstProjection, projection.Tokens), "Repeated presentation must reuse its projected sentence tokens.");
+        familiar = true; projection.Refresh();
+        Check(!projection.Tokens.Single().English && !ReferenceEquals(firstProjection, projection.Tokens), "Feedback must invalidate projection and immediately restore Danish.");
         return checks - before;
     }
 }

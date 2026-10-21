@@ -30,6 +30,15 @@ Click either mouse button on the tower tray logo to open controls, Word Book,
 Settings and Quit. The tower is filled while active and adapts to taskbar
 contrast. Hidden icons are available in the notification area's overflow.
 
+## Windows appearance
+
+Settings uses a resizable navigation window with one page at a time. Under
+**Appearance**, choose the Windows setting, Light or Dark. Native windows use
+the built-in Fluent theme; compact lookup cards, tray and book follow the same
+palette and Windows accent. High contrast and reduced motion follow Windows
+accessibility settings. Word Book recycles visible rows for large collections.
+See [the design guide](WINDOWS_DESIGN.md) for the conventions.
+
 ## Reading controls
 
 | Default | Action |
@@ -53,10 +62,10 @@ The inline speaker replays the word. Refreshing a word does not repeat speech.
 reading to refresh. Power saving pauses scans after five seconds without input
 and resumes on input. Holding and pinning also stop scans.
 
-The overlay follows the Mac layout: a 280-point word panel with three compact
+The overlay keeps compact reading geometry: a 280-point word panel with three
 controls above a divider and a separate 420-point sentence panel. Both avoid
 the source block. A rule underlines the actual word and its focused occurrence
-in the reading line. Meanings use 15-point type, source words 11-point type.
+in the reading line. Meanings use 16-point type, source words 12-point type.
 Known feedback hides direct English; familiarity gradually fades Danish by
 the same amount as Mac. Feedback confirmations survive revisiting for five
 minutes. Adjacent English substitutions share a neutral tint.
@@ -111,6 +120,8 @@ Data lives in `%LOCALAPPDATA%\Babelstaarnet` by default:
 - `preferences.json`: voice, panel, delay, reading and shortcut settings.
 - `vocabulary.json`: saved meanings, contexts and learning evidence;
   `vocabulary.json.lemmas.json` stores dictionary-form associations.
+- `contextual-cache.json`: bounded local sentence meanings and focused
+  explanations reused after restart, invalidated by model/prompt changes.
 - `translation-cache.json`: up to 2,048 local translations reused after restart;
   changing the bridge or model installation invalidates it.
 - `performance.json`: latest 64 numeric latency samples, without recognized
@@ -147,7 +158,8 @@ Capture adapts to text size, starting at 620 × 250 logical pixels. Fresh pixels
 validate cached positions; unchanged text avoids OCR. New words scan after
 35 ms of settled input, separately from the 600 ms refresh. Misses retry after
 150 ms. Optional gloss work yields after batches of at most four words. Pixel
-comparison reuses row buffers; OCR preprocessing and encounter serialization
+comparison reads native rows directly without copying an unchanged image.
+Compositor waits, screenshot copies, OCR preprocessing and encounter serialization
 run away from the UI thread. Unchanged sentence tokens and native frames are
 reused. Pause/resume retains the loaded translation, OCR, voice and audio cache.
 

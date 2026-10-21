@@ -1,13 +1,10 @@
 using Babelstaarnet.Core;
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Globalization;
@@ -23,11 +20,10 @@ internal sealed class ScreenReader
     private OcrEngine? engine;
     private PixelRect? captureArea;
     private PixelRect? captureScreen;
-    private byte[]? fingerprint;
-    private PixelPoint cachedOrigin;
-    private Size cachedSize;
+    private PixelSnapshot? snapshot;
+    private PixelPoint cachedOrigin => snapshot?.Origin ?? default;
+    private Size cachedSize => snapshot?.Size ?? default;
     private IReadOnlyList<RecognizedLine> cachedLines = Array.Empty<RecognizedLine>();
-    private byte[]? cachedPixels;
     private DateTimeOffset fullCaptureAt;
     private double? textHeight;
     private bool previousWholeDisplay;
@@ -48,12 +44,12 @@ internal sealed class ScreenReader
     }
 
     public async Task<IReadOnlyList<RecognizedLine>> ReadAsync(PixelPoint pointer,
-        CancellationToken cancellationToken, Action<PixelRect, Action> captureWithoutOverlay, bool captureWholeDisplay = false)
+        CancellationToken cancellationToken, Func<PixelRect, Action, CancellationToken, Task> captureWithoutOverlay, bool captureWholeDisplay = false)
     {
         // Reuse the page's word boxes only after checking the line's current
         // pixels. Moving to the next word avoids both OCR and compositor work;
         // scrolling, selection and page updates still invalidate the snapshot.
-        if (!captureWholeDisplay && DateTimeOffset.UtcNow - fullCaptureAt < HoverScanPolicy.RefreshInterval && ReadingPolicy.HitTest(cachedLines, pointer) is { } hit && cachedPixels is not null)
+        if (!captureWholeDisplay && DateTimeOffset.UtcNow - fullCaptureAt < HoverScanPolicy.RefreshInterval && ReadingPolicy.HitTest(cachedLines, pointer) is { } hit && snapshot is not null)
         {
             int left = hit.Line.Words.Min(w => w.Bounds.X);
             int top = hit.Line.Words.Min(w => w.Bounds.Y);
@@ -64,7 +60,7 @@ internal sealed class ScreenReader
                 Height = Math.Min(bottom + 2, cachedOrigin.Y + cachedSize.Height) - patch.Y };
             if (patch.Width > 0 && patch.Height > 0)
             {
-                using var line = Capture(patch, captureWithoutOverlay);
+                using var line = await CaptureAsync(patch, captureWithoutOverlay, cancellationToken);
                 if (MatchesSnapshot(line, new(patch.X, patch.Y)))
                 { SnapshotHits++; return cachedLines; }
             }
@@ -84,13 +80,13 @@ internal sealed class ScreenReader
         // All capture and hit-test coordinates remain physical pixels, including
         // monitors with negative origins and different scaling factors.
         IReadOnlyList<RecognizedLine> lines;
-        using (var bitmap = Capture(area, captureWithoutOverlay))
+        using (var bitmap = await CaptureAsync(area, captureWithoutOverlay, cancellationToken))
             lines = await Task.Run(() => RecognizeAsync(bitmap, new(area.X, area.Y), cancellationToken), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested(); fullCaptureAt = DateTimeOffset.UtcNow;
         if (!captureWholeDisplay && ReadingPolicy.HitTest(lines, pointer) is null && AdaptiveCapture.NeedsExpansion(lines, area))
         {
             area = AdaptiveCapture.Plan(pointer, screenRect, textHeight, NativeMethods.MonitorScale(pointer.X, pointer.Y), expansion: 1.6);
-            using var expanded = Capture(area, captureWithoutOverlay);
+            using var expanded = await CaptureAsync(area, captureWithoutOverlay, cancellationToken);
             lines = await Task.Run(() => RecognizeAsync(expanded, new(area.X, area.Y), cancellationToken), cancellationToken);
             captureArea = area;
         }
@@ -99,36 +95,23 @@ internal sealed class ScreenReader
         return lines;
     }
 
-    private static Bitmap Capture(PixelRect area, Action<PixelRect, Action> captureWithoutOverlay)
+    private static async Task<Bitmap> CaptureAsync(PixelRect area, Func<PixelRect, Action, CancellationToken, Task> captureWithoutOverlay, CancellationToken cancellationToken)
     {
-        var bitmap = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
-        try { captureWithoutOverlay(area, () =>
-        {
-            using var graphics = Graphics.FromImage(bitmap);
-            graphics.CopyFromScreen(area.X, area.Y, 0, 0, bitmap.Size, CopyPixelOperation.SourceCopy);
-        }); return bitmap; }
-        catch { bitmap.Dispose(); throw; }
-    }
-
-    internal bool MatchesSnapshot(Bitmap bitmap, PixelPoint origin)
-    {
-        if (cachedPixels is null || origin.X < cachedOrigin.X || origin.Y < cachedOrigin.Y ||
-            origin.X + bitmap.Width > cachedOrigin.X + cachedSize.Width ||
-            origin.Y + bitmap.Height > cachedOrigin.Y + cachedSize.Height) return false;
-        int x = origin.X - cachedOrigin.X, y = origin.Y - cachedOrigin.Y;
-        int bytes = bitmap.Width * 4; byte[] rowBuffer = ArrayPool<byte>.Shared.Rent(bytes);
-        var locked = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        Bitmap? bitmap = null;
         try
         {
-            for (int row = 0; row < bitmap.Height; row++)
+            await captureWithoutOverlay(area, () =>
             {
-                Marshal.Copy(IntPtr.Add(locked.Scan0, row * locked.Stride), rowBuffer, 0, bytes);
-                if (!rowBuffer.AsSpan(0, bytes).SequenceEqual(cachedPixels.AsSpan(((y + row) * cachedSize.Width + x) * 4, bytes))) return false;
-            }
-            return true;
+                bitmap = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
+                using var graphics = Graphics.FromImage(bitmap);
+                graphics.CopyFromScreen(area.X, area.Y, 0, 0, bitmap.Size, CopyPixelOperation.SourceCopy);
+            }, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested(); return bitmap!;
         }
-        finally { bitmap.UnlockBits(locked); ArrayPool<byte>.Shared.Return(rowBuffer); }
+        catch { bitmap?.Dispose(); throw; }
     }
+
+    internal bool MatchesSnapshot(Bitmap bitmap, PixelPoint origin) => snapshot?.Matches(bitmap, origin) == true;
 
     internal async Task<IReadOnlyList<RecognizedLine>> RecognizeAsync(Bitmap bitmap,
         PixelPoint origin, CancellationToken cancellationToken)
@@ -144,10 +127,8 @@ internal sealed class ScreenReader
         cancellationToken.ThrowIfCancellationRequested();
         engine ??= OcrEngine.TryCreateFromLanguage(new Language("da-DK")) ??
             throw new InvalidOperationException("Install Danish optical character recognition in Windows Settings → Time & language → Language & region → Danish → Language options.");
-        byte[] raw = Pixels(bitmap);
-        byte[] nextFingerprint = SHA256.HashData(raw);
-        if (origin == cachedOrigin && bitmap.Size == cachedSize && fingerprint is not null &&
-            nextFingerprint.AsSpan().SequenceEqual(fingerprint)) return cachedLines;
+        if (origin == cachedOrigin && bitmap.Size == cachedSize && MatchesSnapshot(bitmap, origin)) return cachedLines;
+        var nextSnapshot = PixelSnapshot.Capture(bitmap, origin); byte[] raw = nextSnapshot.Bytes;
         // Static snapshots can cover a whole 4K/8K monitor. Respect the OCR
         // runtime's image limit while returning physical source coordinates.
         double ratio = Math.Min(1, (double)OcrEngine.MaxImageDimension / Math.Max(bitmap.Width, bitmap.Height));
@@ -158,7 +139,7 @@ internal sealed class ScreenReader
             graphics.DrawImage(bitmap, new Rectangle(Point.Empty, resized.Size));
         }
         var input = resized ?? bitmap; double scaleX = (double)bitmap.Width / input.Width, scaleY = (double)bitmap.Height / input.Height;
-        using var pixels = SoftwareBitmap.CreateCopyFromBuffer((resized is null ? raw : Pixels(input)).AsBuffer(), BitmapPixelFormat.Bgra8,
+        using var pixels = SoftwareBitmap.CreateCopyFromBuffer((resized is null ? raw : PixelSnapshot.Capture(input, default).Bytes).AsBuffer(), BitmapPixelFormat.Bgra8,
             input.Width, input.Height, BitmapAlphaMode.Ignore);
         var result = await engine.RecognizeAsync(pixels).AsTask(cancellationToken).ConfigureAwait(false);
         Recognitions++;
@@ -168,27 +149,9 @@ internal sealed class ScreenReader
                 origin.X + (int)Math.Floor(word.BoundingRect.X * scaleX), origin.Y + (int)Math.Floor(word.BoundingRect.Y * scaleY),
                 (int)Math.Ceiling(word.BoundingRect.Width * scaleX), (int)Math.Ceiling(word.BoundingRect.Height * scaleY))))
             .ToArray())).ToArray();
-        fingerprint = nextFingerprint;
-        cachedPixels = raw;
-        cachedOrigin = origin;
-        cachedSize = bitmap.Size;
+        snapshot = nextSnapshot;
         cachedLines = lines;
         return lines;
     }
 
-    private static byte[] Pixels(Bitmap bitmap)
-    {
-        byte[] raw = new byte[checked(bitmap.Width * bitmap.Height * 4)];
-        var locked = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly,
-            PixelFormat.Format32bppArgb);
-        try
-        {
-            int rowBytes = bitmap.Width * 4;
-            if (locked.Stride == rowBytes) Marshal.Copy(locked.Scan0, raw, 0, raw.Length);
-            else for (int y = 0; y < bitmap.Height; y++)
-                Marshal.Copy(IntPtr.Add(locked.Scan0, y * locked.Stride), raw, y * rowBytes, rowBytes);
-        }
-        finally { bitmap.UnlockBits(locked); }
-        return raw;
-    }
 }

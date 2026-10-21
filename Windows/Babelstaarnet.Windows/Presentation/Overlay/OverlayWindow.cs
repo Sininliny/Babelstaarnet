@@ -2,6 +2,8 @@ using Babelstaarnet.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -31,31 +33,45 @@ internal sealed class OverlayWindow : IDisposable
     {
         wordWindow = new BubbleWindow(new FloatingSurface(card), "Babelstårnet · word");
         sentenceWindow = new BubbleWindow(new FloatingSurface(sentence), "Babelstårnet · sentence");
-        markerWindow = new BubbleWindow(new Border { Background = new SolidColorBrush(Color.FromArgb(220, 63, 113, 212)), CornerRadius = new CornerRadius(1) }, "Babelstårnet · focus", marker: true);
+        markerWindow = new BubbleWindow(new Border { Background = Ui.Accent, CornerRadius = new CornerRadius(1) }, "Babelstårnet · focus", marker: true);
         card.Known += () => Known?.Invoke(); card.Unknown += () => Unknown?.Invoke();
         card.Pin += () => Pin?.Invoke(); card.Listen += () => Listen?.Invoke();
     }
+    private CaptureLease ExcludeForCapture(PixelRect area) => new(new[] { wordWindow, sentenceWindow, markerWindow }
+        .Where(w => w.IsVisible && OverlayLayout.Intersects(area, w.WindowFrame)).ToArray());
     public void CaptureWithoutOverlay(PixelRect area, Action capture)
     {
-        var overlaps = new[] { wordWindow, sentenceWindow, markerWindow }
-            .Where(w => w.IsVisible && OverlayLayout.Intersects(area, w.WindowFrame)).ToArray();
-        if (overlaps.Length == 0) { capture(); return; }
-        var excluded = new List<BubbleWindow>(); var hidden = new List<BubbleWindow>();
-        try
+        using var lease = ExcludeForCapture(area);
+        if (lease.Changed) NativeMethods.DwmFlush();
+        capture();
+    }
+    public async Task CaptureWithoutOverlayAsync(PixelRect area, Action capture, CancellationToken cancellationToken)
+    {
+        // Exclusion/restoration stay on the dispatcher. Waiting for the
+        // compositor and copying pixels run on a worker, without freezing UI.
+        using var lease = ExcludeForCapture(area);
+        await Task.Run(() => { if (lease.Changed) NativeMethods.DwmFlush(); cancellationToken.ThrowIfCancellationRequested(); capture(); }, cancellationToken);
+    }
+    private sealed class CaptureLease : IDisposable
+    {
+        private readonly List<IDisposable> exclusions = [];
+        internal bool Changed => exclusions.Count > 0;
+        internal CaptureLease(BubbleWindow[] windows)
         {
-            foreach (var window in overlaps)
-                if (NativeMethods.SetWindowDisplayAffinity(window.Handle, 0x11)) excluded.Add(window);
-                else { window.Hide(); hidden.Add(window); }
-            NativeMethods.DwmFlush(); capture();
+            try
+            {
+                foreach (var window in windows) exclusions.Add(CaptureVisibility.Exclude(window.Handle, window.Hide, window.Show, () => !window.ClosedPermanently));
+            }
+            catch { Dispose(); throw; }
         }
-        finally
+        public void Dispose()
         {
-            foreach (var window in excluded)
-                if (!NativeMethods.SetWindowDisplayAffinity(window.Handle, 0)) window.Hide();
-            foreach (var window in hidden) window.Show();
-            NativeMethods.DwmFlush();
+            Exception? failure = null;
+            foreach (var exclusion in exclusions) try { exclusion.Dispose(); } catch (Exception error) { failure ??= error; }
+            exclusions.Clear(); if (failure is not null) throw failure;
         }
     }
+
     public void Present(HoveredText text, string translation, string readingBridge, bool pinned, bool loading, bool known,
         IReadOnlyList<BridgeToken>? tokens = null, bool showWord = true, bool showSentence = true, HotKeyConfiguration? shortcuts = null,
         int knowledgeLevel = 0, IReadOnlyList<BridgeToken>? explanationTokens = null)
@@ -116,12 +132,14 @@ internal sealed class OverlayWindow : IDisposable
         private readonly FrameworkElement panel;
         private readonly int shadow;
         private string? monitor;
+        internal bool ClosedPermanently { get; private set; }
         internal PixelRect ContentFrame { get; private set; }
         internal PixelRect WindowFrame { get; private set; }
         internal IntPtr Handle => new WindowInteropHelper(this).EnsureHandle();
         internal BubbleWindow(FrameworkElement panel, string title, bool marker = false)
         {
             this.panel = panel; shadow = marker ? 0 : 18;
+            Closed += (_, _) => ClosedPermanently = true;
             Title = title; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
             ShowInTaskbar = false; ShowActivated = false; Topmost = true; AllowsTransparency = true;
             Background = Brushes.Transparent;

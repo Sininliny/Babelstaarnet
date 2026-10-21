@@ -141,3 +141,13 @@ engines.
 
 “Babelstårnet” is Danish for “the Tower of Babel.” The repository keeps the ASCII
 spelling `Babelstaarnet`.
+
+## Development
+
+See [the cross-platform development guide](docs/DEVELOPMENT.md) for the repository
+map, shared behavior examples, native test commands and performance tools.
+Windows uses its own [Fluent design conventions](docs/WINDOWS_DESIGN.md).
+Run `python Scripts/check-repository.py` to check language data, versions and
+project references without downloading models. Open `Babelstaarnet.slnx` for
+Windows development; the Swift package and existing build scripts keep their
+current entry points.
