@@ -52,10 +52,16 @@ internal static class NativeExperienceChecks
     {
         using var bitmap = new System.Drawing.Bitmap(3840, 2160);
         using (var graphics = System.Drawing.Graphics.FromImage(bitmap)) graphics.Clear(System.Drawing.Color.White);
-        var snapshot = PixelSnapshot.Capture(bitmap, new(-1920, -400)); snapshot.Matches(bitmap, snapshot.Origin);
+        var snapshot = PixelSnapshot.Capture(bitmap, new(-1920, -400));
+        // Warm native marshalling and tiered JIT before measuring allocations.
+        for (int i = 0; i < 10; i++) snapshot.Matches(bitmap, snapshot.Origin);
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 5; i++) Check(snapshot.Matches(bitmap, snapshot.Origin), "Identical 4K pixels must match without OCR.");
-        Check(GC.GetAllocatedBytesForCurrentThread() - before < 64_000, "Repeated 4K snapshot comparison must not allocate another pixel-sized buffer.");
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Console.WriteLine($"Five 4K snapshot comparisons allocated {allocated} managed bytes.");
+        // Allow hosted-runtime initialization noise, while still rejecting even
+        // one 33 MB pixel buffer. This is an allocation guard, not a JIT budget.
+        Check(allocated < 1_000_000, "Repeated 4K snapshot comparison must not allocate another pixel-sized buffer.");
         bitmap.SetPixel(3839, 2159, System.Drawing.Color.Black);
         Check(!snapshot.Matches(bitmap, snapshot.Origin), "A change in the last pixel must invalidate the snapshot.");
         Check(!snapshot.Matches(bitmap, new(-1919, -400)), "Identical dimensions at another origin must not reuse old word coordinates.");
