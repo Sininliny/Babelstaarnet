@@ -11,9 +11,9 @@ internal sealed class FloatingSurface : Grid
 {
     public FloatingSurface(Border panel)
     {
-        Children.Add(new Border { Background = Brushes.White, CornerRadius = panel.CornerRadius,
+        Children.Add(new Border { Background = Ui.Surface, CornerRadius = panel.CornerRadius,
             IsHitTestVisible = false, Effect = new DropShadowEffect
-            { Color = Colors.Black, BlurRadius = 22, ShadowDepth = 5, Opacity = .14 } });
+            { Color = Colors.Black, BlurRadius = 16, ShadowDepth = 4, Opacity = WindowsTheme.Current.HighContrast ? 0 : .16 } });
         Children.Add(panel);
         UseLayoutRounding = true;
     }

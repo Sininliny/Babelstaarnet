@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "language": "da",
+  "identities": [
+    { "text": "“Æbler!”", "key": "æbler" },
+    { "text": " FÅR ", "key": "får" },
+    { "text": "far", "key": "far" },
+    { "text": "EU-bidrag", "key": "eu-bidrag" },
+    { "text": "LÆSER.", "key": "læser" }
+  ],
+  "sentences": [
+    { "text": "Jeg spiser æbler.", "stops": 1, "ends": true },
+    { "text": "Han sagde “nej.”", "stops": 1, "ends": true },
+    { "text": "Fristen er den 15.", "stops": 0, "ends": false },
+    { "text": "Det kunne fx være støtte til", "stops": 0, "ends": false },
+    { "text": "Vi mødes den 15. november kl. 10.30 på AU.", "stops": 1, "ends": true },
+    { "text": "Se mere på www.au.dk. Fristen er fast.", "stops": 2, "ends": true },
+    { "text": "Hvad gør vi? Vi læser videre!", "stops": 2, "ends": true }
+  ]
+}

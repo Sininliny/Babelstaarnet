@@ -13,8 +13,8 @@ if (-not $env:BABELSTAARNET_TEST_PYTHON) {
     }
 }
 $checksProject = Join-Path $projectDirectory 'Tests\WindowsChecks\WindowsChecks.csproj'
-& $env:BABELSTAARNET_TEST_PYTHON (Join-Path $PSScriptRoot 'sync-windows-language.py') --check
-if ($LASTEXITCODE -ne 0) { throw 'The Windows Danish language pack differs from the Mac source.' }
+& $env:BABELSTAARNET_TEST_PYTHON (Join-Path $PSScriptRoot 'check-repository.py')
+if ($LASTEXITCODE -ne 0) { throw 'Repository contracts failed.' }
 # A single build node also works in restricted Windows environments where
 # MSBuild's worker-node IPC is unavailable. Keep compile failures separate
 # from runtime failures in both local output and CI logs.

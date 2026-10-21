@@ -1,6 +1,9 @@
 using Babelstaarnet.Core;
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -29,8 +32,10 @@ internal sealed class ContextualGlossClient : IDisposable
     private readonly SemaphoreSlim gate = new(1);
     private readonly HttpClient http = new(new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     private readonly CancellationTokenSource lifetime = new();
-    private readonly Dictionary<string, Dictionary<string, string>> sentences = [];
-    private readonly Dictionary<string, FocusedGloss> focuses = [];
+    private readonly ConcurrentDictionary<string, Dictionary<string, string>> sentences = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, FocusedGloss> focuses = new(StringComparer.Ordinal);
+    private readonly string memoryPath;
+    private string memoryStamp;
     private Process? server;
     private Uri? address;
     private bool disposed;
@@ -50,6 +55,15 @@ internal sealed class ContextualGlossClient : IDisposable
         string userModels = Environment.GetEnvironmentVariable("OLLAMA_MODELS") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ollama", "models");
         models = ValidLocalModel(ownModels) ? ownModels : ValidLocalModel(userModels) ? userModels : ownModels;
         IsInstalled = RuntimeAvailable && ValidLocalModel(models);
+        memoryPath = Path.Combine(directory, "contextual-cache.json");
+        string manifest = Path.Combine(models, "manifests", "registry.ollama.ai", "library", "gemma3", "4b");
+        memoryStamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((IsInstalled ? File.ReadAllText(manifest) : "") + DanishLanguage.Shared.ExplainInstructions + DanishLanguage.Shared.GlossInstructions)));
+        if (IsInstalled)
+        {
+            var memory = ContextualMemory.Load(memoryPath, memoryStamp);
+            foreach (var pair in memory.Sentences) sentences[pair.Key] = pair.Value;
+            foreach (var pair in memory.Focuses) focuses[pair.Key] = pair.Value;
+        }
     }
     private static string? FindExecutable() => new[]
     {
@@ -106,18 +120,34 @@ internal sealed class ContextualGlossClient : IDisposable
             if (result.RootElement.TryGetProperty("error", out var error)) throw new IOException(error.GetString());
             IsInstalled = ValidLocalModel(models);
             if (!IsInstalled) throw new IOException("The local Gemma model did not finish installing.");
+            string manifest = Path.Combine(models, "manifests", "registry.ollama.ai", "library", "gemma3", "4b");
+            memoryStamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(File.ReadAllText(manifest) + DanishLanguage.Shared.ExplainInstructions + DanishLanguage.Shared.GlossInstructions)));
             ResetFailure();
         }
         finally { gate.Release(); }
     }
-    public async Task<ContextualAnswer> ExplainAsync(HoveredText hit, CancellationToken cancellationToken, Action<ContextualAnswer>? onFocused = null)
+    public async Task<ContextualAnswer> ExplainAsync(HoveredText hit, CancellationToken cancellationToken, Action<ContextualAnswer>? onFocused = null, bool includeSentence = true, Func<string, bool>? leaveInDanish = null)
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!IsInstalled || HasFailed) throw new InvalidOperationException(LastFailure ?? "The offline contextual model is not installed.");
         string sentence = hit.Line.Text, key = sentence + "\u001f" + ReadingPolicy.Key(hit.Word.Text);
+        var words = includeSentence ? ReadingPolicy.Words().Matches(sentence).Select(m => m.Value).DistinctBy(ReadingPolicy.Key).Take(32)
+            .Where(w => leaveInDanish?.Invoke(ReadingPolicy.Key(w)) != true).ToArray() : [];
+        bool TryCached(out ContextualAnswer answer)
+        {
+            if (focuses.TryGetValue(key, out var focus) && sentences.TryGetValue(sentence, out var glosses) && words.All(w => glosses.ContainsKey(ReadingPolicy.Key(w))))
+            { answer = new(glosses, focus); return true; }
+            answer = null!; return false;
+        }
+        // Cached answers bypass model warm-up and the inference semaphore.
+        if (TryCached(out var cached)) return cached;
+        if (focuses.TryGetValue(key, out var earlier)) onFocused?.Invoke(new(sentences.GetValueOrDefault(sentence) ?? [], earlier));
         await gate.WaitAsync(cancellationToken);
         try
         {
-            if (sentences.TryGetValue(sentence, out var found) && focuses.TryGetValue(key, out var focused)) return new(found, focused);
+            if (TryCached(out cached)) return cached;
+            focuses.TryGetValue(key, out var focused);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
             deadline.CancelAfter(TimeSpan.FromSeconds(45)); await EnsureServerAsync(deadline.Token);
             if (!focuses.TryGetValue(key, out focused))
@@ -125,20 +155,25 @@ internal sealed class ContextualGlossClient : IDisposable
                 string raw = await GenerateAsync(DanishLanguage.Shared.ExplainInstructions, sentence, [hit.Word.Text], deadline.Token);
                 focused = ParseFocus(raw, hit.Word.Text);
                 if (focused.Meaning.Length == 0) throw new IOException("The local model returned no usable focused meaning.");
-                if (focuses.Count >= 1024) focuses.Remove(focuses.Keys.First());
+                if (focuses.Count >= 1024) focuses.TryRemove(focuses.Keys.First(), out _);
                 focuses[key] = focused;
             }
             var glosses = sentences.TryGetValue(sentence, out var previous) ? new Dictionary<string, string>(previous) : new();
             glosses[ReadingPolicy.Key(hit.Word.Text)] = focused.Meaning;
             onFocused?.Invoke(new(glosses, focused));
-            var words = ReadingPolicy.Words().Matches(sentence).Select(m => m.Value).DistinctBy(ReadingPolicy.Key).Take(32).Where(w => !glosses.ContainsKey(ReadingPolicy.Key(w))).ToArray();
-            foreach (var batch in words.Chunk(8))
+            void RememberSentence()
+            {
+                if (sentences.Count >= 256 && !sentences.ContainsKey(sentence)) sentences.TryRemove(sentences.Keys.First(), out _);
+                sentences[sentence] = new(glosses);
+            }
+            RememberSentence();
+            foreach (var batch in words.Where(w => !glosses.ContainsKey(ReadingPolicy.Key(w))).Chunk(8))
             {
                 string raw = await GenerateAsync(DanishLanguage.Shared.GlossInstructions, sentence, batch, deadline.Token);
                 foreach (var pair in ParseGlosses(raw, batch)) glosses[pair.Key] = pair.Value;
+                RememberSentence();
             }
-            if (sentences.Count >= 256) sentences.Remove(sentences.Keys.First());
-            sentences[sentence] = glosses; failures = 0; LastFailure = null; return new(glosses, focused);
+            failures = 0; LastFailure = null; return new(glosses, focused);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || lifetime.IsCancellationRequested) { throw; }
         catch (Exception e)
@@ -202,6 +237,7 @@ internal sealed class ContextualGlossClient : IDisposable
             server = Process.Start(start) ?? throw new IOException("Could not start the local contextual engine.");
             server.OutputDataReceived += (_, _) => { }; server.ErrorDataReceived += (_, _) => { };
             server.BeginOutputReadLine(); server.BeginErrorReadLine();
+            try { server.PriorityClass = ProcessPriorityClass.BelowNormal; } catch (System.ComponentModel.Win32Exception) { }
         }
         for (int attempt = 0; attempt < 100; attempt++)
         {
@@ -217,5 +253,9 @@ internal sealed class ContextualGlossClient : IDisposable
         var old = server; server = null; serverReady = false; if (old is null) return;
         try { if (!old.HasExited) old.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } finally { old.Dispose(); }
     }
-    public void Dispose() { disposed = true; lifetime.Cancel(); StopServer(); http.Dispose(); }
+    public void Dispose()
+    {
+        if (disposed) return; disposed = true; lifetime.Cancel(); StopServer(); http.Dispose();
+        if (IsInstalled) ContextualMemory.Save(memoryPath, new(memoryStamp, sentences.ToDictionary(), focuses.ToDictionary()));
+    }
 }

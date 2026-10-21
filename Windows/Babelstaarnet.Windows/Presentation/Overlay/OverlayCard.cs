@@ -11,12 +11,12 @@ using System.Windows.Media.Animation;
 
 namespace Babelstaarnet.Windows;
 
-// WordBubbleView on macOS: fixed 280-point width, compact controls above
-// a rule, 15-point meaning, 11-point source word and an inline speaker.
+// Compact Windows lookup: familiar reading geometry with a system palette,
+// rectangular quick actions, live text and an inline Danish speaker.
 internal sealed class OverlayCard : Border
 {
-    private readonly TextBlock meaning = Label(15, true);
-    private readonly TextBlock danish = Label(11);
+    private readonly TextBlock meaning = Label(16, true);
+    private readonly TextBlock danish = Label(12);
     private readonly TextBlock knownState = Label(10);
     private readonly TextBlock knownKey = Label(10);
     private readonly TextBlock unknownKey = Label(10);
@@ -32,14 +32,12 @@ internal sealed class OverlayCard : Border
     public event Action? Pin;
     public event Action? Listen;
 
-    internal static readonly Brush Primary = Ui.ColorBrush(35, 35, 37);
-    internal static readonly Brush Secondary = Ui.ColorBrush(110, 110, 114);
-    internal static readonly Brush ControlFill = Ui.ColorBrush(233, 233, 235);
-    internal static readonly Brush ActiveFill = Ui.ColorBrush(216, 216, 221);
-    internal static readonly Brush Rule = Ui.ColorBrush(217, 217, 220);
-    internal static readonly Brush Material = CreateMaterial();
-    private static Brush CreateMaterial()
-    { var brush = new SolidColorBrush(Color.FromRgb(250, 250, 252)); brush.Freeze(); return brush; }
+    internal static Brush Primary => Ui.Ink;
+    internal static Brush Secondary => Ui.Muted;
+    internal static Brush ControlFill => WindowsTheme.Current.Control;
+    internal static Brush ActiveFill => Ui.AccentSoft;
+    internal static Brush Rule => Ui.Stroke;
+    internal static Brush Material => Ui.Surface;
 
     internal static TextBlock Label(double size, bool bold = false) => new()
     {
@@ -52,7 +50,7 @@ internal sealed class OverlayCard : Border
         panel.Padding = new Thickness(padding);
         panel.Background = Material;
         panel.CornerRadius = new CornerRadius(radius);
-        panel.BorderBrush = new SolidColorBrush(Color.FromArgb(180, 200, 200, 205));
+        panel.BorderBrush = Ui.Stroke;
         panel.BorderThickness = new Thickness(.7);
         panel.UseLayoutRounding = true;
         TextOptions.SetTextFormattingMode(panel, TextFormattingMode.Display);
@@ -60,12 +58,12 @@ internal sealed class OverlayCard : Border
 
     public OverlayCard()
     {
-        StylePanel(this, OverlayLayout.WordWidth, 0, 12);
+        StylePanel(this, OverlayLayout.WordWidth, 0, 8);
         MinHeight = 54;
         var panel = new StackPanel { Margin = new Thickness(11, 9, 11, 9) };
         var actions = new WrapPanel();
-        known = Control("1", "Knew", () => Known?.Invoke(), knownKey);
-        unknown = Control("2", "Don’t know", () => Unknown?.Invoke(), unknownKey);
+        known = Control("1", "Known", () => Known?.Invoke(), knownKey);
+        unknown = Control("2", "Learn", () => Unknown?.Invoke(), unknownKey);
         pin = Control("3", "Pin", () => Pin?.Invoke(), pinKey);
         SetShortcuts(shortcuts);
         actions.Children.Add(known); actions.Children.Add(unknown); actions.Children.Add(pin);
@@ -113,7 +111,7 @@ internal sealed class OverlayCard : Border
         var text = Label(10); text.Text = title; text.Foreground = Secondary;
         label.Children.Add(text); button.Content = label;
         var border = new FrameworkElementFactory(typeof(Border)); border.Name = "capsule";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(20));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
         border.SetBinding(Border.BackgroundProperty, new Binding("Background") { RelativeSource = RelativeSource.TemplatedParent });
         border.SetBinding(Border.PaddingProperty, new Binding("Padding") { RelativeSource = RelativeSource.TemplatedParent });
         var content = new FrameworkElementFactory(typeof(ContentPresenter));
@@ -138,7 +136,7 @@ internal sealed class OverlayCard : Border
         meaning.Visibility = directMeaning ? Visibility.Visible : Visibility.Collapsed;
         meaning.Foreground = Primary;
         danish.Text = DanishLanguage.Display(hit.Word.Text);
-        danish.FontSize = directMeaning ? 11 : 15;
+        danish.FontSize = directMeaning ? 12 : 16;
         danish.FontWeight = directMeaning ? FontWeights.Medium : FontWeights.SemiBold;
         danish.Opacity = DanishLanguage.KnowledgeOpacity(level);
         explanation.SetTokens(explanationTokens ?? []); explanation.Visibility = explanationTokens is { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
@@ -152,7 +150,7 @@ internal sealed class OverlayCard : Border
         unknownKey.Text = markedKnown == false ? "✓" : shortcuts.DontKnow.Display;
         known.Background = markedKnown == true ? ActiveFill : ControlFill;
         unknown.Background = markedKnown == false ? ActiveFill : ControlFill;
-        if (markedKnown == true && animate)
+        if (markedKnown == true && animate && WindowsTheme.Current.Animate)
         {
             var scale = new ScaleTransform(1, 1); danish.RenderTransformOrigin = new Point(.5, .5); danish.RenderTransform = scale;
             var animation = new DoubleAnimationUsingKeyFrames();

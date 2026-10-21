@@ -1,0 +1,135 @@
+using Babelstaarnet.Core;
+using Babelstaarnet.Windows;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
+
+internal static class NativeExperienceChecks
+{
+    private static int checks;
+    private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); checks++; }
+    internal static int Run(string directory)
+    {
+        SharedContract(); PixelComparison(); ContextMemory(directory);
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
+            async void Start()
+            {
+                try { ThemesAndPages(directory); VirtualizedBook(directory); await CaptureDispatcherAsync(); }
+                catch (Exception error) { failure = error; }
+                finally { Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background); }
+            }
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(Start)); Dispatcher.Run();
+        });
+        thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join();
+        if (failure is not null) throw failure;
+        return checks;
+    }
+    private static void SharedContract()
+    {
+        using var data = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shared", "reading-contract.json")));
+        foreach (var item in data.RootElement.GetProperty("identities").EnumerateArray())
+            Check(ReadingPolicy.Key(item.GetProperty("text").GetString()!) == item.GetProperty("key").GetString(), "Shared Danish identity must agree on both platforms.");
+        foreach (var item in data.RootElement.GetProperty("sentences").EnumerateArray())
+        {
+            string text = item.GetProperty("text").GetString()!;
+            Check(SentenceBoundary.StopLocations(text).Count == item.GetProperty("stops").GetInt32(), "Shared sentence stops must agree on both platforms.");
+            Check(SentenceBoundary.EndsSentence(text) == item.GetProperty("ends").GetBoolean(), "Shared sentence ending must agree on both platforms.");
+        }
+    }
+    private static void PixelComparison()
+    {
+        using var bitmap = new System.Drawing.Bitmap(3840, 2160);
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap)) graphics.Clear(System.Drawing.Color.White);
+        var snapshot = PixelSnapshot.Capture(bitmap, new(-1920, -400));
+        // Warm native marshalling and tiered JIT before measuring allocations.
+        for (int i = 0; i < 10; i++) snapshot.Matches(bitmap, snapshot.Origin);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 5; i++) Check(snapshot.Matches(bitmap, snapshot.Origin), "Identical 4K pixels must match without OCR.");
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Console.WriteLine($"Five 4K snapshot comparisons allocated {allocated} managed bytes.");
+        // Allow hosted-runtime initialization noise, while still rejecting even
+        // one 33 MB pixel buffer. This is an allocation guard, not a JIT budget.
+        Check(allocated < 1_000_000, "Repeated 4K snapshot comparison must not allocate another pixel-sized buffer.");
+        bitmap.SetPixel(3839, 2159, System.Drawing.Color.Black);
+        Check(!snapshot.Matches(bitmap, snapshot.Origin), "A change in the last pixel must invalidate the snapshot.");
+        Check(!snapshot.Matches(bitmap, new(-1919, -400)), "Identical dimensions at another origin must not reuse old word coordinates.");
+    }
+    private static void ContextMemory(string directory)
+    {
+        string path = Path.Combine(directory, "context-memory.json");
+        ContextualMemory.Save(path, new("same-model", new() { ["Han får en gave."] = new() { ["får"] = "receives" } }, new() { ["Han får en gave.\u001ffår"] = new("receives", "få", "At modtage noget.") }));
+        var read = ContextualMemory.Load(path, "same-model");
+        Check(read.Focuses.Values.Single().Lemma == "få" && read.Sentences.Count == 1, "Focused and partial sentence meanings must survive restart.");
+        Check(ContextualMemory.Load(path, "new-model").Focuses.Count == 0, "Different model or prompt stamps must invalidate contextual memory.");
+        File.WriteAllText(path, "{\"Stamp\":\"same-model\",\"Sentences\":null,\"Focuses\":null}");
+        Check(ContextualMemory.Load(path, "same-model").Focuses.Count == 0, "Malformed contextual memory must not prevent startup.");
+    }
+    private static void ThemesAndPages(string directory)
+    {
+        var theme = WindowsTheme.Current; theme.Apply("light", false, false); var brush = Ui.Ink;
+        var text = Ui.Text("Theme updates in place"); theme.Apply("dark", true, false);
+        Check(ReferenceEquals(brush, text.Foreground) && ((SolidColorBrush)text.Foreground).Color.R > 230, "An existing control must update when Windows appearance changes.");
+        Check(Contrast(theme.Ink.Color, theme.Surface.Color) >= 7 && Contrast(theme.Muted.Color, theme.Paper.Color) >= 4.5 && Contrast(theme.OnAccent.Color, theme.Accent.Color) >= 4.5, "Dark typography and accent controls must remain readable.");
+        theme.Apply("light", false, false);
+        Check(Contrast(theme.Ink.Color, theme.Surface.Color) >= 7 && Contrast(theme.OnAccent.Color, theme.Accent.Color) >= 4.5, "Light typography and accent controls must remain readable.");
+        theme.Apply("system", highContrast: true);
+        Check(theme.Ink.Color == SystemColors.WindowTextColor && theme.Surface.Color == SystemColors.WindowColor && !theme.Animate, "High contrast must use Windows colors and suppress decorative motion.");
+        theme.Apply("light", false, false);
+        string preferences = Path.Combine(directory, "appearance.json");
+        var model = new ReaderUiModel(new(), new VocabularyStore(Path.Combine(directory, "appearance-words.json")), preferences);
+        model.Apply = () => theme.Apply(model.Preferences.Appearance);
+        var shell = new SettingsShell(model); Layout(shell, 880, 640);
+        var navigation = Descendants<ListBox>(shell).Single(); navigation.SelectedItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Appearance"));
+        Check(shell.SelectedPage == "Appearance", "Windows navigation must open its selected settings page.");
+        var picker = Descendants<ComboBox>(shell).Single(box => box.Items.Contains("Use Windows setting")); picker.SelectedIndex = 2;
+        Check(ReaderPreferences.Load(preferences).Appearance == "dark", "Appearance selection must persist through the real settings callback.");
+        theme.Apply("light", false, false);
+    }
+    private static void VirtualizedBook(string directory)
+    {
+        string Word(int n) { string word = "ord"; do { word += (char)('a' + n % 26); n /= 26; } while (n > 0); return word; }
+        var entries = Enumerable.Range(0, 5000).Select(i => new VocabularyEntry { Key = Word(i), Word = Word(i), Saved = true, Level = i % 2 == 0 ? 4 : 0, SavedAt = DateTimeOffset.Now.AddMinutes(-i) }).ToArray();
+        string path = Path.Combine(directory, "large-book.json"); File.WriteAllText(path, JsonSerializer.Serialize(entries));
+        var watch = Stopwatch.StartNew(); var book = new WordBookPanel(new VocabularyStore(path), _ => { }, new()); Layout(book, 860, 520);
+        var list = Descendants<ListBox>(book).Single();
+        Check(list.Items.Count == 5000 && book.RowBuilds < 50, "A 5,000-word book must create only visible rows.");
+        int initialRows = book.RowBuilds;
+        list.ScrollIntoView(list.Items[^1]); Layout(book, 860, 520);
+        Check(book.RowBuilds < 100, "Scrolling to the end must recycle containers instead of constructing the whole book.");
+        Descendants<Button>(book).Single(button => Equals(button.Content, "Known")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(list.Items.Count == 2500, "Virtualization must retain familiarity filters.");
+        Console.WriteLine($"5,000-word book: {initialRows} initial rows, {watch.ElapsedMilliseconds} ms including load, layout, scroll and filter.");
+    }
+    private static async Task CaptureDispatcherAsync()
+    {
+        using var overlay = new OverlayWindow(); using var release = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); int ui = Environment.CurrentManagedThreadId, worker = ui;
+        var task = overlay.CaptureWithoutOverlayAsync(new(0, 0, 10, 10), () => { worker = Environment.CurrentManagedThreadId; entered.SetResult(); release.Wait(TimeSpan.FromSeconds(2)); }, CancellationToken.None);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Check(Environment.CurrentManagedThreadId == ui && worker != ui && !task.IsCompleted, "Waiting for capture must leave the UI dispatcher available.");
+        release.Set(); await task;
+    }
+    private static double Contrast(Color a, Color b)
+    {
+        double L(Color c) { double S(byte v) { double n = v / 255.0; return n <= .04045 ? n / 12.92 : Math.Pow((n + .055) / 1.055, 2.4); } return .2126 * S(c.R) + .7152 * S(c.G) + .0722 * S(c.B); }
+        double x = L(a), y = L(b); return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);
+    }
+    private static void Layout(FrameworkElement element, double width, double height) { element.Measure(new(width, height)); element.Arrange(new Rect(0, 0, width, height)); element.UpdateLayout(); }
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T item) yield return item;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) foreach (var child in Descendants<T>(VisualTreeHelper.GetChild(root, i))) yield return child;
+    }
+}

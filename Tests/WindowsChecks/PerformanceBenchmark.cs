@@ -72,6 +72,14 @@ internal static class PerformanceBenchmark
                 timings.Add(watch.Elapsed.TotalMilliseconds);
             }
             values["ocr_changed_pixels_median"] = Math.Round(timings.Order().ElementAt(2), 1);
+            using var large = new Bitmap(3840, 2160);
+            using (var largeFont = new Font("Segoe UI", 24))
+            using (var graphics = Graphics.FromImage(large)) { graphics.Clear(Color.White); graphics.DrawString("Jeg spiser æbler.", largeFont, Brushes.Black, 40, 100); }
+            await reader.RecognizeAsync(large, new(0, 0), CancellationToken.None);
+            long allocated = GC.GetTotalAllocatedBytes(true); var cachedWatch = Stopwatch.StartNew();
+            for (int i = 0; i < 5; i++) await reader.RecognizeAsync(large, new(0, 0), CancellationToken.None);
+            values["ocr_4k_unchanged_ms"] = Math.Round(cachedWatch.Elapsed.TotalMilliseconds / 5, 2);
+            values["ocr_4k_unchanged_allocated_bytes"] = (GC.GetTotalAllocatedBytes(true) - allocated) / 5;
         }
         File.WriteAllText(output, JsonSerializer.Serialize(values, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"Benchmark saved: {Path.GetFullPath(output)}");

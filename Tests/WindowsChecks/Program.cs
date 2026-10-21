@@ -29,6 +29,7 @@ internal static class Program
 
     public static async Task<int> Main(string[] arguments)
     {
+        Ui.ErrorRaised = error => throw new InvalidOperationException("A UI action failed.", error);
         if (arguments.Contains("--context-check")) return await ContextualEngineChecks.RunAsync();
         if (arguments.Length == 2 && arguments[0] == "--hover-benchmark")
             return HoverPipelineBenchmark.Run(arguments[1]);
@@ -52,6 +53,7 @@ internal static class Program
             VocabularyChecks(temporary);
             checks += ParityChecks.Run(temporary);
             checks += ReadingParityChecks.Run(temporary);
+            checks += NativeExperienceChecks.Run(temporary);
             checks += WindowLifecycleChecks.Run(temporary);
             await HoverSessionChecks();
             checks += await ReadingParityChecks.SessionAsync();
@@ -303,6 +305,8 @@ internal static class Program
         Check(client.TryGetCached("__slow__", out string completed) && completed == "en:__slow__",
             "A canceled hover's completed result must be available from the cache.");
         var inFlight = client.TranslateAsync(["__slow_queue__"], CancellationToken.None);
+        var cachedWhileBusy = client.TranslateAsync(["smør"], CancellationToken.None);
+        Check(cachedWhileBusy.IsCompletedSuccessfully && (await cachedWhileBusy).Single() == "en:smør", "Cached translation must bypass a busy worker's inference queue.");
         using var queuedCancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(30));
         await ThrowsAsync<OperationCanceledException>(() => client.TranslateAsync(["__exit__"], queuedCancellation.Token),
             "A queued stale hover must be canceled before it can reach the pipe.");

@@ -33,7 +33,7 @@ internal sealed class LatencyLog
         lock (sync) { recent = samples.ToArray(); saving = false; }
         try
         {
-            string json = JsonSerializer.Serialize(new { build = "windows-preview-4", samples = recent }, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(new { build = typeof(ReaderApp).Assembly.GetName().Version?.ToString(), samples = recent }, new JsonSerializerOptions { WriteIndented = true });
             await Task.Run(() => { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllText(path, json); }).ConfigureAwait(false);
         }
         catch (IOException) { }

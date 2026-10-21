@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Windows/">
+    <Project Path="Windows/Babelstaarnet.Core/Babelstaarnet.Core.csproj" />
+    <Project Path="Windows/Babelstaarnet.Windows/Babelstaarnet.Windows.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/WindowsChecks/WindowsChecks.csproj" />
+  </Folder>
+</Solution>

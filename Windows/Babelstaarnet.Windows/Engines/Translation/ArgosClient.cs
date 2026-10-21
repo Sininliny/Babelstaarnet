@@ -59,7 +59,14 @@ internal sealed class ArgosClient : IDisposable
 
     private async Task<IReadOnlyList<string>> RunAsync(string[] texts, CancellationToken cancellationToken, bool warmup)
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
+        if (!warmup)
+        {
+            var available = new string[texts.Length]; bool complete = true;
+            for (int i = 0; i < texts.Length; i++) if (!cache.TryGetValue(texts[i], out available[i]!)) { complete = false; break; }
+            if (complete) return available;
+        }
         Task<IReadOnlyList<string>> operation = TranslateCoreAsync(texts, cancellationToken, warmup);
         try { return await operation.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

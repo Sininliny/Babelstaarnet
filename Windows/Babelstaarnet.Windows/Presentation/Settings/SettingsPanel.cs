@@ -14,6 +14,12 @@ internal sealed class SettingsPanel : ScrollViewer
     private readonly List<Action> refresh = [];
     private readonly StackPanel form = new() { Margin = new Thickness(20, 16, 20, 24) };
     private bool refreshing;
+    private readonly Dictionary<string, FrameworkElement[]> sections = [];
+    public void ShowSection(string name)
+    {
+        foreach (var section in sections) { section.Value[0].Visibility = Visibility.Collapsed; section.Value[1].Visibility = section.Key == name ? Visibility.Visible : Visibility.Collapsed; }
+        ScrollToTop();
+    }
     public SettingsPanel(ReaderUiModel model)
     {
         this.model = model; Width = 480; Background = Ui.Paper; VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -83,6 +89,13 @@ internal sealed class SettingsPanel : ScrollViewer
         refresh.Add(() => { contextInstall.IsEnabled = model.ContextRuntimeReady && !model.ContextBusy; contextCheck.IsEnabled = model.ContextReady && !model.ContextBusy;
             runtime.Visibility = model.ContextRuntimeReady ? Visibility.Collapsed : Visibility.Visible; contextStatus.Text = model.ContextBusy ? "Preparing the local model…" : model.ContextMessage ?? ""; });
 
+        var appearance = Section("Appearance");
+        var themes = new ComboBox { Width = 216, ItemsSource = new[] { "Use Windows setting", "Light", "Dark" }, SelectedIndex = model.Preferences.Appearance == "light" ? 1 : model.Preferences.Appearance == "dark" ? 2 : 0 };
+        FormControls.Apply(themes); Row(appearance, "App theme", themes);
+        themes.SelectionChanged += (_, _) => { if (!refreshing) { model.Preferences.Appearance = themes.SelectedIndex == 1 ? "light" : themes.SelectedIndex == 2 ? "dark" : "system"; model.Commit(); } };
+        refresh.Add(() => themes.SelectedIndex = model.Preferences.Appearance == "light" ? 1 : model.Preferences.Appearance == "dark" ? 2 : 0);
+        Caption(appearance, "Follows Windows colors by default. High contrast and reduced motion follow your accessibility settings.");
+
         var access = Section("Access");
         Value(access, "Screen capture", () => "Available to desktop apps"); access.Children.Add(Button("Open Windows language settings", model.OpenLanguageSettings));
         Caption(access, "Screenshots, recognized text, translations and speech remain on this PC. Secure desktops and apps that block capture cannot be read.");
@@ -93,7 +106,7 @@ internal sealed class SettingsPanel : ScrollViewer
     {
         var heading = Ui.Text(title, 12, true); heading.Foreground = Ui.Muted; heading.Margin = new Thickness(10, form.Children.Count == 0 ? 0 : 20, 0, 7); form.Children.Add(heading);
         var panel = new StackPanel { Margin = new Thickness(13, 9, 13, 9) };
-        form.Children.Add(new Border { CornerRadius = new CornerRadius(9), Background = Ui.Surface, BorderBrush = Ui.Stroke, BorderThickness = new Thickness(.7), Child = panel }); return panel;
+        var card = new Border { CornerRadius = new CornerRadius(8), Background = Ui.Surface, BorderBrush = Ui.Stroke, BorderThickness = new Thickness(1), Child = panel }; form.Children.Add(card); sections[title] = [heading, card]; return panel;
     }
     private static TextBlock Caption(Panel parent, string text)
     { var block = Ui.Text(text, 11); block.Foreground = Ui.Muted; block.Margin = new Thickness(0, 5, 0, 8); parent.Children.Add(block); return block; }

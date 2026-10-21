@@ -7,6 +7,7 @@ namespace Babelstaarnet.Windows;
 
 internal sealed class ReaderPreferences
 {
+    public string Appearance { get; set; } = "system";
     public string SpeechEngine { get; set; } = "piper";
     public bool ReadAloud { get; set; } = true;
     public double SpeakAfterSeconds { get; set; } = .45;
@@ -27,6 +28,7 @@ internal sealed class ReaderPreferences
     {
         if (!double.IsFinite(SpeakAfterSeconds)) SpeakAfterSeconds = .45;
         SpeakAfterSeconds = Math.Clamp(Math.Round(SpeakAfterSeconds / .05) * .05, .2, 1.2);
+        if (Appearance is not ("system" or "light" or "dark")) Appearance = "system";
         if (SpeechEngine is not ("piper" or "windows")) SpeechEngine = "piper";
         if (Shortcuts is null || Shortcuts.ValidationError() is not null) Shortcuts = HotKeyConfiguration.Defaults;
     }

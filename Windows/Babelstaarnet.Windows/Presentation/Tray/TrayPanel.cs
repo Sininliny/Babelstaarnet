@@ -17,11 +17,12 @@ internal sealed class TrayPanel : Border
     private readonly Button start, retry, book;
     private readonly CheckBox word = new() { Content = "Word meaning" }, sentence = new() { Content = "Whole sentence" };
     private bool refreshing;
+    private readonly Image headerLogo = new();
     public TrayPanel(ReaderUiModel model)
     {
         this.model = model; Width = 290; Padding = new Thickness(14); Background = Ui.Surface; CornerRadius = new CornerRadius(12); BorderThickness = new Thickness(.7); BorderBrush = Ui.Stroke;
         System.Windows.Documents.TextElement.SetFontFamily(this, Ui.Font); var panel = new StackPanel(); Child = panel;
-        var header = new DockPanel(); var image = new Image { Source = BrandIcons.Image("tray-active-light.ico"), Width = 26, Height = 26, Margin = new Thickness(0, 0, 9, 0) };
+        var header = new DockPanel(); var image = headerLogo; image.Width = image.Height = 26; image.Margin = new Thickness(0, 0, 9, 0);
         header.Children.Add(image); var name = new StackPanel(); var title = Ui.Text("Babelstårnet", 14, true); title.Margin = new Thickness(0, 0, 0, 2); name.Children.Add(title); status.Margin = new Thickness(0); status.Foreground = Ui.Muted; name.Children.Add(status); header.Children.Add(name); panel.Children.Add(header);
         var startContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left }; toggleTitle.Margin = new Thickness(0, 0, 0, 3); toggleDetail.Margin = new Thickness(0); toggleDetail.Foreground = Ui.Muted; startContent.Children.Add(toggleTitle); startContent.Children.Add(toggleDetail);
         start = Ui.ActionButton("", model.Toggle); start.Content = startContent; start.HorizontalContentAlignment = HorizontalAlignment.Stretch; start.Margin = new Thickness(0, 13, 0, 9); panel.Children.Add(start);
@@ -40,6 +41,7 @@ internal sealed class TrayPanel : Border
     private void Refresh()
     {
         refreshing = true;
+        headerLogo.Source = BrandIcons.Image(WindowsTheme.Current.Dark ? "tray-active-dark.ico" : "tray-active-light.ico");
         status.Text = model.Installing ? "Installing local resources…" : model.Busy ? "Preparing local engines…" : model.Idle ? "Idle · waiting for input" : model.Active ? "Active" : "Inactive";
         toggleTitle.Text = model.Active ? "Stop translating" : "Start translating"; toggleDetail.Text = model.Active ? "Pause Danish reading assistance" : "Hover a Danish word to begin";
         start.IsEnabled = !model.Installing; shortcut.Text = model.Preferences.Shortcuts.ToggleLearning.Display;

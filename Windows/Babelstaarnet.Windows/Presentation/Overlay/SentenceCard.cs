@@ -12,9 +12,8 @@ internal sealed class BridgeLine : WrapPanel
 {
     private readonly List<(Grid Unit, TextBlock Text, Border Tint, Border Focus)> units = [];
     private BridgeToken[] previous = [];
-    private static readonly Brush TintBrush = Frozen(Color.FromArgb(16, 0, 0, 0));
-    private static readonly Brush FocusBrush = Frozen(Color.FromArgb(158, 63, 113, 212));
-    private static Brush Frozen(Color color) { var brush = new SolidColorBrush(color); brush.Freeze(); return brush; }
+    private static Brush TintBrush => WindowsTheme.Current.EnglishTint;
+    private static Brush FocusBrush => WindowsTheme.Current.Focus;
     internal int Updates { get; private set; }
     public void SetTokens(IReadOnlyList<BridgeToken> tokens)
     {
@@ -55,7 +54,7 @@ internal sealed class SentenceCard : Border
     private bool standalone;
     public SentenceCard()
     {
-        OverlayCard.StylePanel(this, OverlayLayout.SentenceWidth, 12, 14); MinHeight = 76;
+        OverlayCard.StylePanel(this, OverlayLayout.SentenceWidth, 12, 8); MinHeight = 76;
         var panel = new StackPanel(); panel.Children.Add(line); directMeaning.Foreground = OverlayCard.Secondary;
         directMeaning.Opacity = .72; directMeaning.Margin = new Thickness(0, 5, 0, 0); panel.Children.Add(directMeaning);
         confirmation.Foreground = OverlayCard.Secondary; confirmation.Margin = new Thickness(0, 7, 0, 0); panel.Children.Add(confirmation);

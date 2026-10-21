@@ -16,7 +16,8 @@ internal sealed class WordBookWindow : Window
     public WordBookWindow(VocabularyStore store, Action<string> speak, ReaderPreferences? preferences = null, Action? fillMeanings = null)
     {
         Title = "Babelstårnet · Word Book"; Icon = BrandIcons.AppImage;
-        Width = 820; Height = 540; MinWidth = 460; MinHeight = 360; Background = Ui.Surface;
+        WindowsTheme.Current.Attach(this);
+        Width = 860; Height = 600; MinWidth = 620; MinHeight = 360; Background = Ui.Surface;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var view = new WordBookPanel(store, speak, preferences ?? new ReaderPreferences()); Content = view;
         PreviewKeyDown += (_, e) => view.HandleReviewKey(e);
@@ -38,10 +39,35 @@ internal sealed class WordBookPanel : Grid
     private readonly Button reviewButton;
     private string filter = "All";
     private WordReviewSession? review;
+    internal int RowBuilds { get; private set; }
+    internal sealed record BookRow(VocabularyEntry Entry, WordBookPanel Owner);
+    internal sealed class RowHost : ContentControl
+    {
+        public RowHost() => DataContextChanged += (_, _) =>
+        {
+            if (DataContext is BookRow row) { Content = row.Owner.Row(row.Entry); } else Content = null;
+        };
+    }
     internal WordReviewSession? ReviewSession => review;
     public WordBookPanel(VocabularyStore store, Action<string> speak, ReaderPreferences preferences)
     {
-        this.store = store; this.speak = speak; this.preferences = preferences; Background = Ui.Surface;
+        this.store = store; this.speak = speak; this.preferences = preferences; Background = Ui.Paper;
+        ScrollViewer.SetCanContentScroll(list, true); VirtualizingPanel.SetIsVirtualizing(list, true);
+        VirtualizingPanel.SetVirtualizationMode(list, VirtualizationMode.Recycling);
+        var rowTemplate = new DataTemplate(typeof(BookRow)) { VisualTree = new FrameworkElementFactory(typeof(RowHost)) }; list.ItemTemplate = rowTemplate;
+        var menu = new ContextMenu(); list.ContextMenu = menu;
+        list.PreviewMouseRightButtonDown += (_, e) =>
+        {
+            if (ItemsControl.ContainerFromElement(list, e.OriginalSource as DependencyObject) is ListBoxItem item) item.IsSelected = true;
+        };
+        list.ContextMenuOpening += (_, e) =>
+        {
+            menu.Items.Clear(); if (list.SelectedItem is not BookRow selected) { e.Handled = true; return; }
+            var entry = selected.Entry;
+            menu.Items.Add(new MenuItem { Header = "Say It", Command = new UiCommand(() => speak(entry.Word)) });
+            menu.Items.Add(new MenuItem { Header = "I Know This Now", Command = new UiCommand(() => store.Mark(entry.Word, true, DateTimeOffset.Now)) });
+            menu.Items.Add(new Separator()); menu.Items.Add(new MenuItem { Header = "Remove from Word Book", Command = new UiCommand(() => store.RemoveSaved(entry.Key)) });
+        };
         TextElement.SetFontFamily(this, Ui.Font);
         var frame = listFrame; Children.Add(frame);
         var toolbar = new WrapPanel { Margin = new Thickness(16, 12, 16, 10), VerticalAlignment = VerticalAlignment.Center };
@@ -70,7 +96,9 @@ internal sealed class WordBookPanel : Grid
         var all = store.Saved.ToArray(); string query = search.Text.Trim();
         var entries = all.Where(e => (filter == "All" || (filter == "Known") == (e.EffectiveLevel(DateTimeOffset.Now) >= 3)) &&
             (e.Word.Contains(query, StringComparison.OrdinalIgnoreCase) || e.Meaning.Contains(query, StringComparison.OrdinalIgnoreCase) || e.Sentence.Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
-        list.Items.Clear(); foreach (var entry in entries) list.Items.Add(Row(entry));
+        string? selectedKey = (list.SelectedItem as BookRow)?.Entry.Key;
+        list.ItemsSource = entries.Select(e => new BookRow(e, this)).ToArray();
+        if (selectedKey is not null) list.SelectedItem = list.Items.Cast<BookRow>().FirstOrDefault(row => row.Entry.Key == selectedKey);
         count.Text = all.Length + (all.Length == 1 ? " word" : " words"); int due = all.Count(e => e.DueAt <= DateTimeOffset.Now);
         reviewButton.Content = due > 0 ? $"Review ({due})" : "Review"; reviewButton.IsEnabled = due > 0;
         foreach (var button in filters) { button.Background = (string)button.Content == filter ? Ui.AccentSoft : Ui.Surface; button.Foreground = (string)button.Content == filter ? Ui.Accent : Ui.Ink; }
@@ -78,8 +106,9 @@ internal sealed class WordBookPanel : Grid
         ((TextBlock)empty.Children[0]).Text = all.Length == 0 ? "Your Word Book" : "No matching words";
         empty.Children[1].Visibility = all.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
-    private ListBoxItem Row(VocabularyEntry entry)
+    private FrameworkElement Row(VocabularyEntry entry)
     {
+        RowBuilds++;
         var grid = new Grid { Margin = new Thickness(16, 12, 12, 12) }; grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(155) });
         var detail = new StackPanel();
         var first = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Ui.Ink, FontSize = 13 };
@@ -94,11 +123,9 @@ internal sealed class WordBookPanel : Grid
         var due = Ui.Text(DueLabel(entry), 10); due.Foreground = Ui.Muted; due.Margin = new Thickness(0, 4, 8, 0); bottom.Children.Add(due);
         var speaker = SmallButton("Listen", () => speak(entry.Word)); speaker.Content = Ui.Icon("speaker", Ui.Muted, 13); speaker.ToolTip = "Say it"; speaker.Padding = new Thickness(5); speaker.MinHeight = 23; bottom.Children.Add(speaker); metadata.Children.Add(bottom);
         Grid.SetColumn(metadata, 1); grid.Children.Add(metadata);
-        var item = new ListBoxItem { Content = new Border { Child = grid, BorderBrush = Ui.Stroke, BorderThickness = new Thickness(0, 0, 0, .5) }, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
-        var context = new ContextMenu(); context.Items.Add(new MenuItem { Header = "Say It", Command = new UiCommand(() => speak(entry.Word)) });
-        context.Items.Add(new MenuItem { Header = "I Know This Now", Command = new UiCommand(() => store.Mark(entry.Word, true, DateTimeOffset.Now)) });
-        context.Items.Add(new Separator()); context.Items.Add(new MenuItem { Header = "Remove from Word Book", Command = new UiCommand(() => store.RemoveSaved(entry.Key)) }); item.ContextMenu = context; return item;
+        return new Border { Child = grid, BorderBrush = Ui.Stroke, BorderThickness = new Thickness(0, 0, 0, .5), Background = Ui.Surface };
     }
+
     private static string DueLabel(VocabularyEntry entry)
     { var span = entry.DueAt - DateTimeOffset.Now; return span <= TimeSpan.Zero ? "Ready to review" : span.TotalDays >= 1 ? $"In {(int)Math.Ceiling(span.TotalDays)} days" : span.TotalHours >= 1 ? $"In {(int)Math.Ceiling(span.TotalHours)} hours" : "Later today"; }
     private void Export()
