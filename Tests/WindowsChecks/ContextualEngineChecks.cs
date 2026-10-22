@@ -33,6 +33,10 @@ internal static class ContextualEngineChecks
         using var restarted = new ContextualGlossClient(fixture);
         var remembered = await restarted.ExplainAsync(Hit("Han får en gave."), deadline.Token, includeSentence: false);
         if (restarted.Generations != 0 || remembered.Focus != verb.Focus) throw new Exception("Restarted context must answer from disk before starting the model.");
+        const string excerpt = "Regeringen vil bruge 20 millioner kroner på grøn energi.";
+        string simplified = await restarted.SimplifyPublicExcerptAsync(excerpt, deadline.Token);
+        if (string.IsNullOrWhiteSpace(simplified)) throw new Exception("Local RSS excerpt generation returned no text.");
+        Console.WriteLine("Local excerpt generation completed; conservative display check: " + SharedPolicy.SummaryValid(excerpt, simplified, DanishLanguage.Shared.MeaningPreservationWords));
         File.WriteAllText(Path.Combine(data, "..", "windows-contextual-check.json"), System.Text.Json.JsonSerializer.Serialize(new { verb, noun, cached = true }));
         Console.WriteLine("Real offline contextual meaning, Danish explanation, lemma and cache checks passed.");
         return 0;

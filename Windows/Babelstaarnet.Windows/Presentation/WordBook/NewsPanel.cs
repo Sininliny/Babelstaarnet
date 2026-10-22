@@ -11,7 +11,7 @@ internal sealed class NewsPanel : ScrollViewer
     private readonly StackPanel body = new() { Margin = new Thickness(22) };
     public NewsPanel(NewsService news)
     {
-        this.news = news; Content = body; VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        this.news = news; Content = body; Background = Ui.Paper; VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         Loaded += async (_, _) => { news.PageVisible = true; news.Changed += Render; Render(); await news.RefreshAsync(); };
         Unloaded += (_, _) => { news.PageVisible = false; news.Changed -= Render; }; Render();
     }
@@ -20,6 +20,7 @@ internal sealed class NewsPanel : ScrollViewer
         body.Children.Clear(); body.Children.Add(Ui.Text("Read something new", 24, true));
         Add("DR news · optional internet feature. Headlines are matched to recent learning on this PC.");
         var enabled = new CheckBox { Content = "News recommendations (internet)", IsChecked = news.Preferences.Enabled, Margin = new Thickness(0, 12, 0, 8), Foreground = Ui.Ink };
+        FormControls.Apply(enabled);
         body.Children.Add(enabled);
         enabled.Click += async (_, _) => { news.Configure(enabled.IsChecked == true, news.Preferences.Background, news.Preferences.Notify, news.Preferences.Topic, news.Preferences.DigestHour); await news.RefreshAsync(); };
         Add(NewsService.Disclosure);

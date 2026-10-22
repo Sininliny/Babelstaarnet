@@ -35,7 +35,10 @@ enum ArgosWorkerStartupChecks {
         // More than a pipe can hold, before the worker reads its first request.
         let noisy = try worker(
             "noisy",
-            prelude: "sys.stderr.buffer.write(b'warning\\n' * 32768); sys.stderr.flush()"
+            prelude: "sys.stderr.buffer.write(b'warning\\n' * 32768); sys.stderr.flush()",
+            // Include first Python launch on a cold CI host. The negative
+            // deadline fixtures below still use 200 ms and remain bounded.
+            timeout: 10
         )
         let noisyReady = await noisy.isReady()
         precondition(noisyReady, "Startup warnings blocked the readiness check")
