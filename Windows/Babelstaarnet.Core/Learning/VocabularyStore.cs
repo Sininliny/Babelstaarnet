@@ -75,6 +75,10 @@ public sealed class VocabularyStore
             throw new InvalidDataException("The dictionary form file contains invalid entries.");
     }
     public bool IsKnown(string key) => EffectiveLevel(key) >= 4;
+    public bool LearningCandidate(string key) => words.TryGetValue(ReadingPolicy.Key(key), out var entry) && (entry.Saved || entry.KnownConfirmationCount > 0);
+    public IEnumerable<string> RecentLearningUnits(DateTimeOffset now) => words.Values.Where(e =>
+        (e.Saved && now - e.SavedAt <= TimeSpan.FromDays(14)) ||
+        (e.ReviewedAt is { } reviewed && now - reviewed <= TimeSpan.FromDays(14))).Select(e => e.Key).Take(200);
     public bool LeaveInDanish(string key) => EffectiveLevel(key) >= 3;
     public int EffectiveLevel(string key)
     {

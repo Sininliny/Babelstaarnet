@@ -1,5 +1,6 @@
 import AppKit
 import BabelCore
+import BabelNews
 import BabelOCR
 import BabelSpeech
 import BabelTranslate
@@ -8,9 +9,14 @@ import LanguageDanish
 import OSLog
 import Translation
 import UniformTypeIdentifiers
+import UserNotifications
 
 @MainActor
 public final class AppModel: ObservableObject {
+    public let news = NewsService()
+    @Published var supportedReading = UserDefaults.standard.bool(forKey: "reading.supported") {
+        didSet { UserDefaults.standard.set(supportedReading, forKey: "reading.supported"); overlayController.supportedReading = supportedReading }
+    }
     @Published var phase: ScanPhase = .idle
     @Published var pendingRegions: [TextRegion] = []
     @Published var ocrEngineName = "Detecting"
@@ -175,6 +181,7 @@ public final class AppModel: ObservableObject {
     /// the menu bar.
     let wordBook = WordBookStore()
     private var isFillingWordBookMeanings = false
+    private var pendingSentenceHelp: (String, CheckedContinuation<String, Error>)?
     private lazy var hotKeyService = HotKeyService { [weak self] in
         Task {
             await self?.toggleLearningMode()
@@ -262,6 +269,32 @@ public final class AppModel: ObservableObject {
             return
         }
         hasStarted = true
+        overlayController.supportedReading = supportedReading
+        overlayController.translateSentence = { [weak self] text in
+            guard let self else { throw CancellationError() }
+            if self.openSourceEnginesReady { return try await self.argosTranslationService.translate([text]).first ?? "" }
+            self.pendingSentenceHelp?.1.resume(throwing: CancellationError())
+            return try await withCheckedThrowingContinuation { continuation in
+                self.pendingSentenceHelp = (text, continuation)
+                self.translationConfiguration.invalidate()
+            }
+        }
+        news.learningUnits = { [weak self] in
+            guard let self else { return [] }
+            let saved = self.wordBook.entries.filter { Date().timeIntervalSince($0.savedAt) <= 14 * 86400 }.map(\.word)
+            return saved + self.learnerProfileStore.recentLearningUnits()
+        }
+        news.readingActive = { [weak self] in self?.learningModeActive == true }
+        news.deliverDigest = { [weak self] articles in
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            guard let self, self.news.preferences.enabled, self.news.preferences.notify, !self.learningModeActive,
+                  settings.authorizationStatus == .authorized, let first = articles.first else { return false }
+            let content = UNMutableNotificationContent(); content.title = "DR · something new to read"; content.body = first.title
+            content.interruptionLevel = .passive
+            do { try await center.add(UNNotificationRequest(identifier: "Babelstaarnet.news.digest", content: content, trigger: nil)); return true } catch { return false }
+        }
+        news.startBackground()
         screenPermissionGranted = captureService.hasPermission
         refreshSpeechVoice()
         hotKeyService.register(
@@ -286,6 +319,7 @@ public final class AppModel: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.learnerProfileStore.flushPersistence()
+                self?.news.stop()
             }
         }
         Task {
@@ -808,6 +842,12 @@ public final class AppModel: ObservableObject {
     }
 
     func translatePendingRegions(using session: TranslationSession) async {
+        if let pending = pendingSentenceHelp {
+            pendingSentenceHelp = nil
+            do { let result = try await session.translate(pending.0); pending.1.resume(returning: result.targetText) }
+            catch { pending.1.resume(throwing: error) }
+            return
+        }
         let snapshot = pendingRegions
         guard !snapshot.isEmpty,
               let generation = pendingGeneration,

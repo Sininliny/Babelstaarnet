@@ -10,6 +10,16 @@ it applies, but they have not had a review of their own.
 
 ## The guarantee
 
+**October 2026 update:** optional DR news introduces a separate, default-off
+public-feed client. No vocabulary, screenshots or learning records are uploaded;
+matching is local. DR receives ordinary access metadata such as IP addresses
+and requested URLs. Background refresh and daily notifications require separate
+opt-in. Turning news off stops new requests; cached news remains usable offline.
+The previous statement below about there being no networking code in the Mac
+application describes the reviewed August version, not this news-enabled version.
+Network adapters now live in `Sources/BabelNews` and the Windows news engine;
+screen translation, contextual meaning and speech remain local.
+
 **Nothing you read leaves your Mac.** No screenshot, recognized text,
 translation, definition, or audio is transmitted anywhere.
 

@@ -32,9 +32,8 @@ struct PassiveWordMeaningPolicy: Sendable {
         translation englishTranslation: String,
         knowledgeLevel: Int
     ) -> String? {
-        // A focused hover is a request for meaning, even while the learner is
-        // being quietly tested. Only a known state removes this safety net.
-        guard (0...3).contains(knowledgeLevel) else {
+        // A focused hover always asks for help, including familiar words.
+        guard SharedPolicy.anchor(level: knowledgeLevel, focus: true) else {
             return nil
         }
 

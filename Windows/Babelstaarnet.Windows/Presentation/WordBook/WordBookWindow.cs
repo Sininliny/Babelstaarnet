@@ -13,13 +13,14 @@ namespace Babelstaarnet.Windows;
 
 internal sealed class WordBookWindow : Window
 {
-    public WordBookWindow(VocabularyStore store, Action<string> speak, ReaderPreferences? preferences = null, Action? fillMeanings = null)
+    public WordBookWindow(VocabularyStore store, Action<string> speak, ReaderPreferences? preferences = null, Action? fillMeanings = null, NewsService? news = null)
     {
         Title = "Babelstårnet · Word Book"; Icon = BrandIcons.AppImage;
         WindowsTheme.Current.Attach(this);
         Width = 860; Height = 600; MinWidth = 620; MinHeight = 360; Background = Ui.Surface;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var view = new WordBookPanel(store, speak, preferences ?? new ReaderPreferences()); Content = view;
+        if (news is not null) { var tabs = new TabControl(); tabs.Items.Add(new TabItem { Header = "Words", Content = view }); tabs.Items.Add(new TabItem { Header = "Read something new · internet", Content = new NewsPanel(news) }); Content = tabs; }
         PreviewKeyDown += (_, e) => view.HandleReviewKey(e);
         Loaded += (_, _) => fillMeanings?.Invoke();
     }

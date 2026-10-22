@@ -15,15 +15,34 @@ internal sealed class HoverSession : IDisposable
     private readonly Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<string>>> translate;
     private readonly Func<string, bool> known;
     private CancellationTokenSource? pending;
+    private CancellationTokenSource? sentenceRequest;
     private Dictionary<string, string> glosses = [];
     private readonly HashSet<string> contextualKeys = [];
+    private readonly HashSet<string> visibleAnchors = [];
+    private readonly Dictionary<string, DateTimeOffset[]> helpHistory = [];
     private IReadOnlyList<BridgeToken>? projectedTokens, projectedExplanation;
     public HoveredText? Current { get; private set; }
     public string Meaning { get; private set; } = "";
     public string Explanation { get; private set; } = "";
+    public string SentenceMeaning { get; private set; } = "";
+    public bool SentenceHelp { get; private set; }
+    public bool SupportedReading { get; set; }
+    public Func<string, bool>? LearnedBefore { get; set; }
     public bool Loading => Current is not null && Meaning.Length == 0;
     public string Bridge => string.Join(' ', Tokens.Select(t => t.Text));
-    public IReadOnlyList<BridgeToken> Tokens => projectedTokens ??= Current is null ? [] : BridgePresentation.Tokens(Current, glosses, known, KnowledgeLevel);
+    public IReadOnlyList<BridgeToken> Tokens
+    {
+        get
+        {
+            if (projectedTokens is not null) return projectedTokens;
+            if (Current is null) return projectedTokens = [];
+            projectedTokens = BridgePresentation.Tokens(Current, glosses, known, KnowledgeLevel, SupportedReading, LearnedBefore,
+                key => helpHistory.GetValueOrDefault(key, []).Count(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)), visibleAnchors.Contains);
+            var words = ReadingPolicy.Words().Matches(Current.Line.Text);
+            for (int i = 0; i < Math.Min(words.Count, projectedTokens.Count); i++) if (projectedTokens[i].English) visibleAnchors.Add(ReadingPolicy.Key(words[i].Value));
+            return projectedTokens;
+        }
+    }
     public IReadOnlyList<BridgeToken> ExplanationTokens
     {
         get
@@ -57,6 +76,9 @@ internal sealed class HoverSession : IDisposable
         if (Current?.Word == hit.Word && Current.Line.Text == hit.Line.Text && Current.FocusOccurrence == hit.FocusOccurrence) return Task.CompletedTask;
         Clear(); var request = pending = new CancellationTokenSource(); Current = hit;
         string word = ReadingPolicy.Words().Match(hit.Word.Text).Value;
+        string identity = ReadingPolicy.Key(word);
+        helpHistory[identity] = helpHistory.GetValueOrDefault(identity, []).Where(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)).Append(DateTimeOffset.Now).TakeLast(2).ToArray();
+        if (helpHistory.Count > 256) helpHistory.Remove(helpHistory.Keys.First(key => key != identity));
         var tokens = new[] { word }.Concat(ReadingPolicy.Words().Matches(hit.Line.Text).Select(m => m.Value)).DistinctBy(ReadingPolicy.Key).Take(36).ToArray();
         foreach (string next in tokens)
             if (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, next, out var curated)) glosses[ReadingPolicy.Key(next)] = curated;
@@ -117,10 +139,27 @@ internal sealed class HoverSession : IDisposable
     }
     public void InvalidateProjection() { projectedTokens = projectedExplanation = null; }
     private void Publish() { InvalidateProjection(); Changed?.Invoke(); }
-    public void Refresh() => Publish();
+    public void Refresh() { visibleAnchors.Clear(); Publish(); }
+    public async Task ToggleSentenceMeaningAsync()
+    {
+        SentenceHelp = !SentenceHelp; Publish();
+        if (!SentenceHelp || SentenceMeaning.Length > 0 || Current is not { } hit || sentenceRequest is not null) return;
+        using var owner = new CancellationTokenSource(); sentenceRequest = owner;
+        try
+        {
+            var result = await translate([hit.Line.Text], owner.Token);
+            owner.Token.ThrowIfCancellationRequested();
+            if (ReferenceEquals(sentenceRequest, owner)) { SentenceMeaning = result[0]; Publish(); }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { if (ReferenceEquals(sentenceRequest, owner)) { SentenceMeaning = "Sentence translation is unavailable. Reading remains available."; Publish(); } }
+        finally { if (ReferenceEquals(sentenceRequest, owner)) sentenceRequest = null; }
+    }
     public void Clear()
     {
-        pending?.Cancel(); pending = null; Current = null; Meaning = ""; Explanation = ""; glosses = []; contextualKeys.Clear(); InvalidateProjection();
+        pending?.Cancel(); pending = null; sentenceRequest?.Cancel(); sentenceRequest = null; Current = null; Meaning = ""; Explanation = ""; SentenceMeaning = ""; SentenceHelp = false; glosses = []; contextualKeys.Clear(); InvalidateProjection();
+        visibleAnchors.Clear();
     }
+    public void ResetLearningSession() { helpHistory.Clear(); Clear(); }
     public void Dispose() => Clear();
 }

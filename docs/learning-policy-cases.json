@@ -1,0 +1,826 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "learning-policy-v1",
+  "status": "design-only-unimplemented",
+  "description": "Semantic acceptance examples, not an executable policy engine or a claim that tests pass. given overrides conservative defaults; expected asserts only listed fields. Implementations must first formalize and share the input contract.",
+  "defaults": {
+    "newsEnabled": false,
+    "backgroundRefreshEnabled": false,
+    "notificationsEnabled": false,
+    "sourceVerified": false,
+    "sourceAllowsAdaptation": false,
+    "readingMode": "natural",
+    "readingActive": false,
+    "evidence": []
+  },
+  "cases": [
+    {
+      "id": "R01",
+      "rules": [
+        "UX-01",
+        "LEARN-01"
+      ],
+      "given": {
+        "action": "lookup",
+        "familiarity": "well_established",
+        "answerAvailable": true
+      },
+      "expected": {
+        "focusedMeaning": "full",
+        "forcedPractice": false,
+        "masteryChange": "none"
+      }
+    },
+    {
+      "id": "R02",
+      "rules": [
+        "UX-01"
+      ],
+      "given": {
+        "action": "lookup",
+        "answerAvailable": false,
+        "quality": "unreliable"
+      },
+      "expected": {
+        "focusedMeaning": "unavailable_state",
+        "forcedPractice": false,
+        "teachingDelayMs": 0
+      }
+    },
+    {
+      "id": "R03",
+      "rules": [
+        "UX-02",
+        "LEARN-01"
+      ],
+      "given": {
+        "action": "sentence_help",
+        "localTranslationAvailable": true,
+        "sentenceWords": [
+          "known",
+          "learning",
+          "unknown"
+        ]
+      },
+      "expected": {
+        "sentenceMeaning": "local_full",
+        "wordMasteryChange": "none",
+        "cloudFallback": false
+      }
+    },
+    {
+      "id": "R04",
+      "rules": [
+        "UX-03"
+      ],
+      "given": {
+        "action": "present_bridge",
+        "readingMode": "natural",
+        "quality": "reliable",
+        "eligibleNonfocusLearningUnits": 3,
+        "focusAnswerAvailable": true
+      },
+      "expected": {
+        "focusedMeaning": "full",
+        "weakChallengeCount": 1
+      }
+    },
+    {
+      "id": "R05",
+      "rules": [
+        "UX-04"
+      ],
+      "given": {
+        "action": "present_bridge",
+        "readingMode": "supported",
+        "eligibleNonfocusLearningUnits": 3
+      },
+      "expected": {
+        "weakChallengeCount": 0,
+        "learningUnitsHaveAnchors": true
+      }
+    },
+    {
+      "id": "R06",
+      "rules": [
+        "LEARN-02",
+        "UX-03"
+      ],
+      "given": {
+        "action": "present_bridge",
+        "wordForm": "får",
+        "knownSense": "receive",
+        "currentSense": "sheep",
+        "currentSensePreviouslyLearned": false
+      },
+      "expected": {
+        "currentSenseHelp": "full",
+        "weakChallengeCount": 0,
+        "allSensesMastered": false
+      }
+    },
+    {
+      "id": "R07",
+      "rules": [
+        "UX-04"
+      ],
+      "given": {
+        "action": "lookup",
+        "sameUnitHelpRequestsWithin10Minutes": 2,
+        "sessionId": "session-a",
+        "answerAvailable": true
+      },
+      "expected": {
+        "focusedMeaning": "full",
+        "unitChallengeCooldown": "until_session_end",
+        "masteryChange": "none"
+      }
+    },
+    {
+      "id": "R08",
+      "rules": [
+        "LEARN-01",
+        "LEARN-03"
+      ],
+      "given": {
+        "action": "observe",
+        "sameSentenceHoverCount": 10,
+        "elapsedMinutes": 2
+      },
+      "expected": {
+        "evidence": "exposure_only",
+        "verifiedRetrievalsAdded": 0
+      }
+    },
+    {
+      "id": "R09",
+      "rules": [
+        "LEARN-01"
+      ],
+      "given": {
+        "action": "practice_answer",
+        "answerCorrect": true,
+        "hintShown": true,
+        "direction": "meaning_to_danish"
+      },
+      "expected": {
+        "evidence": "cued_retrieval",
+        "unpromptedRetrievalsAdded": 0,
+        "otherDirectionsChanged": false
+      }
+    },
+    {
+      "id": "R10",
+      "rules": [
+        "LEARN-03",
+        "NEWS-01"
+      ],
+      "given": {
+        "action": "open_wordbook",
+        "oldSavedSentenceAvailable": true
+      },
+      "expected": {
+        "mandatoryQuestion": false,
+        "automaticOldSentenceTask": false,
+        "wordManagementAvailable": true
+      }
+    },
+    {
+      "id": "N01",
+      "rules": [
+        "NET-01",
+        "NEWS-01"
+      ],
+      "given": {
+        "action": "open_news",
+        "newsEnabled": false,
+        "cacheAvailable": false
+      },
+      "expected": {
+        "newsHttpRequests": 0,
+        "remoteAssetRequests": 0,
+        "view": "static_opt_in"
+      }
+    },
+    {
+      "id": "N02",
+      "rules": [
+        "NET-01",
+        "NET-03",
+        "NEWS-04"
+      ],
+      "given": {
+        "action": "enable_news",
+        "sourceVerified": true,
+        "cacheAvailable": false
+      },
+      "expected": {
+        "foregroundMetadataFetch": "allowed",
+        "backgroundRefreshEnabled": false,
+        "notificationsEnabled": false
+      }
+    },
+    {
+      "id": "N03",
+      "rules": [
+        "NET-01",
+        "NET-03"
+      ],
+      "given": {
+        "action": "background_refresh_due",
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": false,
+        "sourceVerified": true
+      },
+      "expected": {
+        "newsHttpRequests": 0
+      }
+    },
+    {
+      "id": "N04",
+      "rules": [
+        "NET-01"
+      ],
+      "given": {
+        "action": "disable_news",
+        "requestInFlight": true,
+        "queuedRequests": 3,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true
+      },
+      "expected": {
+        "cancelInFlight": "attempt",
+        "queuedRequests": 0,
+        "newRequestsAllowed": false,
+        "backgroundRefreshEnabled": false,
+        "notificationsEnabled": false
+      }
+    },
+    {
+      "id": "N05",
+      "rules": [
+        "NET-03"
+      ],
+      "given": {
+        "action": "open_news",
+        "newsEnabled": true,
+        "cacheAgeMinutes": 10,
+        "cacheAvailable": true,
+        "sourceVerified": true
+      },
+      "expected": {
+        "newsHttpRequests": 0,
+        "view": "cached_news"
+      }
+    },
+    {
+      "id": "N06",
+      "rules": [
+        "NET-01",
+        "NET-03"
+      ],
+      "given": {
+        "action": "open_news",
+        "newsEnabled": false,
+        "cacheAvailable": true,
+        "cacheAgeDays": 1
+      },
+      "expected": {
+        "newsHttpRequests": 0,
+        "view": "cached_news",
+        "cachedLabel": true
+      }
+    },
+    {
+      "id": "N07",
+      "rules": [
+        "NET-02"
+      ],
+      "given": {
+        "action": "fetch_public_metadata",
+        "newsEnabled": true,
+        "sourceVerified": true,
+        "personalLearningUnits": [
+          "tilbageholde",
+          "afgørelse"
+        ]
+      },
+      "expected": {
+        "matchingLocation": "device",
+        "learningUnitsInRequest": false,
+        "screenshotsInRequest": false,
+        "cloudRanking": false
+      }
+    },
+    {
+      "id": "N08",
+      "rules": [
+        "NET-04"
+      ],
+      "given": {
+        "action": "refresh_news",
+        "newsEnabled": true,
+        "sourceVerified": false
+      },
+      "expected": {
+        "newsHttpRequests": 0,
+        "view": "source_unverified",
+        "automaticMirrorFallback": false
+      }
+    },
+    {
+      "id": "N09",
+      "rules": [
+        "NEWS-02",
+        "NEWS-03"
+      ],
+      "given": {
+        "action": "select_news",
+        "candidates": [
+          {
+            "id": "old-high-match",
+            "originalAgeDays": 10,
+            "learningMatch": 1,
+            "interestMatch": 1
+          },
+          {
+            "id": "new-no-match",
+            "originalAgeHours": 2,
+            "learningMatch": 0,
+            "interestMatch": 1
+          }
+        ],
+        "sourceVerified": true
+      },
+      "expected": {
+        "selectedIds": [
+          "new-no-match"
+        ],
+        "fillerOldPractice": false
+      }
+    },
+    {
+      "id": "N10",
+      "rules": [
+        "NEWS-02"
+      ],
+      "given": {
+        "action": "select_news",
+        "candidates": [
+          {
+            "id": "same-event-new-url",
+            "eventSeen": true,
+            "materialUpdateConfirmed": false,
+            "originalAgeHours": 1,
+            "daysSinceEventShown": 1
+          }
+        ],
+        "sourceVerified": true
+      },
+      "expected": {
+        "selectedIds": [],
+        "duplicateEventShown": false
+      }
+    },
+    {
+      "id": "N11",
+      "rules": [
+        "NEWS-02"
+      ],
+      "given": {
+        "action": "select_news",
+        "candidates": [
+          {
+            "id": "event-new-development",
+            "eventSeen": true,
+            "materialUpdateConfirmed": true,
+            "originalAgeHours": 1,
+            "interestMatch": 1,
+            "daysSinceEventShown": 1
+          }
+        ],
+        "sourceVerified": true
+      },
+      "expected": {
+        "selectedIds": [
+          "event-new-development"
+        ],
+        "newDevelopmentLabel": true
+      }
+    },
+    {
+      "id": "N12",
+      "rules": [
+        "NEWS-01",
+        "NEWS-03"
+      ],
+      "given": {
+        "action": "present_news_card",
+        "titleAndSummaryMatch": [],
+        "bodyFetched": false,
+        "topicRelatedToLearning": true
+      },
+      "expected": {
+        "claimedBodyWordMatches": 0,
+        "learnedWordBadge": false
+      }
+    },
+    {
+      "id": "N13",
+      "rules": [
+        "NEWS-02"
+      ],
+      "given": {
+        "action": "select_news",
+        "candidates": [
+          {
+            "id": "refetched-old",
+            "originalAgeDays": 20,
+            "fetchedAgeMinutes": 1,
+            "learningMatch": 1
+          }
+        ],
+        "sourceVerified": true
+      },
+      "expected": {
+        "selectedIds": [],
+        "fetchTimeUsedAsPublishTime": false
+      }
+    },
+    {
+      "id": "G01",
+      "rules": [
+        "GEN-01",
+        "GEN-02"
+      ],
+      "given": {
+        "action": "request_short_version",
+        "sourceAllowsAdaptation": true,
+        "completeBodyAvailable": true,
+        "localModelInstalled": true,
+        "readingActive": false,
+        "sourceVerified": true
+      },
+      "expected": {
+        "generation": "local_on_demand",
+        "aiLabelRequired": true,
+        "sourceLinkRequired": true,
+        "autoModelDownload": false
+      }
+    },
+    {
+      "id": "G02",
+      "rules": [
+        "GEN-01",
+        "NET-04"
+      ],
+      "given": {
+        "action": "request_short_version",
+        "sourceAllowsAdaptation": false,
+        "completeBodyAvailable": true,
+        "localModelInstalled": true
+      },
+      "expected": {
+        "generation": "blocked",
+        "fallback": "available_source_text",
+        "cloudFallback": false
+      }
+    },
+    {
+      "id": "G03",
+      "rules": [
+        "GEN-01"
+      ],
+      "given": {
+        "action": "request_short_version",
+        "sourceAllowsAdaptation": true,
+        "completeBodyAvailable": false,
+        "summaryAvailable": true,
+        "localModelInstalled": true,
+        "sourceVerified": true
+      },
+      "expected": {
+        "fullArticleRewrite": "blocked",
+        "summarySimplification": "allowed_if_labelled",
+        "inventMissingFacts": false
+      }
+    },
+    {
+      "id": "G04",
+      "rules": [
+        "GEN-02"
+      ],
+      "given": {
+        "action": "validate_generated_text",
+        "entityMismatch": false,
+        "numberMismatch": true,
+        "attributionMismatch": false
+      },
+      "expected": {
+        "publishRewrite": false,
+        "fallback": "available_source_text"
+      }
+    },
+    {
+      "id": "G05",
+      "rules": [
+        "GEN-03"
+      ],
+      "given": {
+        "action": "request_short_version",
+        "readingActive": true,
+        "engineCanPreemptSafely": false,
+        "localModelInstalled": true,
+        "sourceVerified": true,
+        "sourceAllowsAdaptation": true,
+        "completeBodyAvailable": true
+      },
+      "expected": {
+        "generation": "deferred",
+        "originalReadable": true,
+        "hoverWaitsForNews": false
+      }
+    },
+    {
+      "id": "G06",
+      "rules": [
+        "GEN-01",
+        "NET-02"
+      ],
+      "given": {
+        "action": "request_short_version",
+        "localModelInstalled": false,
+        "availableSourceText": true
+      },
+      "expected": {
+        "generation": "unavailable",
+        "fallback": "available_source_text",
+        "autoModelDownload": false,
+        "cloudFallback": false
+      }
+    },
+    {
+      "id": "G07",
+      "rules": [
+        "GEN-02"
+      ],
+      "given": {
+        "action": "present_cached_rewrite",
+        "sourceMateriallyUpdated": true,
+        "rewriteSourceFingerprint": "old",
+        "currentSourceFingerprint": "new"
+      },
+      "expected": {
+        "currentNewsUseOfOldRewrite": false,
+        "oldVersionLabelRequired": true,
+        "automaticRegeneration": false
+      }
+    },
+    {
+      "id": "P01",
+      "rules": [
+        "NEWS-04",
+        "NET-01"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": false,
+        "appRunning": true,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": false,
+        "readingActive": false,
+        "digestsSentToday": 0,
+        "freshCandidates": 3,
+        "action": "digest_due"
+      },
+      "expected": {
+        "notification": "suppress"
+      }
+    },
+    {
+      "id": "P02",
+      "rules": [
+        "NEWS-04"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true,
+        "appRunning": true,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": false,
+        "readingActive": true,
+        "digestsSentToday": 0,
+        "freshCandidates": 3,
+        "action": "digest_due"
+      },
+      "expected": {
+        "notification": "suppress",
+        "backlogNotification": false
+      }
+    },
+    {
+      "id": "P03",
+      "rules": [
+        "NEWS-04"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true,
+        "appRunning": true,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": true,
+        "readingActive": false,
+        "digestsSentToday": 0,
+        "freshCandidates": 3,
+        "action": "digest_due"
+      },
+      "expected": {
+        "notification": "suppress",
+        "backlogNotification": false
+      }
+    },
+    {
+      "id": "P04",
+      "rules": [
+        "NEWS-04"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true,
+        "appRunning": true,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": false,
+        "readingActive": false,
+        "digestsSentToday": 1,
+        "freshCandidates": 3,
+        "action": "digest_due"
+      },
+      "expected": {
+        "notification": "suppress"
+      }
+    },
+    {
+      "id": "P05",
+      "rules": [
+        "NEWS-04"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true,
+        "appRunning": true,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": false,
+        "readingActive": false,
+        "digestsSentToday": 0,
+        "freshCandidates": 0,
+        "action": "digest_due",
+        "dueLearningUnits": 12
+      },
+      "expected": {
+        "notification": "suppress",
+        "reviewDebtCopy": false
+      }
+    },
+    {
+      "id": "P06",
+      "rules": [
+        "NEWS-04"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true,
+        "appRunning": true,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": false,
+        "readingActive": false,
+        "digestsSentToday": 0,
+        "freshCandidates": 5,
+        "action": "digest_due"
+      },
+      "expected": {
+        "notification": "one_digest",
+        "maximumArticles": 3
+      }
+    },
+    {
+      "id": "P07",
+      "rules": [
+        "NET-01"
+      ],
+      "given": {
+        "action": "reenable_news",
+        "previouslyBackgroundEnabled": true,
+        "previouslyNotificationsEnabled": true
+      },
+      "expected": {
+        "foregroundNewsEnabled": true,
+        "backgroundRefreshEnabled": false,
+        "notificationsEnabled": false
+      }
+    },
+    {
+      "id": "R11",
+      "rules": [
+        "UX-03"
+      ],
+      "given": {
+        "action": "background_result_arrives",
+        "fragmentFrozen": true,
+        "helpAlreadyVisible": true,
+        "newEvidenceSuggestsLessHelp": true
+      },
+      "expected": {
+        "visibleHelpRemoved": false,
+        "layoutDecision": "stable"
+      }
+    },
+    {
+      "id": "R12",
+      "rules": [
+        "LEARN-01"
+      ],
+      "given": {
+        "action": "article_end_reached",
+        "matchingUnits": [
+          "tilbageholde"
+        ],
+        "noExplicitRecallAttempt": true
+      },
+      "expected": {
+        "evidence": "content_end_reached",
+        "verifiedRetrievalsAdded": 0,
+        "masteryChange": "none"
+      }
+    },
+    {
+      "id": "N14",
+      "rules": [
+        "NEWS-03"
+      ],
+      "given": {
+        "action": "rank_eligible_news",
+        "remainingSlots": 1,
+        "candidates": [
+          {
+            "id": "same-interest-related",
+            "scores": {
+              "interest": 1,
+              "freshness": 0.9,
+              "learning": 0.7,
+              "readability": 0.5
+            }
+          },
+          {
+            "id": "same-interest-unrelated",
+            "scores": {
+              "interest": 1,
+              "freshness": 0.9,
+              "learning": 0,
+              "readability": 0.5
+            }
+          }
+        ]
+      },
+      "expected": {
+        "selectedIds": [
+          "same-interest-related"
+        ]
+      }
+    },
+    {
+      "id": "P08",
+      "rules": [
+        "NEWS-04"
+      ],
+      "given": {
+        "newsEnabled": true,
+        "backgroundRefreshEnabled": true,
+        "notificationsEnabled": true,
+        "appRunning": false,
+        "osPermissionGranted": true,
+        "scheduledTimeReached": true,
+        "inQuietHours": false,
+        "readingActive": false,
+        "digestsSentToday": 0,
+        "freshCandidates": 3,
+        "action": "digest_due"
+      },
+      "expected": {
+        "notification": "suppress",
+        "claimOfClosedAppDelivery": false
+      }
+    }
+  ]
+}

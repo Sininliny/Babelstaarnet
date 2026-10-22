@@ -8,6 +8,7 @@ namespace Babelstaarnet.Windows;
 internal sealed class ReaderPreferences
 {
     public string Appearance { get; set; } = "system";
+    public bool SupportedReading { get; set; }
     public string SpeechEngine { get; set; } = "piper";
     public bool ReadAloud { get; set; } = true;
     public double SpeakAfterSeconds { get; set; } = .45;

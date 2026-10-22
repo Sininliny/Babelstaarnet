@@ -52,19 +52,33 @@ internal sealed class SentenceCard : Border
     private readonly BridgeLine line = new();
     private readonly TextBlock confirmation = OverlayCard.Label(10), directMeaning = OverlayCard.Label(11);
     private bool standalone;
+    private readonly Button sentenceHelp;
+    private readonly TextBlock fullMeaning = OverlayCard.Label(12);
+    public event Action? SentenceMeaningRequested;
     public SentenceCard()
     {
         OverlayCard.StylePanel(this, OverlayLayout.SentenceWidth, 12, 8); MinHeight = 76;
         var panel = new StackPanel(); panel.Children.Add(line); directMeaning.Foreground = OverlayCard.Secondary;
         directMeaning.Opacity = .72; directMeaning.Margin = new Thickness(0, 5, 0, 0); panel.Children.Add(directMeaning);
         confirmation.Foreground = OverlayCard.Secondary; confirmation.Margin = new Thickness(0, 7, 0, 0); panel.Children.Add(confirmation);
+        sentenceHelp = Ui.Button("See sentence meaning", () => SentenceMeaningRequested?.Invoke()); sentenceHelp.FontSize = 10; sentenceHelp.Padding = new Thickness(5, 3, 5, 3); sentenceHelp.MinHeight = 24;
+        sentenceHelp.HorizontalAlignment = HorizontalAlignment.Left; sentenceHelp.Margin = new Thickness(0, 5, 0, 0);
+        panel.Children.Add(fullMeaning); panel.Children.Add(sentenceHelp);
+        fullMeaning.Visibility = Visibility.Collapsed;
         confirmation.Visibility = directMeaning.Visibility = Visibility.Collapsed; Child = panel;
+    }
+    public void SetSentenceMeaning(string text, bool requested)
+    {
+        sentenceHelp.Content = requested ? "Show reading bridge" : "See sentence meaning";
+        line.Visibility = requested ? Visibility.Collapsed : Visibility.Visible;
+        fullMeaning.Visibility = requested ? Visibility.Visible : Visibility.Collapsed;
+        fullMeaning.Text = text.Length > 0 ? text : "Translating locally…";
     }
     public void SetContent(IReadOnlyList<BridgeToken> tokens) => line.SetTokens(tokens);
     public void SetMode(bool standsAlone, string meaning, int level)
     {
         standalone = standsAlone; directMeaning.Text = meaning;
-        directMeaning.Visibility = standalone && level == 3 && meaning.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        directMeaning.Visibility = standalone && meaning.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (!standalone) confirmation.Visibility = Visibility.Collapsed;
     }
     public void SetFeedback(bool? known)

@@ -53,6 +53,7 @@ internal static class Program
             VocabularyChecks(temporary);
             checks += ParityChecks.Run(temporary);
             checks += ReadingParityChecks.Run(temporary);
+            checks += await SharedPolicyChecks.RunAsync(temporary);
             checks += NativeExperienceChecks.Run(temporary);
             checks += WindowLifecycleChecks.Run(temporary);
             await HoverSessionChecks();

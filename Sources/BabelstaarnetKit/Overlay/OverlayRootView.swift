@@ -189,7 +189,9 @@ struct SentenceBridgeBubbleView: View {
         // No header. The sentence is the content, and a label above it only
         // adds a line to read before the text the learner came for.
         VStack(alignment: .leading, spacing: 7) {
-            SentenceBridgeText(
+            if state.sentenceHelpRequested {
+                Text(state.sentenceMeaning ?? "Translating locally…").font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+            } else { SentenceBridgeText(
                 text: LearnerDisplayText.clean(card.learningText),
                 englishTokenIndexes: card.adaptiveEnglishTokenIndexes,
                 knowledgeLevels: card.sentenceBridgeKnowledgeLevels,
@@ -197,10 +199,11 @@ struct SentenceBridgeBubbleView: View {
                 knownAnimationTrigger: card.sentencePanelStandsAlone
                     ? state.knownAnimationID
                     : 0
-            )
+            ) }
+            Button(state.sentenceHelpRequested ? "Show reading bridge" : "See sentence meaning", action: state.onSentenceMeaning)
+                .buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary)
 
             if card.sentencePanelStandsAlone,
-               card.wordKnowledgeLevel == 3,
                let wordEnglishMeaning = card.wordEnglishMeaning {
                 Text(LearnerDisplayText.clean(wordEnglishMeaning))
                     .font(.system(size: 11, design: .rounded))

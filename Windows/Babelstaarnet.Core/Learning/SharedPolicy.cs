@@ -1,0 +1,26 @@
+using System;
+using System.Runtime.InteropServices;
+
+namespace Babelstaarnet.Core;
+
+// Only marshaling lives here; the rules are compiled from Shared/BabelPolicy.
+public static class SharedPolicy
+{
+    private const string Library = "babel_policy";
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_version();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_anchor(int level, int supported, int focus, int newSense, int cooldown, int selected);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_challenge(int supported, int reliable, int learned, int newSense, int helps, int used);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_evidence(int kind, int correct, int hinted);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_fetch(int enabled, int background, int requestBackground, int manual, double attempt, double success);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_digest(int enabled, int background, int notify, int permitted, int reading, int quiet, int sent, int fresh);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_rewrite(int allows, int text, int model, int reading, int preempt);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern double bp_news_score(double age, double interest, double matches, double readability, int seen);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern int bp_contains([MarshalAs(UnmanagedType.LPUTF8Str)] string text, [MarshalAs(UnmanagedType.LPUTF8Str)] string unit);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern int bp_same_story([MarshalAs(UnmanagedType.LPUTF8Str)] string a, [MarshalAs(UnmanagedType.LPUTF8Str)] string b);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr bp_feed_url(int topic);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr bp_rewrite_prompt();
+    public static bool Contains(string text, string unit) => bp_contains(text.Normalize().ToLowerInvariant(), unit.Normalize().ToLowerInvariant()) != 0;
+    public static bool SameStory(string a, string b) => bp_same_story(a.Normalize().ToLowerInvariant(), b.Normalize().ToLowerInvariant()) != 0 && bp_same_story(b.Normalize().ToLowerInvariant(), a.Normalize().ToLowerInvariant()) != 0;
+    public static string FeedUrl(int topic) => Marshal.PtrToStringUTF8(bp_feed_url(topic))!;
+    public static string RewritePrompt => Marshal.PtrToStringUTF8(bp_rewrite_prompt())!;
+}

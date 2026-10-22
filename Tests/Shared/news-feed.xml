@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel><title>Fictional fixture feed</title>
+  <item><title><![CDATA[Regeringen fremlægger ny plan for grøn energi]]></title><description><![CDATA[En kort &amp; tydelig <b>besked</b>.]]></description><link>https://www.dr.dk/nyheder/fixture-one</link><guid>fixture-one</guid><pubDate>Thu, 22 Oct 2026 10:00:00 GMT</pubDate></item>
+  <item><title><![CDATA[Regeringen fremlægger en ny plan for grøn energi]]></title><link>https://www.dr.dk/nyheder/fixture-two</link><guid>fixture-two</guid><pubDate>Thu, 22 Oct 2026 09:00:00 GMT</pubDate></item>
+  <item><title><![CDATA[Æbler og får på landet]]></title><link>https://www.dr.dk/nyheder/fixture-three</link><guid>fixture-three</guid><pubDate>Thu, 22 Oct 2026 08:00:00 GMT</pubDate></item>
+  <item><title>Unsafe link</title><link>https://www.dr.dk.attacker.invalid/nyheder/item</link><pubDate>Thu, 22 Oct 2026 08:00:00 GMT</pubDate></item>
+  <item><title>Unknown date</title><link>https://www.dr.dk/nyheder/fixture-four</link></item>
+</channel></rss>

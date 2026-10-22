@@ -6,6 +6,7 @@ namespace Babelstaarnet.Windows;
 internal sealed class ReaderUiModel
 {
     public ReaderPreferences Preferences { get; }
+    public NewsService? News { get; set; }
     public VocabularyStore Vocabulary { get; }
     private readonly string? preferencesPath;
     public event Action? Changed;

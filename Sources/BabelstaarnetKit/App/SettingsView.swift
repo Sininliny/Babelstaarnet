@@ -84,6 +84,7 @@ public struct SettingsView: View {
             }
 
             Section("Reading") {
+                Toggle("Supported reading · more English anchors", isOn: $model.supportedReading)
                 Toggle("Follow screen changes", isOn: $model.liveMode)
                     .disabled(!model.screenPermissionGranted)
 
@@ -101,6 +102,8 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 }
             }
+
+            Section("News (internet)") { NewsSettings(news: model.news) }
 
             Section("Shortcuts") {
                 ForEach(ConfigurableHotKeyAction.allCases) { action in

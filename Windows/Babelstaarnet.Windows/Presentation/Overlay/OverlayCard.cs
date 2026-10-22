@@ -131,7 +131,7 @@ internal sealed class OverlayCard : Border
     public void SetContent(HoveredText hit, string translation, string bridge, bool pinned, bool loading, bool isKnown, int level = 0, IReadOnlyList<BridgeToken>? explanationTokens = null)
     {
         translation = DanishLanguage.ConciseMeaning(translation, hit.Word.Text);
-        bool directMeaning = !isKnown && !loading && translation.Length > 0 && ReadingPolicy.Key(translation) != ReadingPolicy.Key(hit.Word.Text);
+        bool directMeaning = !loading && translation.Length > 0 && ReadingPolicy.Key(translation) != ReadingPolicy.Key(hit.Word.Text);
         meaning.Text = directMeaning ? translation : "";
         meaning.Visibility = directMeaning ? Visibility.Visible : Visibility.Collapsed;
         meaning.Foreground = Primary;

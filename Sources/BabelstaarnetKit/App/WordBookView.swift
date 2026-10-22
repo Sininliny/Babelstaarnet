@@ -21,6 +21,7 @@ public struct WordBookView: View {
         @Published var search = ""
         @Published var filter = Filter.all
         @Published var review: WordReviewSession?
+        @Published var news = false
     }
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -32,8 +33,12 @@ public struct WordBookView: View {
     }
 
     public var body: some View {
-        Group {
-            if let review = query.review {
+        VStack(spacing: 0) {
+            Picker("Word Book page", selection: $query.news) { Text("Words").tag(false); Text("Read something new · internet").tag(true) }
+                .pickerStyle(.segmented).padding(12)
+            if query.news {
+                NewsView(news: model.news)
+            } else if let review = query.review {
                 WordReviewView(model: model, session: review) {
                     query.review = nil
                 }

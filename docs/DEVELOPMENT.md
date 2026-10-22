@@ -5,11 +5,19 @@ formats should agree; their window systems and visual conventions can differ.
 The native platform supplies OCR, screen capture, speech playback, shortcuts
 and window integration. There is no web frontend or shared UI runtime.
 
+Learning behavior and opt-in online news are specified in the
+[learning decision policy](LEARNING_POLICY.md), with
+[design acceptance cases](learning-policy-cases.json). Runtime vectors in
+`Tests/Shared/policy-runtime.json` exercise the actual shared native component.
+See [the shared-policy decision](ADR-001-SHARED-POLICY.md) for the ABI and boundaries.
+
 ## Repository map
 
 | Location | Responsibility |
 | --- | --- |
 | `Sources/BabelCore` | Swift reading primitives and language contracts |
+| `Shared/BabelPolicy` | One C11 implementation of learning and news decisions, compiled by both clients |
+| `Sources/BabelNews` | Mac public-feed, cache and notification scheduling adapter |
 | `Sources/LanguageDanish` | Canonical Danish tables, prompts and rules |
 | `Sources/BabelOCR`, `BabelTranslate`, `BabelLexicon`, `BabelSpeech` | Mac capability adapters |
 | `Sources/BabelstaarnetKit`, `Babelstaarnet` | Mac application and SwiftUI presentation |
@@ -67,7 +75,7 @@ never move a user's vocabulary or invalidate their learning profile.
 | App | `./Scripts/build-windows.ps1` | `make app` |
 | Package | `./Scripts/package-windows.ps1` | `make release` |
 
-Windows requires .NET 10 SDK and Python 3 for worker tests. Mac requires the
+Windows requires .NET 10 SDK, CMake, Visual Studio C++ build tools and Python 3 for worker tests. Mac requires the
 Swift/Xcode toolchain described in the README. CI runs both native jobs on
 `main`, `codex/**` branches and pull requests. Packaging checks use clean
 outputs; downloaded runtimes and model weights do not enter release archives.

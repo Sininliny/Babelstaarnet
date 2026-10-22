@@ -450,6 +450,12 @@ final class LearnerProfileStore {
     var trackedWordCount: Int {
         entries.count
     }
+    func recentLearningUnits(at date: Date = Date()) -> [String] {
+        entries.values.filter { entry in
+            guard let reviewed = entry.lastReviewedAt else { return false }
+            return date.timeIntervalSince(reviewed) <= 14 * 86400
+        }.sorted { $0.word < $1.word }.prefix(200).map(\.word)
+    }
 
     func familiarWordCount(at date: Date = Date()) -> Int {
         entries.values.filter {

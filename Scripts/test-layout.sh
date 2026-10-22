@@ -60,6 +60,7 @@ for archive in "$bin_dir"/*.a(N); do
 done
 
 include_flags=()
+include_flags+=(-I "$project_dir/Shared/BabelPolicy/include")
 for module_dir in "${module_dirs[@]}"; do
     include_flags+=(-I "$module_dir")
 done
