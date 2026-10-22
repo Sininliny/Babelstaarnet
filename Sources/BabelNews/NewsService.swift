@@ -1,7 +1,9 @@
 import BabelCore
 import Combine
 import Foundation
+#if canImport(FoundationXML)
 import FoundationXML
+#endif
 
 public struct NewsArticle: Codable, Equatable, Identifiable, Sendable {
     public var id: String
@@ -69,14 +71,15 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     }()
     public init(directory: URL? = nil, clock: @escaping () -> Date = Date.init,
                 download: ((URL) async throws -> String)? = nil) {
-        self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Babelstaarnet")
+        let storageDirectory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Babelstaarnet")
+        self.directory = storageDirectory
         self.clock = clock; self.downloadOverride = download
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpShouldSetCookies = false; configuration.httpCookieStorage = nil; configuration.urlCache = nil
         configuration.timeoutIntervalForRequest = 15; configuration.timeoutIntervalForResource = 20
         session = URLSession(configuration: configuration, delegate: NewsRedirectDelegate(), delegateQueue: nil)
         func load<T: Decodable>(_ name: String, type: T.Type) -> T? {
-            let url = self.directory.appendingPathComponent(name)
+            let url = storageDirectory.appendingPathComponent(name)
             guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 2_000_000,
                   let data = try? Data(contentsOf: url) else { return nil }
             return try? JSONDecoder().decode(type, from: data)
