@@ -43,6 +43,8 @@ internal sealed class ReaderApp : Application
     private string currentMeaning => session.Meaning;
     private Window? settings;
     private WordBookWindow? book;
+    private NewsService news = null!;
+    private readonly DispatcherTimer newsTimer = new() { Interval = TimeSpan.FromMinutes(1) };
     private TrayPopup? popup;
     private Process? installer;
     private Task? initialization;
@@ -54,6 +56,7 @@ internal sealed class ReaderApp : Application
         {
             try
             {
+                if (SharedPolicy.bp_version() != 1) return 4;
                 _ = ScreenReader.DanishAvailable; _ = BrandIcons.AppImage;
                 using var brand = new BrandIcons(); _ = brand.Tray(false); _ = brand.Tray(true);
                 if (!File.Exists(AppPaths.Bridge) || !File.Exists(AppPaths.Installer) || !File.Exists(AppPaths.SpeechBridge) || !File.Exists(AppPaths.SpeechInstaller)) return 2;
@@ -73,6 +76,11 @@ internal sealed class ReaderApp : Application
         base.OnStartup(e); ShutdownMode = ShutdownMode.OnExplicitShutdown;
         if (preferences.SpeechEngine == "windows") speech.SelectEngine(new WindowsDanishEngine());
         vocabulary = new VocabularyStore(Path.Combine(AppPaths.DataDirectory, "vocabulary.json"));
+        news = new NewsService(AppPaths.DataDirectory) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
+        news.ReadingActive = () => active;
+        news.MeaningPreservationWords = DanishLanguage.Shared.MeaningPreservationWords;
+        news.LanguageInstructions = DanishLanguage.Shared.NewsSimplificationInstructions;
+        news.SimplifyExcerpt = contextual.SimplifyPublicExcerptAsync; news.ModelAvailable = () => contextual.IsInstalled; news.ModelIdentity = () => contextual.ModelIdentity;
         model = new ReaderUiModel(preferences, vocabulary)
         {
             Toggle = Toggle, OpenSettings = ShowSettings, OpenBook = ShowBook, Quit = Shutdown, Apply = ApplyPreferences,
@@ -84,22 +92,35 @@ internal sealed class ReaderApp : Application
             GetContextRuntime = () => Process.Start(new ProcessStartInfo("https://ollama.com/download/windows") { UseShellExecute = true }),
             ChangeShortcuts = ChangeShortcuts, ShortcutCapture = value => { try { hotkeys?.Suspend(value); } catch (Exception error) { model.ShortcutMessage = error.Message; model.Notify(); } }
         };
+        model.News = news;
         vocabulary.Changed += () => { session?.InvalidateProjection(); if (popup?.IsVisible == true || settings?.IsVisible == true) UpdateTray(); };
-        session = new HoverSession(word => translator.TryGetCached(word, out var meaning) ? meaning : null, translator.TranslateAsync, vocabulary.LeaveInDanish);
+        session = new HoverSession(word => translator.TryGetCached(word, out var meaning) ? meaning : null, translator.TranslateAsync, vocabulary.IsKnown);
+        session.LearnedBefore = vocabulary.LearningCandidate;
+        session.PreviousMeaning = vocabulary.SavedMeaning;
         session.KnowledgeLevel = vocabulary.EffectiveLevel;
         session.LemmaFound += (word, lemma) => vocabulary.RecordLemma(word, lemma);
         session.ContextFailed += error => { model.ContextMessage = error.Message; if (contextual.HasFailed) session.ContextProvider = null; model.Notify(); };
         contextual.Changed += () => Dispatcher.BeginInvoke(new Action(() => { if (!shuttingDown) { model.ContextMessage = contextual.LastFailure; UpdateTray(); } }));
         session.Changed += Present; session.ReadAloud += ScheduleSpeech; session.Failed += ReadingFailed;
         overlay = new OverlayWindow(); overlay.Known += () => Feedback(true); overlay.Unknown += () => Feedback(false); overlay.Pin += TogglePin;
+        overlay.SentenceMeaningRequested += () => _ = session.ToggleSentenceMeaningAsync();
         overlay.Listen += () => { if (current is not null) Speak(current.Word.Text); };
         tray = new Forms.NotifyIcon { Text = "Babelstårnet · inactive", Icon = icons.Tray(false), Visible = true };
         tray.MouseClick += (_, _) => Ui.Try(ShowTray);
+        tray.BalloonTipClicked += (_, _) => Ui.Try(() => { ShowBook(); book?.OpenNews(); });
+        newsTimer.Tick += async (_, _) =>
+        {
+            await news.RefreshAsync(background: true);
+            if (news.DigestDue(active, NotificationsAccepted()) && news.DigestCandidates.Count > 0)
+            { tray.ShowBalloonTip(7000, "DR · something new to read", news.DigestCandidates[0].Title, Forms.ToolTipIcon.Info); news.DigestSent(); }
+        };
+        news.Changed += () => newsTimer.IsEnabled = news.Preferences.Enabled && news.Preferences.Background;
+        newsTimer.IsEnabled = news.Preferences.Enabled && news.Preferences.Background;
         SystemEvents.UserPreferenceChanged += ThemeChanged;
         try
         {
             hotkeys = new HotKeyService();
-            hotkeys.Pressed += id => Ui.Try(() => { switch (id) { case 1: Toggle(); break; case 2: Feedback(true); break; case 3: Feedback(false); break; case 4: TogglePin(); break; } });
+            hotkeys.Pressed += id => Ui.Try(() => { switch (id) { case 1: Toggle(); break; case 2: Feedback(true); break; case 3: Feedback(false); break; case 4: TogglePin(); break; case 5: _ = session.ToggleSentenceMeaningAsync(); break; } });
             hotkeys.Configure(preferences.Shortcuts);
         }
         catch (Exception error) { model.ShortcutMessage = error.Message + " Use the tray menu or choose another shortcut in Settings."; }
@@ -128,6 +149,8 @@ internal sealed class ReaderApp : Application
         if (model.Installing) return;
         if (!active && (!translator.IsInstalled || !ScreenReader.DanishAvailable)) { ShowSettings(); return; }
         active = !active; model.Failure = null; CancelPending(); ClearBubble(); previous = lastScanPoint = null; frozenPages.Clear(); idle = false; captureFailures = 0;
+        session.ResetLearningSession();
+        if (active) news.CancelGeneration();
         timer.Interval = TimeSpan.FromMilliseconds(35); timer.IsEnabled = active;
         if (active) { contextual.ResetFailure(); ApplyPreferences(); }
         if (active) PrepareEngines(); UpdateTray();
@@ -150,7 +173,8 @@ internal sealed class ReaderApp : Application
         lastFollow = preferences.FollowScreenChanges; lastWord = preferences.WordMeaning; lastSentence = preferences.WholeSentence;
         lastReadAloud = preferences.ReadAloud; lastSpeechDelay = preferences.SpeakAfterSeconds;
         session.TranslateMeaning = preferences.WordMeaning; session.TranslateSentence = preferences.WholeSentence;
-        session.ContextProvider = preferences.ContextualMeanings && contextual.IsInstalled && !contextual.HasFailed ? (hit, token, ready) => contextual.ExplainAsync(hit, token, ready, preferences.WholeSentence, vocabulary.LeaveInDanish) : null;
+        session.SupportedReading = preferences.SupportedReading; session.InvalidateProjection();
+        session.ContextProvider = preferences.ContextualMeanings && contextual.IsInstalled && !contextual.HasFailed ? (hit, token, ready) => contextual.ExplainAsync(hit, token, ready, preferences.WholeSentence, vocabulary.IsKnown) : null;
         if (panelsChanged && current is { } hit) { session.Clear(); _ = session.FocusAsync(hit); }
         if (current is not null) Present(); else overlay.Hide();
         UpdateTray();
@@ -266,8 +290,8 @@ internal sealed class ReaderApp : Application
     {
         if (current is null) return;
         if (!active || !pinned && !Holding && (!NativeMethods.GetCursorPos(out var pointer) || !current.Word.Bounds.Contains(new(pointer.X, pointer.Y), 3))) { ClearBubble(); return; }
-        overlay.Present(current, currentMeaning, "", pinned, session.Loading, vocabulary.IsKnown(ReadingPolicy.Key(current.Word.Text)), session.Tokens,
-            preferences.WordMeaning, preferences.WholeSentence, preferences.Shortcuts, vocabulary.EffectiveLevel(current.Word.Text), session.ExplanationTokens);
+        overlay.Present(current, currentMeaning, "", pinned, session.Loading, !session.NewSense && vocabulary.IsKnown(ReadingPolicy.Key(current.Word.Text)), session.Tokens,
+            preferences.WordMeaning, preferences.WholeSentence, preferences.Shortcuts, vocabulary.EffectiveLevel(current.Word.Text), session.ExplanationTokens, session.SentenceMeaning, session.SentenceHelp);
         if (saveMeaningWhenReady && !session.Loading) { saveMeaningWhenReady = false; vocabulary.Save(current.Word.Text, currentMeaning, current.Line.Text, DateTimeOffset.Now); }
         if (!cardTimed) { cardTimed = true; timings.Record("pointer_settled_to_card", (DateTimeOffset.UtcNow - focusSettled).TotalMilliseconds); }
         if (!session.Loading && !meaningTimed) { meaningTimed = true; timings.Record("pointer_settled_to_meaning", (DateTimeOffset.UtcNow - focusSettled).TotalMilliseconds); }
@@ -278,7 +302,7 @@ internal sealed class ReaderApp : Application
         if (current is null) return;
         var now = DateTimeOffset.Now;
         if (!known) { vocabulary.Save(current.Word.Text, currentMeaning, current.Line.Text, now); saveMeaningWhenReady = session.Loading; }
-        vocabulary.Mark(current.Word.Text, known, now); overlay.SetFeedback(known); Present();
+        vocabulary.Mark(current.Word.Text, known, now); session.Refresh(); overlay.SetFeedback(known); Present();
     }
     private async void ScheduleSpeech(string word)
     {
@@ -329,7 +353,7 @@ internal sealed class ReaderApp : Application
     {
         DismissTray(); ClearBubble();
         if (book is not null) { book.Activate(); return; }
-        book = new WordBookWindow(vocabulary, word => Speak(word), preferences, FillMissingMeanings); book.Closed += (_, _) => book = null; book.Show();
+        book = new WordBookWindow(vocabulary, word => Speak(word), preferences, FillMissingMeanings, news); book.Closed += (_, _) => book = null; book.Show();
     }
     private async void FillMissingMeanings()
     {
@@ -393,8 +417,11 @@ internal sealed class ReaderApp : Application
     }
     protected override void OnExit(ExitEventArgs e)
     {
-        shuttingDown = true; timer.Stop(); CancelPending(); CancelSpeech(); SystemEvents.UserPreferenceChanged -= ThemeChanged;
+        shuttingDown = true; timer.Stop(); newsTimer.Stop(); news.Dispose(); CancelPending(); CancelSpeech(); SystemEvents.UserPreferenceChanged -= ThemeChanged;
         hotkeys?.Dispose(); session.Dispose(); overlay.Dispose(); translator.Dispose(); speech.Dispose(); contextual.Dispose(); vocabulary.Flush();
         if (tray is not null) { tray.Visible = false; tray.Dispose(); } icons.Dispose(); base.OnExit(e);
     }
+    [System.Runtime.InteropServices.DllImport("shell32.dll")]
+    private static extern int SHQueryUserNotificationState(out int state);
+    private static bool NotificationsAccepted() => SHQueryUserNotificationState(out int state) == 0 && state == 5;
 }

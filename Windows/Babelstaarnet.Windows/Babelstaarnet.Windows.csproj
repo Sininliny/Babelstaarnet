@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/Babelstaarnet.ico</ApplicationIcon>
     <AssemblyName>Babelstaarnet</AssemblyName>
-    <Version>0.5.1</Version>
+    <Version>0.6.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Assets/*.ico" LogicalName="Babelstaarnet.Assets.%(Filename)%(Extension)" />
@@ -21,5 +21,11 @@
     <Content Include="../../Resources/LocalEngines/piper_bridge.py" Link="LocalEngines/piper_bridge.py" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../Scripts/install-neural-voice.ps1" Link="LocalEngines/install-neural-voice.ps1" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../docs/images/logo.png" Link="logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="BuildSharedPolicy" BeforeTargets="BeforeBuild">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildProjectDirectory)/../../Scripts/build-shared-windows.ps1&quot; -Configuration $(Configuration)" />
+  </Target>
+  <ItemGroup>
+    <Content Include="../../build/shared-policy/$(Configuration)/babel_policy.dll" Link="babel_policy.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

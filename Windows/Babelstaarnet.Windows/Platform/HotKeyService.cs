@@ -49,17 +49,17 @@ internal sealed class HotKeyService : IDisposable
     {
         if (suspended) return;
         Register(ShortcutAction.ToggleLearning);
-        if (feedback) foreach (var action in new[] { ShortcutAction.Known, ShortcutAction.DontKnow, ShortcutAction.TogglePin }) Register(action);
+        if (feedback) foreach (var action in new[] { ShortcutAction.Known, ShortcutAction.DontKnow, ShortcutAction.TogglePin, ShortcutAction.SentenceMeaning }) Register(action);
     }
     public void EnableFeedback(bool enabled)
     {
         if (feedback == enabled) return;
         feedback = enabled;
         if (!enabled)
-            foreach (int id in new[] { 2, 3, 4 }) { if (registered.Remove(id)) NativeMethods.UnregisterHotKey(source.Handle, id); }
+            foreach (int id in new[] { 2, 3, 4, 5 }) { if (registered.Remove(id)) NativeMethods.UnregisterHotKey(source.Handle, id); }
         else if (!suspended)
         {
-            try { foreach (var a in new[] { ShortcutAction.Known, ShortcutAction.DontKnow, ShortcutAction.TogglePin }) Register(a); }
+            try { foreach (var a in new[] { ShortcutAction.Known, ShortcutAction.DontKnow, ShortcutAction.TogglePin, ShortcutAction.SentenceMeaning }) Register(a); }
             catch { EnableFeedback(false); throw; }
         }
     }

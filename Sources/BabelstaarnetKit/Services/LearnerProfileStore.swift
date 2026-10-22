@@ -213,6 +213,7 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
     var encounterCount: Int
     var moreEnglishCount: Int
     var knownConfirmationCount: Int
+    var lastEvidenceKind: Int? = nil
     var spacedEncounterCount: Int
     var lastSeen: Date
     var lastReviewedAt: Date?
@@ -304,6 +305,7 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
         case encounterCount
         case moreEnglishCount
         case knownConfirmationCount
+        case lastEvidenceKind
         case spacedEncounterCount
         case lastSeen
         case lastReviewedAt
@@ -343,6 +345,7 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
             Int.self,
             forKey: .knownConfirmationCount
         )
+        lastEvidenceKind = try container.decodeIfPresent(Int.self, forKey: .lastEvidenceKind)
         spacedEncounterCount = try container.decodeIfPresent(
             Int.self,
             forKey: .spacedEncounterCount
@@ -377,6 +380,7 @@ struct LearnerWordProgress: Codable, Equatable, Sendable {
             knownConfirmationCount,
             forKey: .knownConfirmationCount
         )
+        try container.encodeIfPresent(lastEvidenceKind, forKey: .lastEvidenceKind)
         try container.encode(
             spacedEncounterCount,
             forKey: .spacedEncounterCount
@@ -449,6 +453,12 @@ final class LearnerProfileStore {
 
     var trackedWordCount: Int {
         entries.count
+    }
+    func recentLearningUnits(at date: Date = Date()) -> [String] {
+        entries.values.filter { entry in
+            guard let reviewed = entry.lastReviewedAt else { return false }
+            return date.timeIntervalSince(reviewed) <= 14 * 86400
+        }.sorted { $0.word < $1.word }.prefix(200).map(\.word)
     }
 
     func familiarWordCount(at date: Date = Date()) -> Int {
@@ -564,6 +574,7 @@ final class LearnerProfileStore {
         entry.knowledgeLevel =
             AdaptiveKnowledgePolicy.levelAfterUnknownFeedback()
         entry.moreEnglishCount += 1
+        entry.lastEvidenceKind = SharedPolicy.evidence(event: 1)
         entry.spacedEncounterCount = 0
         entry.lastSeen = date
         entry.lastReviewedAt = date
@@ -589,6 +600,7 @@ final class LearnerProfileStore {
             at: date
         )
         entry.knownConfirmationCount += 1
+        entry.lastEvidenceKind = SharedPolicy.evidence(event: 2, correct: true)
         entry.lastSeen = date
         entry.lastReviewedAt = date
         entries[key] = entry
@@ -645,6 +657,7 @@ final class LearnerProfileStore {
             currentLevel: entry.effectiveKnowledgeLevel(at: date),
             remembered: remembered
         )
+        entry.lastEvidenceKind = SharedPolicy.evidence(event: 2, correct: remembered)
         if remembered {
             entry.knownConfirmationCount += 1
         } else {
@@ -745,6 +758,7 @@ final class LearnerProfileStore {
                 lastContextSignature:
                     newestSpacedProgress.lastContextSignature
             )
+            entries[key]?.lastEvidenceKind = preferredProgress.lastEvidenceKind
         }
         pruneToStorageLimit()
         save()
@@ -879,6 +893,7 @@ final class LearnerProfileStore {
             && word.encounterCount >= 0
             && word.moreEnglishCount >= 0
             && word.knownConfirmationCount >= 0
+            && (word.lastEvidenceKind == nil || (0...4).contains(word.lastEvidenceKind!))
             && word.spacedEncounterCount >= 0
             && word.spacedEncounterCount <= word.encounterCount
             && (word.lastContextSignature?.count ?? 0) <= 64

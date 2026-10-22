@@ -16,6 +16,10 @@ final class OverlayState: ObservableObject {
     var onKnown: () -> Void = {}
     var onDontKnow: () -> Void = {}
     var onTogglePin: () -> Void = {}
+    var onSentenceMeaning: () -> Void = {}
+    @Published var sentenceMeaning: String?
+    @Published var sentenceHelpRequested = false
+    var sentenceMeaningShortcut = "4"
 
     /// Publishing is what redraws both bubbles, and an unchanged value redraws
     /// them just as thoroughly as a changed one. This is written from the mouse

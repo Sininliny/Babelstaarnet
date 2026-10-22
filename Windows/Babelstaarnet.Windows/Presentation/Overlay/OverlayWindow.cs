@@ -29,6 +29,7 @@ internal sealed class OverlayWindow : IDisposable
     public event Action? Unknown;
     public event Action? Pin;
     public event Action? Listen;
+    public event Action? SentenceMeaningRequested;
     public OverlayWindow()
     {
         wordWindow = new BubbleWindow(new FloatingSurface(card), "Babelstårnet · word");
@@ -36,6 +37,7 @@ internal sealed class OverlayWindow : IDisposable
         markerWindow = new BubbleWindow(new Border { Background = Ui.Accent, CornerRadius = new CornerRadius(1) }, "Babelstårnet · focus", marker: true);
         card.Known += () => Known?.Invoke(); card.Unknown += () => Unknown?.Invoke();
         card.Pin += () => Pin?.Invoke(); card.Listen += () => Listen?.Invoke();
+        sentence.SentenceMeaningRequested += () => SentenceMeaningRequested?.Invoke();
     }
     private CaptureLease ExcludeForCapture(PixelRect area) => new(new[] { wordWindow, sentenceWindow, markerWindow }
         .Where(w => w.IsVisible && OverlayLayout.Intersects(area, w.WindowFrame)).ToArray());
@@ -74,7 +76,7 @@ internal sealed class OverlayWindow : IDisposable
 
     public void Present(HoveredText text, string translation, string readingBridge, bool pinned, bool loading, bool known,
         IReadOnlyList<BridgeToken>? tokens = null, bool showWord = true, bool showSentence = true, HotKeyConfiguration? shortcuts = null,
-        int knowledgeLevel = 0, IReadOnlyList<BridgeToken>? explanationTokens = null)
+        int knowledgeLevel = 0, IReadOnlyList<BridgeToken>? explanationTokens = null, string sentenceMeaning = "", bool sentenceHelp = false)
     {
         if (!showWord && !showSentence) { Hide(); return; }
         card.SetShortcuts(shortcuts ?? HotKeyConfiguration.Defaults);
@@ -83,6 +85,7 @@ internal sealed class OverlayWindow : IDisposable
         card.SetContent(text, translation, readingBridge, pinned, loading, known, knowledgeLevel, explanationTokens);
         sentence.SetContent(tokens ?? BridgePresentation.Tokens(text, ReadingPolicy.Glosses, _ => false));
         sentence.SetMode(!showWord, DanishLanguage.ConciseMeaning(translation, text.Word.Text), knowledgeLevel); sentence.SetFeedback(feedback);
+        sentence.SetSentenceMeaning(sentenceMeaning, sentenceHelp, (shortcuts ?? HotKeyConfiguration.Defaults).SentenceMeaning.Display);
         var display = Forms.Screen.FromPoint(new System.Drawing.Point(text.Word.Bounds.X, text.Word.Bounds.Y));
         var work = display.WorkingArea;
         var screen = new PixelRect(work.X, work.Y, work.Width, work.Height);

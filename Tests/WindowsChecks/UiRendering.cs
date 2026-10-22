@@ -51,6 +51,10 @@ internal static class UiRendering
         store.Save("anspændte", "tense", "Mette Frederiksen om den anspændte situation.", now.AddDays(-2));
         store.Save("æbler", "apples", "Jeg spiser æbler.", now.AddDays(-1)); store.Mark("æbler", true, now);
         var preferences = new ReaderPreferences(); var model = new ReaderUiModel(preferences, store, Path.Combine(fixture, "preferences.json")) { Active = true, OcrReady = true, TranslationReady = true, VoiceReady = true };
+        using var news = new NewsService(Path.Combine(fixture, "news"), (_, _) => System.Threading.Tasks.Task.FromResult(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shared", "news-feed.xml"))), () => DateTimeOffset.Parse("2026-10-22T12:00:00Z", CultureInfo.InvariantCulture));
+        news.LearningUnits = () => ["æbler", "energi"]; model.News = news;
+        news.Configure(true, false, false, 0, 18); news.RefreshAsync(true).GetAwaiter().GetResult();
+        Save(new NewsPanel(news), stem + "-news.png", 860, 950);
         Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
         var settings = new SettingsPanel(model); settings.Measure(new Size(480, 3000)); settings.Arrange(new Rect(0, 0, 480, 3000)); settings.UpdateLayout();
         // Render the actual grouped form without the viewport cropping its lower sections.

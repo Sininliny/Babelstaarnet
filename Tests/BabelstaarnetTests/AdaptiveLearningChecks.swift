@@ -329,7 +329,7 @@ enum AdaptiveLearningChecks {
                     sourceWord: "studieboliger",
                     translation: "student accommodation",
                     knowledgeLevel: level
-                ) == nil
+                ) == "student accommodation"
             )
         }
         precondition(

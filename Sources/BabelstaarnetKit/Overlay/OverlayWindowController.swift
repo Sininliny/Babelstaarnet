@@ -27,6 +27,16 @@ final class OverlayWindowController {
     private let learnerProfile: LearnerProfileStore
     private let systemIdleMonitor = SystemIdleMonitor()
     private let bubbleState = OverlayState()
+    var supportedReading = false
+    var translateSentence: ((String) async throws -> String)?
+    var previousMeaning: ((String) -> String?)?
+    var learnedBefore: ((String) -> Bool)?
+    private var sentenceMeaningTask: Task<Void, Never>?
+    private var visibleAnchorKeys = Set<String>()
+    private var helpHistory: [String: [Date]] = [:]
+    private var learningTargets = Set<String>()
+    private var cooledUnits = Set<String>()
+    func resetLearningSession() { helpHistory.removeAll(); learningTargets.removeAll(); cooledUnits.removeAll(); visibleAnchorKeys.removeAll() }
     private var overlays: [CGDirectDisplayID: DisplayOverlay] = [:]
     private var mouseTimer: Timer?
     private var hoverSpeechTimer: Timer?
@@ -124,6 +134,7 @@ final class OverlayWindowController {
         bubbleState.onTogglePin = { [weak self] in
             self?.toggleBubblePin()
         }
+        bubbleState.onSentenceMeaning = { [weak self] in self?.requestSentenceMeaning() }
     }
 
     /// Shows a newly read page.
@@ -383,6 +394,15 @@ final class OverlayWindowController {
         if targetChanged {
             hoverSpeechTimer?.invalidate()
             hoverSpeechTimer = nil
+            sentenceMeaningTask?.cancel(); sentenceMeaningTask = nil
+            bubbleState.sentenceMeaning = nil; bubbleState.sentenceHelpRequested = false
+            visibleAnchorKeys.removeAll()
+            if let word = match?.word {
+                let key = learnerProfile.normalizedKey(for: word.sourceText), now = Date()
+                helpHistory[key] = Array((helpHistory[key] ?? []).filter { now.timeIntervalSince($0) < 600 }.suffix(1)) + [now]
+                if (helpHistory[key]?.count ?? 0) >= 2 && cooledUnits.count < 256 { cooledUnits.insert(key) }
+                if helpHistory.count > 256, let oldest = helpHistory.filter({ $0.key != key }).min(by: { ($0.value.last ?? .distantPast) < ($1.value.last ?? .distantPast) })?.key { helpHistory.removeValue(forKey: oldest) }
+            }
         }
         currentWord = match?.word
         currentRegion = match?.region
@@ -451,6 +471,7 @@ final class OverlayWindowController {
         for word: WordRegion,
         in region: TextRegion
     ) -> HoverCard {
+        bubbleState.sentenceMeaningShortcut = hotKeyConfiguration.sentenceMeaning.displayText
         let key = learnerProfile.normalizedKey(for: word.sourceText)
         let expanded = expandedEnglishWords.contains(key)
         let now = Date()
@@ -475,10 +496,25 @@ final class OverlayWindowController {
             [learnerProfile] candidate in
             knowledgeLevelForKey(learnerProfile.normalizedKey(for: candidate))
         }
-        let stateForWord: (String) -> LanguageTransferState = { candidate in
-            LanguageTransferState.forKnowledgeLevel(
-                knowledgeLevelForWord(candidate)
-            )
+        var selectedChallenge: String?
+        let stateForWord: (String) -> LanguageTransferState = { [self] candidate in
+            let candidateKey = learnerProfile.normalizedKey(for: candidate)
+            let level = knowledgeLevelForWord(candidate)
+            let progress = learnerProfile.progress(for: candidate, at: now)
+            let currentMeaning = region.words.first { learnerProfile.normalizedKey(for: $0.sourceText) == candidateKey }?.translatedText
+            let priorMeaning = previousMeaning?(candidateKey)
+            let reliableMeaning = priorMeaning?.isEmpty == false && currentMeaning?.isEmpty == false && priorMeaning?.lowercased() == currentMeaning?.lowercased() && currentMeaning?.lowercased() != candidateKey
+            var newSense = false
+            if let previous = previousMeaning?(candidateKey), !previous.isEmpty, let currentMeaning, !currentMeaning.isEmpty,
+               learnerProfile.normalizedKey(for: currentMeaning) != candidateKey { newSense = previous.lowercased() != currentMeaning.lowercased() }
+            let helps = cooledUnits.contains(candidateKey) || cooledUnits.count >= 256 ? 2 : (helpHistory[candidateKey] ?? []).filter { now.timeIntervalSince($0) < 600 }.count
+            if candidateKey != key && level == 3 && SharedPolicy.challenge(supported: supportedReading, reliable: reliableMeaning, learned: learnedBefore?(candidateKey) ?? (progress.knownConfirmationCount > 0),
+                newSense: newSense, helps: helps, used: selectedChallenge == nil ? 0 : 1) && SharedPolicy.targetAllowed(count: learningTargets.count, already: learningTargets.contains(candidateKey)) {
+                selectedChallenge = candidateKey; learningTargets.insert(candidateKey)
+            }
+            let anchor = visibleAnchorKeys.contains(candidateKey) || SharedPolicy.anchor(level: level, supported: supportedReading, newSense: newSense, cooldown: helps >= 2, selected: selectedChallenge == candidateKey)
+            if anchor { visibleAnchorKeys.insert(candidateKey) }
+            return anchor ? .learning : .known
         }
         let bridge = adaptiveSentenceBridge(
             for: word,
@@ -544,6 +580,28 @@ final class OverlayWindowController {
             dontKnowShortcutLabel: hotKeyConfiguration.dontKnow.displayText,
             pinShortcutLabel: hotKeyConfiguration.togglePin.displayText
         )
+    }
+
+    private func requestSentenceMeaning() {
+        bubbleState.sentenceHelpRequested.toggle()
+        if !bubbleState.sentenceHelpRequested || bubbleState.sentenceMeaning != nil { refreshCurrentCard(preservePosition: true); return }
+        guard let word = currentWord, let region = currentRegion else { return }
+        let sentence = sentenceAssembly.sentence(containing: word, in: region, among: overlays[word.displayID]?.regions ?? [region]).text
+        sentenceMeaningTask?.cancel()
+        sentenceMeaningTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard let translateSentence else { throw CancellationError() }
+                let meaning = try await translateSentence(sentence)
+                guard !Task.isCancelled, currentWord == word else { return }
+                bubbleState.sentenceMeaning = meaning
+            } catch {
+                guard !Task.isCancelled, currentWord == word else { return }
+                bubbleState.sentenceMeaning = "Sentence translation is unavailable. Reading remains available."
+            }
+            refreshCurrentCard(preservePosition: true)
+        }
+        refreshCurrentCard(preservePosition: true)
     }
 
     private func tokenKnowledgeLevels(
@@ -851,6 +909,7 @@ final class OverlayWindowController {
     }
 
     private func markCurrentWordKnown() {
+        visibleAnchorKeys.removeAll()
         guard let currentWord else {
             return
         }
@@ -1059,6 +1118,8 @@ final class OverlayWindowController {
             markCurrentWordUnknown()
         case .togglePin:
             toggleBubblePin()
+        case .sentenceMeaning:
+            requestSentenceMeaning()
         }
     }
 

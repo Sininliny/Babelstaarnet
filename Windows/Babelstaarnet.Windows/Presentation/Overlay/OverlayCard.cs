@@ -63,7 +63,7 @@ internal sealed class OverlayCard : Border
         var panel = new StackPanel { Margin = new Thickness(11, 9, 11, 9) };
         var actions = new WrapPanel();
         known = Control("1", "Known", () => Known?.Invoke(), knownKey);
-        unknown = Control("2", "Learn", () => Unknown?.Invoke(), unknownKey);
+        unknown = Control("2", "Don't know", () => Unknown?.Invoke(), unknownKey);
         pin = Control("3", "Pin", () => Pin?.Invoke(), pinKey);
         SetShortcuts(shortcuts);
         actions.Children.Add(known); actions.Children.Add(unknown); actions.Children.Add(pin);
@@ -131,10 +131,11 @@ internal sealed class OverlayCard : Border
     public void SetContent(HoveredText hit, string translation, string bridge, bool pinned, bool loading, bool isKnown, int level = 0, IReadOnlyList<BridgeToken>? explanationTokens = null)
     {
         translation = DanishLanguage.ConciseMeaning(translation, hit.Word.Text);
-        bool directMeaning = !isKnown && !loading && translation.Length > 0 && ReadingPolicy.Key(translation) != ReadingPolicy.Key(hit.Word.Text);
-        meaning.Text = directMeaning ? translation : "";
-        meaning.Visibility = directMeaning ? Visibility.Visible : Visibility.Collapsed;
-        meaning.Foreground = Primary;
+        bool directMeaning = !loading && translation.Length > 0 && ReadingPolicy.Key(translation) != ReadingPolicy.Key(hit.Word.Text);
+        meaning.Text = directMeaning ? translation : loading ? "Looking up locally…" : "Local meaning unavailable";
+        meaning.Visibility = Visibility.Visible;
+        meaning.FontSize = directMeaning ? 16 : 11;
+        meaning.Foreground = directMeaning ? Primary : Secondary;
         danish.Text = DanishLanguage.Display(hit.Word.Text);
         danish.FontSize = directMeaning ? 12 : 16;
         danish.FontWeight = directMeaning ? FontWeights.Medium : FontWeights.SemiBold;

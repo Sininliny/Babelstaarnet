@@ -149,6 +149,7 @@ enum ConfigurableHotKeyAction: String, CaseIterable, Identifiable, Sendable {
     case known
     case dontKnow
     case togglePin
+    case sentenceMeaning
 
     var id: String { rawValue }
 
@@ -158,6 +159,7 @@ enum ConfigurableHotKeyAction: String, CaseIterable, Identifiable, Sendable {
         case .known: "Knew"
         case .dontKnow: "Don’t know"
         case .togglePin: "Pin or unpin"
+        case .sentenceMeaning: "See sentence meaning"
         }
     }
 
@@ -201,6 +203,7 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
     var known: AppShortcut
     var dontKnow: AppShortcut
     var togglePin: AppShortcut
+    var sentenceMeaning = AppShortcut(keyCode: UInt32(kVK_ANSI_4), modifiers: [])
     var holdModifier: BubbleHoldModifier
 
     static let defaults = Self(
@@ -231,6 +234,7 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
         case .known: known
         case .dontKnow: dontKnow
         case .togglePin: togglePin
+        case .sentenceMeaning: sentenceMeaning
         }
     }
 
@@ -243,6 +247,7 @@ struct HotKeyConfiguration: Codable, Equatable, Sendable {
         case .known: known = shortcut
         case .dontKnow: dontKnow = shortcut
         case .togglePin: togglePin = shortcut
+        case .sentenceMeaning: sentenceMeaning = shortcut
         }
     }
 
@@ -275,5 +280,8 @@ extension HotKeyConfiguration {
             BubbleHoldModifier.self,
             forKey: .holdModifier
         )
+        let occupied = [toggleLearning, known, dontKnow, togglePin]
+        sentenceMeaning = try container.decodeIfPresent(AppShortcut.self, forKey: .sentenceMeaning)
+            ?? (0..<16).map { AppShortcut(keyCode: UInt32(kVK_ANSI_4), modifiers: HotKeyModifiers(rawValue: UInt32($0))) }.first { !occupied.contains($0) }!
     }
 }

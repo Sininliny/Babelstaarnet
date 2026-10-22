@@ -22,8 +22,10 @@ let package = Package(
     // the archive rather than to hope for it. The checks are the only consumer
     // that needs them — the app links the same code either way.
     products: [
+        .library(name: "BabelPolicy", type: .static, targets: ["BabelPolicy"]),
         .executable(name: "Babelstaarnet", targets: ["Babelstaarnet"]),
         .library(name: "BabelCore", type: .static, targets: ["BabelCore"]),
+        .library(name: "BabelNews", type: .static, targets: ["BabelNews"]),
         .library(name: "BabelOCR", type: .static, targets: ["BabelOCR"]),
         .library(
             name: "BabelTranslate",
@@ -48,9 +50,11 @@ let package = Package(
         )
     ],
     targets: [
+        .target(name: "BabelPolicy", path: "Shared/BabelPolicy", exclude: ["CMakeLists.txt"], publicHeadersPath: "include"),
         // Recognized text, the language-pack value types, and the two helpers
         // more than one capability needs.
-        .target(name: "BabelCore", path: "Sources/BabelCore"),
+        .target(name: "BabelCore", dependencies: ["BabelPolicy"], path: "Sources/BabelCore"),
+        .target(name: "BabelNews", dependencies: ["BabelCore"], path: "Sources/BabelNews"),
 
         .target(
             name: "BabelOCR",
@@ -85,6 +89,7 @@ let package = Package(
             name: "BabelstaarnetKit",
             dependencies: [
                 "BabelCore",
+                "BabelNews",
                 "BabelOCR",
                 "BabelTranslate",
                 "BabelLexicon",

@@ -108,6 +108,19 @@
     "vi",
     "vil"
   ],
+  "meaningPreservationWords": [
+    "ikke",
+    "ingen",
+    "aldrig",
+    "muligvis",
+    "ifølge",
+    "mistænkt",
+    "sigtet",
+    "anklaget",
+    "kan",
+    "vil",
+    "måske"
+  ],
   "glosses": {
     "er": "is",
     "var": "was",
@@ -290,6 +303,7 @@
     "tilmelde": "At skrive sig op som deltager.",
     "online": "Forbundet med eller tilgængelig gennem internettet."
   },
+  "newsSimplificationInstructions": "Skriv kun en kortere og enklere version PÅ DANSK. Oversæt ikke til engelsk.\nBevar navne, tal, datoer, negation, forbehold og hvem der siger hvad.\nTilføj ingen fakta, overskrift, indledning eller citater. Hvis teksten allerede er enkel, gengiv den uændret.\nReturner kun selve den danske tekst.",
   "glossInstructions": "Du hjælper en engelsktalende, der lærer dansk. Du får en dansk sætning og en nummereret liste af ord fra den.\n\nSvar med præcis én linje per ord, i listens rækkefølge, som `N. ord = engelsk`. Den engelske glose skal være den betydning og form, ordet har i NETOP denne sætning, på 1-3 engelske ord. Intet andet.\n\nEksempel\nSætning: Hun gik hjem, fordi hun var træt.\nOrd:\n1. gik\n2. hjem\n3. træt\nSvar:\n1. gik = went\n2. hjem = home\n3. træt = tired\n\nDanske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: \"Det ved du jo\" = jo → you know; \"Kom nu!\" = nu → come on; \"Han kommer nok\" = nok → probably; \"Det er vel rigtigt\" = vel → I suppose.",
   "explainInstructions": "Du hjælper en engelsktalende, der lærer dansk. Du får en dansk sætning og ét ord fra den.\n\nSvar med præcis tre linjer:\n1. ord = <den engelske betydning, ordet har i NETOP denne sætning, på 1-3 engelske ord>\nopslagsform: <ordets grundform i en dansk ordbog>\nforklaring: <én kort, enkel sætning PÅ DANSK, som forklarer ordet for en begynder>\n\nEksempel\nSætning: Hun gik hjem, fordi hun var træt.\nOrd:\n1. gik\nSvar:\n1. gik = went\nopslagsform: gå\nforklaring: At bevæge sig til fods fra et sted til et andet.\n\nDanske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: \"Det ved du jo\" = jo → you know; \"Kom nu!\" = nu → come on; \"Han kommer nok\" = nok → probably; \"Det er vel rigtigt\" = vel → I suppose."
 }

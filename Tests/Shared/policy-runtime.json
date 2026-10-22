@@ -1,0 +1,731 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "cases": [
+    {
+      "id": "S01",
+      "operation": "anchor",
+      "args": [
+        5,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S02",
+      "operation": "anchor",
+      "args": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S03",
+      "operation": "anchor",
+      "args": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S04",
+      "operation": "anchor",
+      "args": [
+        3,
+        1,
+        0,
+        0,
+        0,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S05",
+      "operation": "anchor",
+      "args": [
+        3,
+        0,
+        0,
+        1,
+        0,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S06",
+      "operation": "anchor",
+      "args": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S07",
+      "operation": "anchor",
+      "args": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S08",
+      "operation": "challenge",
+      "args": [
+        0,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S09",
+      "operation": "challenge",
+      "args": [
+        0,
+        1,
+        1,
+        0,
+        2,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S10",
+      "operation": "challenge",
+      "args": [
+        1,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S11",
+      "operation": "challenge",
+      "args": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S12",
+      "operation": "challenge",
+      "args": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S13",
+      "operation": "challenge",
+      "args": [
+        0,
+        1,
+        1,
+        1,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S14",
+      "operation": "challenge",
+      "args": [
+        0,
+        1,
+        1,
+        0,
+        0,
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S15",
+      "operation": "fetch",
+      "args": [
+        0,
+        0,
+        0,
+        1,
+        -1,
+        -1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S16",
+      "operation": "fetch",
+      "args": [
+        1,
+        0,
+        0,
+        0,
+        -1,
+        -1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S17",
+      "operation": "fetch",
+      "args": [
+        1,
+        0,
+        1,
+        1,
+        -1,
+        -1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S18",
+      "operation": "fetch",
+      "args": [
+        1,
+        1,
+        1,
+        0,
+        4000,
+        4000
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S19",
+      "operation": "fetch",
+      "args": [
+        1,
+        1,
+        1,
+        0,
+        21600,
+        21600
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S20",
+      "operation": "fetch",
+      "args": [
+        1,
+        0,
+        0,
+        0,
+        100,
+        100
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S21",
+      "operation": "fetch",
+      "args": [
+        1,
+        0,
+        0,
+        1,
+        59,
+        100
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S22",
+      "operation": "fetch",
+      "args": [
+        1,
+        0,
+        0,
+        1,
+        60,
+        100
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S23",
+      "operation": "digest",
+      "args": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        3
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S24",
+      "operation": "digest",
+      "args": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        3
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S25",
+      "operation": "digest",
+      "args": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        0,
+        3
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S26",
+      "operation": "digest",
+      "args": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        3
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S27",
+      "operation": "digest",
+      "args": [
+        1,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        3
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S28",
+      "operation": "digest",
+      "args": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S29",
+      "operation": "evidence",
+      "args": [
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S30",
+      "operation": "evidence",
+      "args": [
+        1,
+        0,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S31",
+      "operation": "evidence",
+      "args": [
+        2,
+        1,
+        0
+      ],
+      "expected": 2
+    },
+    {
+      "id": "S32",
+      "operation": "evidence",
+      "args": [
+        3,
+        1,
+        1
+      ],
+      "expected": 3
+    },
+    {
+      "id": "S33",
+      "operation": "evidence",
+      "args": [
+        3,
+        1,
+        0
+      ],
+      "expected": 4
+    },
+    {
+      "id": "S34",
+      "operation": "evidence",
+      "args": [
+        3,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S35",
+      "operation": "rewrite",
+      "args": [
+        0,
+        1,
+        1,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S36",
+      "operation": "rewrite",
+      "args": [
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "expected": 2
+    },
+    {
+      "id": "S37",
+      "operation": "rewrite",
+      "args": [
+        1,
+        1,
+        1,
+        0,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S38",
+      "operation": "rewrite",
+      "args": [
+        1,
+        0,
+        1,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S39",
+      "operation": "rewrite",
+      "args": [
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S40",
+      "operation": "score",
+      "args": [
+        0,
+        1,
+        2,
+        1,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S41",
+      "operation": "score",
+      "args": [
+        169,
+        1,
+        2,
+        1,
+        0
+      ],
+      "expected": -1
+    },
+    {
+      "id": "S42",
+      "operation": "score",
+      "args": [
+        -1,
+        1,
+        2,
+        1,
+        0
+      ],
+      "expected": -1
+    },
+    {
+      "id": "S43",
+      "operation": "score",
+      "args": [
+        1,
+        1,
+        2,
+        1,
+        1
+      ],
+      "expected": -1
+    },
+    {
+      "id": "S44",
+      "operation": "contains",
+      "args": [
+        "Æbler og får.",
+        "æbler"
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S45",
+      "operation": "contains",
+      "args": [
+        "Han får en gave.",
+        "få"
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S46",
+      "operation": "contains",
+      "args": [
+        "Hun vil holde op med det.",
+        "holde op med"
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S47",
+      "operation": "story",
+      "args": [
+        "Regeringen fremlægger ny plan for grøn energi",
+        "Regeringen fremlægger en ny plan for grøn energi"
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S48",
+      "operation": "story",
+      "args": [
+        "Nye regler for skoler i Danmark",
+        "Forskerne finder nye dyr i havet"
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S49",
+      "operation": "summary",
+      "args": [
+        "Regeringen har 12 planer.",
+        "Regeringen har 12 planer."
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S50",
+      "operation": "summary",
+      "args": [
+        "Regeringen har 12 planer.",
+        "Regeringen har 13 planer."
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S51",
+      "operation": "summary",
+      "args": [
+        "Mette vil ikke ændre loven.",
+        "Mette vil ændre loven."
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S52",
+      "operation": "summary",
+      "args": [
+        "Mette vil ikke ændre loven.",
+        "Lars vil ikke ændre loven."
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S53",
+      "operation": "source",
+      "args": [
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S54",
+      "operation": "source",
+      "args": [
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S55",
+      "operation": "source",
+      "args": [
+        2
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S56",
+      "operation": "source",
+      "args": [
+        999
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S57",
+      "operation": "target",
+      "args": [
+        2,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S58",
+      "operation": "target",
+      "args": [
+        3,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S59",
+      "operation": "target",
+      "args": [
+        3,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "retry-0",
+      "operation": "retry",
+      "args": [
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "retry-1",
+      "operation": "retry",
+      "args": [
+        1
+      ],
+      "expected": 60
+    },
+    {
+      "id": "retry-3",
+      "operation": "retry",
+      "args": [
+        3
+      ],
+      "expected": 240
+    },
+    {
+      "id": "retry-16",
+      "operation": "retry",
+      "args": [
+        16
+      ],
+      "expected": 21600
+    },
+    {
+      "id": "summary-quote-curly",
+      "operation": "summary",
+      "args": [
+        "En kort besked.",
+        "En “kort” besked."
+      ],
+      "expected": 0
+    }
+  ]
+}

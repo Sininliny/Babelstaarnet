@@ -30,12 +30,22 @@ grammar stay Danish, and so does every word you can already read. Only the words
 you cannot read are swapped for English, in place — so you get one line to read
 rather than two texts to reconcile.
 
-**Which words those are is learned, not asked.** The app remembers what keeps
-coming back to you, and hands each word back in Danish as you learn it. That is
-the only progress signal there is: no lessons, no score, nothing to answer.
+**Help adapts as words become familiar.** Reading supplies exposure cues;
+optional feedback and review correct them. Those cues are estimates, not proof
+of mastery. A direct lookup always gives the available meaning, and there is
+no exercise to finish before you can keep reading.
 
 **Nothing leaves your computer while reading.** No screenshot, recognized text, definition, or audio
 is sent to a remote service.
+
+The Word Book also offers **Read something new**, an optional, default-off
+internet feature using DR's public RSS feeds. Matching recent learning happens
+on your computer. DR receives normal web requests; your vocabulary and screen
+content are never sent with them. Background refresh and daily news digests
+are separate opt-ins. Cached news remains available offline. An installed local
+language model can simplify an RSS excerpt on request, with the original kept
+visible. Full articles open in your browser. Press **4** in a lookup bubble for
+a full sentence meaning; **Supported reading** keeps extra help available.
 
 ## Install
 

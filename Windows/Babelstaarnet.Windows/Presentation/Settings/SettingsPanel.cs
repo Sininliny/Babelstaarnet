@@ -47,10 +47,23 @@ internal sealed class SettingsPanel : ScrollViewer
         Caption(translation, "How long the pointer rests on a word before it is spoken. The bubble itself appears as soon as the word is read.");
 
         var reading = Section("Reading");
+        Toggle(reading, "Supported reading · more English anchors", () => model.Preferences.SupportedReading, v => model.Preferences.SupportedReading = v);
         Toggle(reading, "Follow screen changes", () => model.Preferences.FollowScreenChanges, v => model.Preferences.FollowScreenChanges = v);
         Toggle(reading, "Pause screen reading when idle", () => model.Preferences.PowerSaving, v => model.Preferences.PowerSaving = v, () => model.Preferences.FollowScreenChanges);
         Caption(reading, "Screen capture and OCR back off while the pointer is still, stop while a bubble is held, and pause after 5 seconds without input.");
 
+        var newsSection = Section("News (internet)");
+        Caption(newsSection, NewsService.Disclosure);
+        if (model.News is { } news)
+        {
+            void Set(bool enabled, bool background, bool notify) => news.Configure(enabled, background, notify, news.Preferences.Topic, news.Preferences.DigestHour);
+            Toggle(newsSection, "News recommendations (internet)", () => news.Preferences.Enabled, v => Set(v, news.Preferences.Background, news.Preferences.Notify));
+            Toggle(newsSection, "Background refresh", () => news.Preferences.Background, v => Set(news.Preferences.Enabled, v, news.Preferences.Notify), () => news.Preferences.Enabled);
+            Toggle(newsSection, "Daily news digest · while this app runs", () => news.Preferences.Notify, v => Set(news.Preferences.Enabled, news.Preferences.Background, v), () => news.Preferences.Enabled && news.Preferences.Background);
+            var hour = new ComboBox { Width = 140, ItemsSource = Enumerable.Range(9, 12).Select(h => h.ToString("00") + ":00").ToArray(), SelectedIndex = news.Preferences.DigestHour - 9 };
+            FormControls.Apply(hour); hour.SelectionChanged += (_, _) => { if (hour.SelectedIndex >= 0) news.Configure(news.Preferences.Enabled, news.Preferences.Background, news.Preferences.Notify, news.Preferences.Topic, hour.SelectedIndex + 9); }; Row(newsSection, "Digest time", hour);
+            Caption(newsSection, "At most one daily digest. Quiet hours 21:00–09:00; no notification while reading. Turning news off also turns background refresh and notifications off.");
+        }
         var shortcuts = Section("Shortcuts");
         foreach (var action in Enum.GetValues<ShortcutAction>())
         { var recorder = new ShortcutRecorder(model, action); Row(shortcuts, HotKeyConfiguration.Title(action), recorder); refresh.Add(recorder.Refresh); }

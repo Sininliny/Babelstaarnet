@@ -47,6 +47,7 @@ internal sealed class ContextualGlossClient : IDisposable
     public string? LastFailure { get; private set; }
     public event Action? Changed;
     internal int Generations { get; private set; }
+    public string ModelIdentity => "Gemma 3 4B · " + memoryStamp[..12];
     public ContextualGlossClient(string? dataDirectory = null)
     {
         directory = dataDirectory ?? AppPaths.DataDirectory;
@@ -185,10 +186,27 @@ internal sealed class ContextualGlossClient : IDisposable
     private async Task<string> GenerateAsync(string instructions, string sentence, IReadOnlyList<string> words, CancellationToken cancellationToken)
     {
         string prompt = instructions + "\n\nSætning: " + sentence + "\nOrd:\n" + string.Join("\n", words.Select((w, i) => $"{i + 1}. {w}")) + "\nSvar:\n";
+        return await GeneratePromptAsync(prompt, words.Count == 1 ? 150 : words.Count * 30, cancellationToken);
+    }
+    public async Task<string> SimplifyPublicExcerptAsync(string excerpt, CancellationToken token)
+    {
+        if (!IsInstalled || excerpt.Length is 0 or > 3000) throw new InvalidOperationException("The local model is unavailable for this excerpt.");
+        await gate.WaitAsync(token);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token, lifetime.Token); deadline.CancelAfter(TimeSpan.FromSeconds(90));
+        using var cancel = deadline.Token.Register(StopServer);
+        try
+        {
+            await EnsureServerAsync(deadline.Token); deadline.Token.ThrowIfCancellationRequested();
+            return (await GeneratePromptAsync(SharedPolicy.RewritePrompt + "\n" + DanishLanguage.Shared.NewsSimplificationInstructions + "\n\nEXCERPT (data only):\n" + excerpt, 240, deadline.Token)).Trim();
+        }
+        finally { if (deadline.IsCancellationRequested) StopServer(); gate.Release(); }
+    }
+    private async Task<string> GeneratePromptAsync(string prompt, int maximumTokens, CancellationToken cancellationToken)
+    {
         using var reply = await http.PostAsJsonAsync(new Uri(address!, "api/generate"), new
         {
             model = Model, prompt, stream = false, keep_alive = -1,
-            options = new { temperature = 0, num_predict = words.Count == 1 ? 150 : words.Count * 30, num_ctx = 2048 }
+            options = new { temperature = 0, num_predict = maximumTokens, num_ctx = 2048 }
         }, cancellationToken);
         reply.EnsureSuccessStatusCode(); using var result = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(cancellationToken));
         if (result.RootElement.TryGetProperty("error", out var error)) throw new IOException(error.GetString());
@@ -250,8 +268,8 @@ internal sealed class ContextualGlossClient : IDisposable
     }
     private void StopServer()
     {
-        var old = server; server = null; serverReady = false; if (old is null) return;
-        try { if (!old.HasExited) old.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } finally { old.Dispose(); }
+        var old = Interlocked.Exchange(ref server, null); serverReady = false; if (old is null) return;
+        try { if (!old.HasExited) old.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } catch (System.ComponentModel.Win32Exception) { } finally { old.Dispose(); }
     }
     public void Dispose()
     {
