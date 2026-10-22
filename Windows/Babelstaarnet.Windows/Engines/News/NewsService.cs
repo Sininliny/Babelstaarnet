@@ -17,6 +17,7 @@ namespace Babelstaarnet.Windows;
 
 internal sealed record NewsArticle(string Id, string Title, string Summary, string Url, double Published, int Topic);
 internal sealed record NewsCard(NewsArticle Article, string[] Matches, double Score);
+internal sealed record NewsShortVersion(string Text, string Model, double Created);
 internal sealed class NewsPreferences
 {
     public bool Enabled { get; set; }
@@ -25,6 +26,8 @@ internal sealed class NewsPreferences
     public int Topic { get; set; }
     public int DigestHour { get; set; } = 18;
     public string? LastDigestDay { get; set; }
+    public string[] LastDigestIds { get; set; } = [];
+    public int LastBookPage { get; set; }
 }
 internal sealed class NewsCache
 {
@@ -33,6 +36,7 @@ internal sealed class NewsCache
     public NewsArticle[] Articles { get; set; } = [];
     public Dictionary<string, double> Seen { get; set; } = [];
     public Dictionary<string, double> SeenTitles { get; set; } = [];
+    public Dictionary<string, NewsShortVersion> ShortVersions { get; set; } = [];
 }
 
 // DR metadata only. No browser engine, remote assets, personalized request or cloud fallback.
@@ -48,9 +52,21 @@ internal sealed class NewsService : IDisposable
     private readonly HttpClient? http;
     private CancellationTokenSource? fetch;
     private DateTimeOffset? lastAttempt;
+    private DateTimeOffset? nextRetry;
+    private int failedRequests;
     private NewsCache cache;
     private bool disposed;
     private int rotation;
+    private CancellationTokenSource? generation;
+    private readonly Dictionary<string, NewsShortVersion> simplified = [];
+    private readonly Dictionary<string, string> simplificationStates = [];
+    public Func<string, CancellationToken, Task<string>>? SimplifyExcerpt { get; set; }
+    public Func<bool>? ModelAvailable { get; set; }
+    public Func<string> ModelIdentity { get; set; } = () => "Local language model";
+    public string[] MeaningPreservationWords { get; set; } = [];
+    public Func<bool> ReadingActive { get; set; } = () => false;
+    public bool PageVisible { get; set; }
+    public bool HasUpdates { get; private set; }
     public NewsPreferences Preferences { get; }
     public bool Busy { get; private set; }
     public string Status { get; private set; } = "News is optional. Enable it to connect to DR.";
@@ -65,13 +81,16 @@ internal sealed class NewsService : IDisposable
         Preferences.Topic = Math.Clamp(Preferences.Topic, 0, Topics.Length - 1); Preferences.DigestHour = Math.Clamp(Preferences.DigestHour, 9, 20);
         if (!Preferences.Enabled) Preferences.Background = Preferences.Notify = false;
         if (!Preferences.Background) Preferences.Notify = false;
+        Preferences.LastDigestIds ??= [];
         cache.Articles ??= []; cache.Seen ??= []; cache.SeenTitles ??= [];
+        cache.ShortVersions ??= [];
+        foreach (var pair in cache.ShortVersions.Where(p => p.Key.Length < 1000 && p.Value?.Text is { Length: > 0 and <= 3000 } && p.Value.Model is { Length: <= 200 } && double.IsFinite(p.Value.Created)).OrderBy(p => p.Key, StringComparer.Ordinal).Take(64)) simplified[pair.Key] = pair.Value;
         cache.Articles = cache.Articles.Where(ValidArticle).Take(256).ToArray();
         if (!double.IsFinite(cache.Fetched) || cache.Fetched < 0 || cache.Fetched > this.clock().ToUnixTimeSeconds() + 3600) cache.Fetched = 0;
         if (download is null)
         {
             http = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.5.1");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.0");
             this.download = DownloadAsync;
         }
         else this.download = download;
@@ -94,17 +113,20 @@ internal sealed class NewsService : IDisposable
         bool changedTopic = Preferences.Topic != topic;
         Preferences.Enabled = enabled; Preferences.Background = enabled && background; Preferences.Notify = enabled && background && notify;
         Preferences.Topic = Math.Clamp(topic, 0, Topics.Length - 1); Preferences.DigestHour = Math.Clamp(hour, 9, 20);
-        if (!enabled || changedTopic) { fetch?.Cancel(); rotation = 0; }
+        if (!enabled || changedTopic) { fetch?.Cancel(); CancelGeneration(); rotation = 0; }
+        if (changedTopic) { nextRetry = null; failedRequests = 0; }
         if (!enabled) { Preferences.Background = Preferences.Notify = false; Status = "News is off. Cached articles remain available offline."; }
         Save(); SelectCards(); Changed?.Invoke();
     }
     public async Task RefreshAsync(bool manual = false, bool background = false)
     {
-        if (disposed || Busy) return;
+        if (disposed || Busy || background && PageVisible) return;
         var now = clock();
+        if (!manual && nextRetry is { } retry && now < retry) return;
         double successAge = cache.Topic == Preferences.Topic && cache.Fetched > 0 ? now.ToUnixTimeSeconds() - cache.Fetched : -1;
         if (SharedPolicy.bp_fetch(Preferences.Enabled ? 1 : 0, Preferences.Background ? 1 : 0, background ? 1 : 0, manual ? 1 : 0,
-            lastAttempt is { } attempted ? (now - attempted).TotalSeconds : -1, successAge) == 0) return;
+            lastAttempt is { } attempted ? (now - attempted).TotalSeconds : -1, successAge) == 0)
+        { if (manual && Preferences.Enabled && lastAttempt is { } last && now - last < TimeSpan.FromSeconds(60)) { Status = "Recently refreshed. Try again in a minute."; Changed?.Invoke(); } return; }
         lastAttempt = now; Busy = true; Status = "Fetching public headlines from DR…"; Changed?.Invoke();
         using var request = new CancellationTokenSource(); fetch = request; int topic = Preferences.Topic;
         try
@@ -114,11 +136,13 @@ internal sealed class NewsService : IDisposable
             var articles = ParseFeed(xml, topic);
             if (articles.Length == 0) throw new InvalidDataException("DR returned no usable news entries.");
             cache.Articles = articles; cache.Topic = topic; cache.Fetched = now.ToUnixTimeSeconds(); rotation = 0;
-            Status = "Updated from DR · " + now.ToString("g"); Save(); SelectCards();
+            failedRequests = 0; nextRetry = null;
+            Status = "Updated from DR · " + now.ToString("g"); Save();
+            if (Cards.Count == 0 || manual || !PageVisible) SelectCards(); else HasUpdates = true;
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested) { }
         catch (Exception e) when (e is HttpRequestException or IOException or XmlException or TaskCanceledException or InvalidOperationException)
-        { Status = "News could not be updated. Cached content is available. " + e.Message; }
+        { failedRequests = Math.Min(16, failedRequests + 1); nextRetry = clock().AddSeconds(SharedPolicy.bp_retry_delay(failedRequests)); Status = "News could not be updated. Cached content is available. " + e.Message; }
         finally { if (ReferenceEquals(fetch, request)) fetch = null; Busy = false; if (!disposed) Changed?.Invoke(); }
     }
     private async Task<string> DownloadAsync(Uri uri, CancellationToken token)
@@ -152,7 +176,35 @@ internal sealed class NewsService : IDisposable
     }
     internal static bool ValidArticle(NewsArticle? a) => a is not null && !string.IsNullOrWhiteSpace(a.Title) && a.Title.Length <= 350 && a.Summary is not null && a.Summary.Length <= 3000 && a.Id is not null && a.Id.Length < 512 &&
         Uri.TryCreate(a.Url, UriKind.Absolute, out var url) && url.Scheme == "https" && url.Host == "www.dr.dk" && url.UserInfo.Length == 0 && url.Port == 443 && url.AbsolutePath.StartsWith("/nyheder/", StringComparison.Ordinal) && double.IsFinite(a.Published) && a.Topic is >= 0 and < 8;
-    public void NextGroup() { rotation += 3; SelectCards(); Changed?.Invoke(); }
+    public void NextGroup() { rotation += 3; HasUpdates = false; SelectCards(); Changed?.Invoke(); }
+    public void AcceptUpdates() { rotation = 0; HasUpdates = false; SelectCards(); Changed?.Invoke(); }
+    public void SetBookPage(int page) { Preferences.LastBookPage = Math.Clamp(page, 0, 1); Save(); }
+    private string ExcerptKey(NewsArticle a) => a.Id + ":v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(a.Summary + "\u001f" + SharedPolicy.RewritePrompt + "\u001f" + string.Join('\n', MeaningPreservationWords))));
+    public string? Simplified(NewsArticle a) => simplified.GetValueOrDefault(ExcerptKey(a))?.Text;
+    public string? SimplifiedModel(NewsArticle a) => simplified.GetValueOrDefault(ExcerptKey(a))?.Model;
+    public string? SimplificationState(NewsArticle a) => simplificationStates.GetValueOrDefault(ExcerptKey(a));
+    public async Task SimplifyAsync(NewsArticle article)
+    {
+        // Only the public RSS excerpt supplied by DR, never fetched full article text.
+        string key = ExcerptKey(article);
+        if (simplified.ContainsKey(key)) return;
+        int decision = SharedPolicy.bp_rewrite(SharedPolicy.bp_source_capability(2), article.Summary.Length > 0 ? 1 : 0, (ModelAvailable?.Invoke() ?? SimplifyExcerpt is not null) ? 1 : 0, ReadingActive() ? 1 : 0, 0);
+        if (decision != 1) { simplificationStates[key] = decision == 2 ? "Pause screen reading to simplify this excerpt. The original remains available." : "Install the optional local language model to simplify RSS excerpts."; Changed?.Invoke(); return; }
+        if (generation is not null) return;
+        using var request = new CancellationTokenSource(TimeSpan.FromSeconds(90)); generation = request;
+        simplificationStates[key] = "Simplifying this RSS excerpt locally…"; Changed?.Invoke();
+        try
+        {
+            string text = await SimplifyExcerpt!(article.Summary, request.Token); request.Token.ThrowIfCancellationRequested();
+            if (!SharedPolicy.SummaryValid(article.Summary, text, MeaningPreservationWords)) throw new InvalidDataException("Short version did not pass the conservative checks. Read the original excerpt instead.");
+            if (simplified.Count >= 64) simplified.Clear();
+            simplified[key] = new(text, ModelIdentity(), clock().ToUnixTimeSeconds()); simplificationStates.Remove(key); cache.ShortVersions = new(simplified); Save();
+        }
+        catch (OperationCanceledException) { simplificationStates[key] = "Short version canceled; the original excerpt remains available."; }
+        catch (Exception e) { simplificationStates[key] = e.Message; }
+        finally { if (ReferenceEquals(generation, request)) generation = null; if (!disposed) Changed?.Invoke(); }
+    }
+    public void CancelGeneration() => generation?.Cancel();
     public void MarkSeen(NewsArticle article)
     {
         cache.Seen[article.Id] = clock().ToUnixTimeSeconds(); cache.SeenTitles[article.Title] = clock().ToUnixTimeSeconds();
@@ -162,7 +214,7 @@ internal sealed class NewsService : IDisposable
     }
     public void SelectCards()
     {
-        var now = clock(); var units = LearningUnits().Where(s => !ReadingPolicy.StructuralWords.Contains(ReadingPolicy.Key(s))).Distinct().Take(200).ToArray();
+        var now = clock(); var units = LearningUnits().Select(s => s.Normalize().ToLowerInvariant()).Where(s => !ReadingPolicy.StructuralWords.Contains(s)).Distinct().Order(StringComparer.Ordinal).Take(200).ToArray();
         var ranked = cache.Articles.Where(a => ValidArticle(a) && a.Topic == Preferences.Topic).Select(a =>
         {
             string[] matches = units.Where(w => SharedPolicy.Contains(a.Title + " " + a.Summary, w)).Take(5).ToArray();
@@ -179,8 +231,9 @@ internal sealed class NewsService : IDisposable
     public bool DigestDue(bool reading, bool permitted)
     {
         var now = clock(); bool quiet = now.Hour < 9 || now.Hour >= 21 || now.Hour != Preferences.DigestHour;
-        return SharedPolicy.bp_digest(Preferences.Enabled ? 1 : 0, Preferences.Background ? 1 : 0, Preferences.Notify ? 1 : 0, permitted ? 1 : 0, reading ? 1 : 0, quiet ? 1 : 0, Preferences.LastDigestDay == now.ToString("yyyy-MM-dd") ? 1 : 0, Cards.Count) != 0;
+        return SharedPolicy.bp_digest(Preferences.Enabled ? 1 : 0, Preferences.Background ? 1 : 0, Preferences.Notify ? 1 : 0, permitted ? 1 : 0, reading || PageVisible ? 1 : 0, quiet ? 1 : 0, Preferences.LastDigestDay == now.ToString("yyyy-MM-dd") ? 1 : 0, DigestCandidates.Count) != 0;
     }
-    public void DigestSent() { Preferences.LastDigestDay = clock().ToString("yyyy-MM-dd"); Save(); }
-    public void Dispose() { disposed = true; fetch?.Cancel(); http?.Dispose(); }
+    public IReadOnlyList<NewsArticle> DigestCandidates => Cards.Where(c => !Preferences.LastDigestIds.Contains(c.Article.Id) && clock().ToUnixTimeSeconds() - c.Article.Published is >= 0 and <= 604800).Select(c => c.Article).ToArray();
+    public void DigestSent() { Preferences.LastDigestDay = clock().ToString("yyyy-MM-dd"); Preferences.LastDigestIds = Preferences.LastDigestIds.Concat(DigestCandidates.Take(1).Select(a => a.Id)).Distinct().TakeLast(100).ToArray(); Save(); }
+    public void Dispose() { disposed = true; fetch?.Cancel(); CancelGeneration(); http?.Dispose(); }
 }

@@ -3,6 +3,11 @@ import Foundation
 
 public enum SharedPolicy {
     public static let version = Int(bp_version())
+    public static func retryDelay(failures: Int) -> Double { Double(bp_retry_delay(Int32(failures))) }
+    public static func evidence(event: Int, correct: Bool = false, hinted: Bool = false) -> Int {
+        Int(bp_evidence(Int32(event), correct ? 1 : 0, hinted ? 1 : 0))
+    }
+    public static func sourceCapability(_ capability: Int) -> Bool { bp_source_capability(Int32(capability)) != 0 }
     public static func challenge(supported: Bool, reliable: Bool, learned: Bool, newSense: Bool = false, helps: Int, used: Int) -> Bool {
         bp_challenge(supported ? 1 : 0, reliable ? 1 : 0, learned ? 1 : 0, newSense ? 1 : 0, Int32(helps), Int32(used)) != 0
     }
@@ -19,6 +24,13 @@ public enum SharedPolicy {
     }
     public static func feedURL(topic: Int) -> URL { URL(string: String(cString: bp_feed_url(Int32(topic))))! }
     public static var rewritePrompt: String { String(cString: bp_rewrite_prompt()) }
+    public static func summaryValid(source: String, summary: String, preservationWords: [String] = []) -> Bool {
+        !source.utf8.contains(0) && !summary.utf8.contains(0) && bp_summary_valid(source.precomposedStringWithCanonicalMapping, summary.precomposedStringWithCanonicalMapping, preservationWords.joined(separator: "\n")) != 0
+    }
+    public static func targetAllowed(count: Int, already: Bool) -> Bool { bp_target_allowed(Int32(count), already ? 1 : 0) != 0 }
+    public static func rewrite(sourceAllows: Bool, textPresent: Bool, modelInstalled: Bool, reading: Bool) -> Int {
+        Int(bp_rewrite(sourceAllows ? 1 : 0, textPresent ? 1 : 0, modelInstalled ? 1 : 0, reading ? 1 : 0, 0))
+    }
     public static func fetch(enabled: Bool, background: Bool, backgroundRequest: Bool, manual: Bool, attempt: Double, success: Double) -> Bool {
         bp_fetch(enabled ? 1 : 0, background ? 1 : 0, backgroundRequest ? 1 : 0, manual ? 1 : 0, attempt, success) != 0
     }

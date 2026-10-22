@@ -20,10 +20,11 @@ internal sealed class WordBookWindow : Window
         Width = 860; Height = 600; MinWidth = 620; MinHeight = 360; Background = Ui.Surface;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var view = new WordBookPanel(store, speak, preferences ?? new ReaderPreferences()); Content = view;
-        if (news is not null) { var tabs = new TabControl(); tabs.Items.Add(new TabItem { Header = "Words", Content = view }); tabs.Items.Add(new TabItem { Header = "Read something new · internet", Content = new NewsPanel(news) }); Content = tabs; }
-        PreviewKeyDown += (_, e) => view.HandleReviewKey(e);
+        if (news is not null) { var tabs = new TabControl(); tabs.Items.Add(new TabItem { Header = "Words", Content = view }); tabs.Items.Add(new TabItem { Header = "Read something new · internet", Content = new NewsPanel(news) }); tabs.SelectedIndex = Math.Clamp(news.Preferences.LastBookPage, 0, 1); tabs.SelectionChanged += (sender, e) => { if (ReferenceEquals(e.Source, tabs)) news.SetBookPage(tabs.SelectedIndex); }; Content = tabs; }
+        PreviewKeyDown += (_, e) => { if (Content is not TabControl tabs || tabs.SelectedIndex == 0) view.HandleReviewKey(e); };
         Loaded += (_, _) => fillMeanings?.Invoke();
     }
+    public void OpenNews() { if (Content is TabControl tabs) tabs.SelectedIndex = 1; }
 }
 
 internal sealed class WordBookPanel : Grid

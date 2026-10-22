@@ -67,9 +67,9 @@ internal sealed class SentenceCard : Border
         fullMeaning.Visibility = Visibility.Collapsed;
         confirmation.Visibility = directMeaning.Visibility = Visibility.Collapsed; Child = panel;
     }
-    public void SetSentenceMeaning(string text, bool requested)
+    public void SetSentenceMeaning(string text, bool requested, string shortcut = "4")
     {
-        sentenceHelp.Content = requested ? "Show reading bridge" : "See sentence meaning";
+        sentenceHelp.Content = shortcut + " · " + (requested ? "Show reading bridge" : "See sentence meaning");
         line.Visibility = requested ? Visibility.Collapsed : Visibility.Visible;
         fullMeaning.Visibility = requested ? Visibility.Visible : Visibility.Collapsed;
         fullMeaning.Text = text.Length > 0 ? text : "Translating locally…";

@@ -108,6 +108,19 @@
     "vi",
     "vil"
   ],
+  "meaningPreservationWords": [
+    "ikke",
+    "ingen",
+    "aldrig",
+    "muligvis",
+    "ifølge",
+    "mistænkt",
+    "sigtet",
+    "anklaget",
+    "kan",
+    "vil",
+    "måske"
+  ],
   "glosses": {
     "er": "is",
     "var": "was",

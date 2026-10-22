@@ -41,7 +41,10 @@ The Word Book also offers **Read something new**, an optional, default-off
 internet feature using DR's public RSS feeds. Matching recent learning happens
 on your computer. DR receives normal web requests; your vocabulary and screen
 content are never sent with them. Background refresh and daily news digests
-are separate opt-ins. Cached news remains available offline.
+are separate opt-ins. Cached news remains available offline. An installed local
+language model can simplify an RSS excerpt on request, with the original kept
+visible. Full articles open in your browser. Press **4** in a lookup bubble for
+a full sentence meaning; **Supported reading** keeps extra help available.
 
 ## Install
 

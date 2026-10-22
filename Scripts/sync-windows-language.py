@@ -13,7 +13,7 @@ def prompt(field):
     text = re.search(field + r': """\n(.*?)\n            """', source, re.S).group(1)
     return "\n".join(line[12:] for line in text.splitlines())
 data = dict(source="Sources/LanguageDanish/Danish.swift", code="da",
-    abbreviations=strings("abbreviations"), structuralWords=strings("structuralWords"),
+    abbreviations=strings("abbreviations"), structuralWords=strings("structuralWords"), meaningPreservationWords=strings("meaningPreservationWords"),
     glosses=table("danishClosedClassGlosses"), beginner=table("danishBeginnerGlosses"),
     glossInstructions=prompt("glossInstructions"), explainInstructions=prompt("explainInstructions"))
 exact = re.search(r"exactGlosses: \[(.*?)\n        \]", source, re.S).group(1)

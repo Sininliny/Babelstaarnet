@@ -257,9 +257,9 @@ bubbles.
   complete stillness. Reading a page with the pointer parked produces that
   pattern roughly once a second, so the row appeared and vanished under a reader
   who had never left the word. Position, not visibility, now keeps them out of
-  the reading path. The sentence panel carries no controls; it still confirms a
-  shortcut inline, because the shortcuts work whether or not the word panel is
-  switched on
+  the reading path. The sentence panel provides **See sentence meaning** (default shortcut **4**)
+  for an on-demand full local translation. It toggles back to the Danish bridge;
+  requesting help never lowers every word in the sentence
 - Versioned local JSON export/import for backing up or moving the adaptive
   learning profile without exporting screenshots or source sentences; imports
   merge idempotently with existing progress
@@ -551,3 +551,19 @@ Argos state is kept under:
   `rift`, which is closer than "scratch" but not right.
 - macOS may need the app to be relaunched after Screen Recording permission is
   changed.
+
+## Shared learning policy and optional new reading
+
+The focused word always shows its available meaning, including familiar words.
+Natural mode may leave one previously learned, unstable non-focus unit in Danish
+when its current meaning agrees with a saved meaning. Supported reading supplies
+that extra help. Existing English anchors remain during a frozen passage; repeated
+help puts a unit on cooldown. See [the decision policy](LEARNING_POLICY.md).
+
+Word Book has a **Read something new** tab. DR news is an explicitly labelled,
+default-off internet feature; topic, recent learning matches and seen-story filtering
+are applied locally. Only public RSS fields are fetched. Opening the original
+explicitly uses a browser. Optional excerpt simplification uses the installed
+local model, preserves the original and yields to screen reading. Background
+refresh and daily notifications require separate opt-ins. Shared rules compile
+from `Shared/BabelPolicy` for both native clients; UI and system adapters remain native.

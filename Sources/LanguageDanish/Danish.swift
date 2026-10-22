@@ -87,6 +87,7 @@ public extension SourceLanguage {
             "om", "på", "sig", "sin", "sit", "skal", "som", "til",
             "var", "ved", "vi", "vil"
         ],
+        meaningPreservationWords: ["ikke", "ingen", "aldrig", "muligvis", "ifølge", "mistænkt", "sigtet", "anklaget", "kan", "vil", "måske"],
         contextualGlossPrompts: Self.danishContextualGlossPrompts,
         meansPhrase: { meaning in "Betyder “\(meaning)”." }
     )

@@ -590,6 +590,142 @@
         "Forskerne finder nye dyr i havet"
       ],
       "expected": 0
+    },
+    {
+      "id": "S49",
+      "operation": "summary",
+      "args": [
+        "Regeringen har 12 planer.",
+        "Regeringen har 12 planer."
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S50",
+      "operation": "summary",
+      "args": [
+        "Regeringen har 12 planer.",
+        "Regeringen har 13 planer."
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S51",
+      "operation": "summary",
+      "args": [
+        "Mette vil ikke ændre loven.",
+        "Mette vil ændre loven."
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S52",
+      "operation": "summary",
+      "args": [
+        "Mette vil ikke ændre loven.",
+        "Lars vil ikke ændre loven."
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S53",
+      "operation": "source",
+      "args": [
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S54",
+      "operation": "source",
+      "args": [
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S55",
+      "operation": "source",
+      "args": [
+        2
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S56",
+      "operation": "source",
+      "args": [
+        999
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S57",
+      "operation": "target",
+      "args": [
+        2,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "S58",
+      "operation": "target",
+      "args": [
+        3,
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "S59",
+      "operation": "target",
+      "args": [
+        3,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "retry-0",
+      "operation": "retry",
+      "args": [
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "retry-1",
+      "operation": "retry",
+      "args": [
+        1
+      ],
+      "expected": 60
+    },
+    {
+      "id": "retry-3",
+      "operation": "retry",
+      "args": [
+        3
+      ],
+      "expected": 240
+    },
+    {
+      "id": "retry-16",
+      "operation": "retry",
+      "args": [
+        16
+      ],
+      "expected": 21600
+    },
+    {
+      "id": "summary-quote-curly",
+      "operation": "summary",
+      "args": [
+        "En kort besked.",
+        "En “kort” besked."
+      ],
+      "expected": 0
     }
   ]
 }

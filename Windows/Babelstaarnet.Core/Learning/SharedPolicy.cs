@@ -8,6 +8,9 @@ public static class SharedPolicy
 {
     private const string Library = "babel_policy";
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_version();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_retry_delay(int failures);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_source_capability(int capability);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_target_allowed(int count, int already);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_anchor(int level, int supported, int focus, int newSense, int cooldown, int selected);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_challenge(int supported, int reliable, int learned, int newSense, int helps, int used);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_evidence(int kind, int correct, int hinted);
@@ -19,6 +22,8 @@ public static class SharedPolicy
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern int bp_same_story([MarshalAs(UnmanagedType.LPUTF8Str)] string a, [MarshalAs(UnmanagedType.LPUTF8Str)] string b);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr bp_feed_url(int topic);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr bp_rewrite_prompt();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] private static extern int bp_summary_valid([MarshalAs(UnmanagedType.LPUTF8Str)] string source, [MarshalAs(UnmanagedType.LPUTF8Str)] string summary, [MarshalAs(UnmanagedType.LPUTF8Str)] string markers);
+    public static bool SummaryValid(string source, string summary, string[]? markers = null) => !source.Contains('\0') && !summary.Contains('\0') && bp_summary_valid(source.Normalize(), summary.Normalize(), string.Join('\n', markers ?? [])) != 0;
     public static bool Contains(string text, string unit) => bp_contains(text.Normalize().ToLowerInvariant(), unit.Normalize().ToLowerInvariant()) != 0;
     public static bool SameStory(string a, string b) => bp_same_story(a.Normalize().ToLowerInvariant(), b.Normalize().ToLowerInvariant()) != 0 && bp_same_story(b.Normalize().ToLowerInvariant(), a.Normalize().ToLowerInvariant()) != 0;
     public static string FeedUrl(int topic) => Marshal.PtrToStringUTF8(bp_feed_url(topic))!;

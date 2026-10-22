@@ -15,23 +15,15 @@ public-feed client. No vocabulary, screenshots or learning records are uploaded;
 matching is local. DR receives ordinary access metadata such as IP addresses
 and requested URLs. Background refresh and daily notifications require separate
 opt-in. Turning news off stops new requests; cached news remains usable offline.
-The previous statement below about there being no networking code in the Mac
-application describes the reviewed August version, not this news-enabled version.
-Network adapters now live in `Sources/BabelNews` and the Windows news engine;
-screen translation, contextual meaning and speech remain local.
+Network adapters live in `Sources/BabelNews` and the Windows news engine;
+screen translation, contextual meaning and speech remain local. Their inputs
+are never handed to the public-feed client. The C policy component has no
+networking capability; it receives only values supplied by native adapters.
 
-**Nothing you read leaves your Mac.** No screenshot, recognized text,
-translation, definition, or audio is transmitted anywhere.
-
-This holds structurally rather than by policy: there is no networking code in
-the application. No `URLSession`, no `NWConnection`, no socket, no HTTP client
-anywhere under `Sources/`. The app cannot send your screen somewhere because it
-contains nothing capable of sending anything. A grep is enough to check, and it
-is worth more than this paragraph:
-
-```sh
-grep -rn "URLSession\|NWConnection\|dataTask\|https://" Sources/
-```
+The August audit described an application without an HTTP client. That is no
+longer a claim about the entire application. News metadata and cached AI
+simplifications are public source material; access to a selected source URL is
+visible to the source or browser even though the learning profile stays local.
 
 Three consequences worth stating plainly:
 
@@ -54,8 +46,7 @@ Three consequences worth stating plainly:
 
 ### Where the network *is* used
 
-Being accurate matters more than sounding absolute. Network access happens in
-exactly two places, neither of which carries anything you read:
+Being accurate matters more than sounding absolute. Network access happens in the following explicit paths:
 
 1. **Installing the optional open-source engines**, which downloads Tesseract,
    Python packages, and the Argos language models — and, as a separate step,
@@ -64,6 +55,14 @@ exactly two places, neither of which carries anything you read:
 2. **Apple's Translation framework**, on first use, may download a Danish
    language pack from Apple. Translation itself then runs on-device. Apple's
    Vision recognition and the speech synthesizer are on-device throughout.
+
+3. **Optional DR news**, disabled by default, fetches the public RSS feeds listed
+   by [DR's own RSS guide](https://www.dr.dk/nyheder/dr-nyheder-som-rss-feed).
+   Titles and feed-provided excerpts are matched locally. No full article is
+   fetched by this adapter. Original links open in the user's browser.
+   On-device simplification uses only a feed-provided excerpt, retains the
+   original beside it, and makes no cloud call. News caches and preferences
+   are separate `news-*.json` files in the local application data directory.
 
 ## What is stored, and where
 

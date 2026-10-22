@@ -11,4 +11,6 @@ Performance changes should include comparable measurements and their limits.
 
 Keep downloaded models, user data, screenshots, measurements and build outputs
 out of Git. Reading and speech must continue to work without internet access;
-downloads belong only to explicit setup actions.
+engine downloads belong only to explicit setup actions. Public news is a separate,
+default-off network feature; its native adapters must never receive private
+screen content or send learning inputs to a remote service.

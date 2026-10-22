@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "source": "DR",
+  "verifiedAt": "2026-10-22",
+  "guide": "https://www.dr.dk/nyheder/dr-nyheder-som-rss-feed",
+  "capabilities": {
+    "publicRssMetadata": true,
+    "fullArticleFetch": false,
+    "fullArticleRewrite": false,
+    "onDeviceRssExcerptSimplification": true
+  },
+  "scope": "Only the RSS fields DR supplies. User-requested local excerpt simplification keeps the original visible. No full-text scraping or third-party mirror.",
+  "evidence": "DR official guide lists the public feeds and says they may be freely used. Direct RSS returned HTTP 200. This does not assert a general full-text or republication licence."
+}

@@ -114,17 +114,9 @@ struct WordBubbleView: View {
 
                 Spacer(minLength: 0)
 
-                // A word the profile counts as known has no English to show —
-                // withholding it is the whole point of counting it as known.
-                // The panel still has to answer: pointing at a familiar word
-                // was returning a box containing three buttons and the word
-                // itself, sitting on top of the line being read. Saying which
-                // state the word is in is an answer, and the control above it
-                // already offers the way back. It sits at the far edge of the
-                // row, away from the Danish, so it reads as the word's state
-                // rather than as the word's meaning.
-                if card.wordEnglishMeaning == nil, card.wordIsKnown {
-                    Text("Known")
+                // Missing translation is never presented as a learning test.
+                if card.wordEnglishMeaning == nil {
+                    Text("No local meaning yet")
                         .font(.system(size: 10, design: .rounded))
                         .foregroundStyle(.tertiary)
                 }
@@ -200,7 +192,7 @@ struct SentenceBridgeBubbleView: View {
                     ? state.knownAnimationID
                     : 0
             ) }
-            Button(state.sentenceHelpRequested ? "Show reading bridge" : "See sentence meaning", action: state.onSentenceMeaning)
+            Button(state.sentenceMeaningShortcut + " · " + (state.sentenceHelpRequested ? "Show reading bridge" : "See sentence meaning"), action: state.onSentenceMeaning)
                 .buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary)
 
             if card.sentencePanelStandsAlone,

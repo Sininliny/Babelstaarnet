@@ -85,7 +85,7 @@ internal sealed class OverlayWindow : IDisposable
         card.SetContent(text, translation, readingBridge, pinned, loading, known, knowledgeLevel, explanationTokens);
         sentence.SetContent(tokens ?? BridgePresentation.Tokens(text, ReadingPolicy.Glosses, _ => false));
         sentence.SetMode(!showWord, DanishLanguage.ConciseMeaning(translation, text.Word.Text), knowledgeLevel); sentence.SetFeedback(feedback);
-        sentence.SetSentenceMeaning(sentenceMeaning, sentenceHelp);
+        sentence.SetSentenceMeaning(sentenceMeaning, sentenceHelp, (shortcuts ?? HotKeyConfiguration.Defaults).SentenceMeaning.Display);
         var display = Forms.Screen.FromPoint(new System.Drawing.Point(text.Word.Bounds.X, text.Word.Bounds.Y));
         var work = display.WorkingArea;
         var screen = new PixelRect(work.X, work.Y, work.Width, work.Height);

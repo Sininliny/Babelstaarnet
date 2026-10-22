@@ -1,6 +1,7 @@
 using Babelstaarnet.Core;
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Babelstaarnet.Windows;
@@ -22,7 +23,14 @@ internal sealed class ReaderPreferences
     {
         string file = path ?? Path.Combine(AppPaths.DataDirectory, "preferences.json");
         if (!File.Exists(file)) return new();
-        var preferences = JsonSerializer.Deserialize<ReaderPreferences>(File.ReadAllText(file)) ?? throw new InvalidDataException("The preferences file is empty.");
+        string raw = File.ReadAllText(file);
+        var preferences = JsonSerializer.Deserialize<ReaderPreferences>(raw) ?? throw new InvalidDataException("The preferences file is empty.");
+        using var document = JsonDocument.Parse(raw);
+        if (preferences.Shortcuts is { } shortcuts && document.RootElement.TryGetProperty("Shortcuts", out var prior) && prior.ValueKind == JsonValueKind.Object && !prior.TryGetProperty("SentenceMeaning", out _))
+        {
+            AppShortcut[] occupied = [shortcuts.ToggleLearning, shortcuts.Known, shortcuts.DontKnow, shortcuts.TogglePin];
+            preferences.Shortcuts = shortcuts with { SentenceMeaning = Enumerable.Range(0, 16).Select(m => new AppShortcut(52, (uint)m)).First(s => !occupied.Contains(s)) };
+        }
         preferences.Normalize(); return preferences;
     }
     public void Normalize()

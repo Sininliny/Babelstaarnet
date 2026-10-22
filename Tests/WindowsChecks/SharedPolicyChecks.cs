@@ -21,6 +21,10 @@ internal static class SharedPolicyChecks
             var a = c.GetProperty("args").EnumerateArray().ToArray(); int I(int n) => a[n].GetInt32(); double D(int n) => a[n].GetDouble(); string S(int n) => a[n].GetString()!;
             double result = c.GetProperty("operation").GetString() switch
             {
+                "retry" => SharedPolicy.bp_retry_delay(I(0)),
+                "source" => SharedPolicy.bp_source_capability(I(0)),
+                "summary" => SharedPolicy.SummaryValid(S(0),S(1), DanishLanguage.Shared.MeaningPreservationWords) ? 1 : 0,
+                "target" => SharedPolicy.bp_target_allowed(I(0),I(1)),
                 "anchor" => SharedPolicy.bp_anchor(I(0),I(1),I(2),I(3),I(4),I(5)),
                 "challenge" => SharedPolicy.bp_challenge(I(0),I(1),I(2),I(3),I(4),I(5)),
                 "fetch" => SharedPolicy.bp_fetch(I(0),I(1),I(2),I(3),D(4),D(5)),
@@ -47,11 +51,35 @@ internal static class SharedPolicyChecks
         news.Configure(true, false, false, 0, 18); await news.RefreshAsync();
         Check(downloads == 1 && news.Cards.Count == 2 && news.Cards.Any(c => c.Matches.Contains("æbler")), "Opt-in RSS uses local learning matching and deduplicates stories.");
         await news.RefreshAsync(); Check(downloads == 1, "Fresh cache must avoid another request.");
+        news.MeaningPreservationWords = DanishLanguage.Shared.MeaningPreservationWords;
+        int generations = 0; bool reading = true;
+        news.ReadingActive = () => reading;
+        news.ModelAvailable = () => true; news.ModelIdentity = () => "fixture-v1";
+        news.SimplifyExcerpt = (text, _) => { generations++; return Task.FromResult("En tydelig besked."); };
+        var excerpt = parsed[0]; await news.SimplifyAsync(excerpt);
+        Check(generations == 0 && news.Simplified(excerpt) is null, "Active screen reading must defer news inference.");
+        reading = false; await news.SimplifyAsync(excerpt); await news.SimplifyAsync(excerpt);
+        Check(generations == 1 && news.Simplified(excerpt) == "En tydelig besked." && news.SimplifiedModel(excerpt) == "fixture-v1", "Local excerpt simplification must be cached and labelled with its model.");
+        using (var restored = new NewsService(Path.Combine(directory, "news")))
+        { restored.MeaningPreservationWords = news.MeaningPreservationWords; Check(restored.Simplified(excerpt) == "En tydelig besked.", "AI excerpt metadata survives restart without inference or HTTP."); }
+        news.Configure(true, true, true, 0, 18); now = now.AddHours(6);
+        Check(news.DigestDue(false, true) && !news.DigestDue(true, true) && !news.DigestDue(false, false), "News digest requires idle reading and actual notification permission.");
+        news.PageVisible = true; Check(!news.DigestDue(false, true), "An open news page suppresses digests.");
+        int before = downloads; await news.RefreshAsync(background: true); Check(downloads == before, "Background refresh must not replace visible reading cards."); news.PageVisible = false;
+        string notified = news.DigestCandidates[0].Id; news.DigestSent();
+        Check(!news.DigestDue(false, true), "Digest is limited to one per local day.");
+        now = now.AddDays(1); Check(!news.DigestCandidates.Any(a => a.Id == notified), "A headline must not be notified again the next day.");
         var first = news.Cards[0].Article; news.MarkSeen(first); Check(!news.Cards.Any(c => SharedPolicy.SameStory(c.Article.Title, first.Title)), "Already seen hides equivalent stories.");
         news.Configure(false, true, true, 0, 18); now = now.AddHours(8); await news.RefreshAsync(true, true);
         Check(downloads == 1 && !news.Preferences.Background && !news.Preferences.Notify, "Disable news cancels all background privileges.");
         using var reloaded = new NewsService(Path.Combine(directory, "news"), (_, _) => throw new Exception("Offline cache accessed network"), () => now);
         Check(!reloaded.Preferences.Enabled && reloaded.Cards.Count > 0, "Cache remains usable offline across restart.");
+        string legacy = Path.Combine(directory, "legacy-shortcuts.json");
+        File.WriteAllText(legacy, "{\"Shortcuts\":{\"Known\":{\"Key\":52,\"Modifiers\":0}}}");
+        var migrated = ReaderPreferences.Load(legacy);
+        Check(migrated.Shortcuts.Known == new AppShortcut(52, 0) && migrated.Shortcuts.SentenceMeaning != migrated.Shortcuts.Known && migrated.Shortcuts.ValidationError() is null, "Adding sentence help must preserve legacy shortcut choices.");
+        var evidence = new VocabularyStore(Path.Combine(directory, "evidence.json")); evidence.Save("æbler", "apples", "Jeg spiser æbler.", now); evidence.Mark("æbler", true, now);
+        Check(evidence.Saved.Single().LastEvidenceKind == 2, "Knew is self-report, not verified recall.");
         using var session = new HoverSession(_ => "word", (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => t.Contains(' ') ? "A full sentence." : "word").ToArray()), _ => true);
         var word = new RecognizedWord("ord", new(1,1,10,10)); await session.FocusAsync(new(word, new("Et ord her.", [word])));
         await session.ToggleSentenceMeaningAsync();

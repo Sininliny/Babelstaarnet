@@ -23,6 +23,7 @@ public sealed class VocabularyEntry
     public int EncounterCount { get; set; }
     public int MoreEnglishCount { get; set; }
     public int KnownConfirmationCount { get; set; }
+    public int? LastEvidenceKind { get; set; }
     public DateTimeOffset LastSeen { get; set; }
     [JsonIgnore] public DateTimeOffset DueAt => DueDate(DateTimeOffset.Now);
     [JsonIgnore] public string Familiarity => EffectiveLevel(DateTimeOffset.Now) switch
@@ -64,7 +65,7 @@ public sealed class VocabularyStore
     {
         this.path = path;
         var entries = File.Exists(path) ? JsonSerializer.Deserialize<List<VocabularyEntry>>(File.ReadAllText(path)) ?? throw new InvalidDataException("The vocabulary file is empty.") : [];
-        if (entries.Count > MaximumEntries || entries.Any(e => e is null || string.IsNullOrEmpty(e.Key) || (e.Key != ReadingPolicy.Key(e.Word) && e.Key != ReadingPolicy.FoldKey(e.Word)) || e.Level is < 0 or > 5))
+        if (entries.Count > MaximumEntries || entries.Any(e => e is null || string.IsNullOrEmpty(e.Key) || (e.Key != ReadingPolicy.Key(e.Word) && e.Key != ReadingPolicy.FoldKey(e.Word)) || e.Level is < 0 or > 5 || e.LastEvidenceKind is < 0 or > 4))
             throw new InvalidDataException("The vocabulary file contains invalid entries.");
         foreach (var entry in entries) { string canonical = ReadingPolicy.Key(entry.Word); migratedKeys |= entry.Key != canonical; entry.Key = canonical; }
         if (entries.Select(e => e.Key).Distinct().Count() != entries.Count) throw new InvalidDataException("The vocabulary file contains duplicate entries.");
@@ -75,6 +76,7 @@ public sealed class VocabularyStore
             throw new InvalidDataException("The dictionary form file contains invalid entries.");
     }
     public bool IsKnown(string key) => EffectiveLevel(key) >= 4;
+    public string? SavedMeaning(string key) => words.TryGetValue(ReadingPolicy.Key(key), out var entry) && entry.Meaning.Length > 0 ? entry.Meaning : null;
     public bool LearningCandidate(string key) => words.TryGetValue(ReadingPolicy.Key(key), out var entry) && (entry.Saved || entry.KnownConfirmationCount > 0);
     public IEnumerable<string> RecentLearningUnits(DateTimeOffset now) => words.Values.Where(e =>
         (e.Saved && now - e.SavedAt <= TimeSpan.FromDays(14)) ||
@@ -132,6 +134,7 @@ public sealed class VocabularyStore
         int current = entry.EffectiveLevel(now);
         entry.Level = known ? current < 4 ? 4 : current >= 5 || entry.ReviewedAt is null || now - entry.ReviewedAt >= TimeSpan.FromHours(20) ? 5 : 4 : 0;
         if (known) entry.KnownConfirmationCount++; else { entry.MoreEnglishCount++; ClearSpaced(entry); }
+        entry.LastEvidenceKind = SharedPolicy.bp_evidence(known ? 2 : 1, known ? 1 : 0, 0);
         entry.Tracked = true; entry.LastSeen = now; entry.ReviewedAt = now; Persist();
     }
     public void Review(string key, bool remembered, DateTimeOffset now)
@@ -139,6 +142,7 @@ public sealed class VocabularyStore
         if (!words.TryGetValue(ReadingPolicy.Key(key), out var entry)) return;
         entry.Level = remembered ? Math.Min(entry.EffectiveLevel(now) + 1, 5) : 0;
         if (remembered) entry.KnownConfirmationCount++; else { entry.MoreEnglishCount++; ClearSpaced(entry); }
+        entry.LastEvidenceKind = SharedPolicy.bp_evidence(2, remembered ? 1 : 0, 0);
         entry.Tracked = true; entry.LastSeen = now; entry.ReviewedAt = now; Persist();
     }
     private static void ClearSpaced(VocabularyEntry e) { e.SpacedEncounters = 0; e.LastEncounterAt = null; e.LastContext = ""; }
@@ -147,7 +151,7 @@ public sealed class VocabularyStore
         lemmas.Clear();
         foreach (var key in words.Where(p => !p.Value.Saved).Select(p => p.Key).ToArray()) words.Remove(key);
         foreach (var entry in words.Values)
-        { entry.Tracked = false; entry.Level = ReadingPolicy.StructuralWords.Contains(entry.Key) ? 4 : 0; entry.ReviewedAt = null; entry.EncounterCount = entry.MoreEnglishCount = entry.KnownConfirmationCount = 0; ClearSpaced(entry); }
+        { entry.Tracked = false; entry.Level = ReadingPolicy.StructuralWords.Contains(entry.Key) ? 4 : 0; entry.ReviewedAt = null; entry.LastEvidenceKind = null; entry.EncounterCount = entry.MoreEnglishCount = entry.KnownConfirmationCount = 0; ClearSpaced(entry); }
         Persist();
     }
     private VocabularyEntry? Get(string word)
@@ -199,6 +203,7 @@ public sealed class VocabularyStore
         {
             Word = ReadingPolicy.Words().Match(e.Word).Value.ToLowerInvariant().Normalize(), KnowledgeLevel = e.Level, Familiarity = e.Level / 5.0,
             EncounterCount = e.EncounterCount, MoreEnglishCount = e.MoreEnglishCount, KnownConfirmationCount = e.KnownConfirmationCount,
+            LastEvidenceKind = e.LastEvidenceKind,
             SpacedEncounterCount = e.SpacedEncounters, LastSeen = e.LastSeen == default ? e.ReviewedAt ?? e.LastEncounterAt ?? now : e.LastSeen,
             LastReviewedAt = e.ReviewedAt, LastSpacedEncounterAt = e.LastEncounterAt, LastContextSignature = e.LastContext.Length > 0 ? e.LastContext : null
         }).ToArray() };
@@ -215,7 +220,7 @@ public sealed class VocabularyStore
         foreach (var e in archive.Words)
         {
             if (e is null || string.IsNullOrWhiteSpace(e.Word) || e.Word.Length > 100 || !ReadingPolicy.Words().IsMatch(e.Word) ||
-                e.Level is < 0 or > 5 || e.EncounterCount < 0 || e.MoreEnglishCount < 0 || e.KnownConfirmationCount < 0 || e.SpacedEncounterCount < 0 || e.SpacedEncounterCount > e.EncounterCount || (e.LastContextSignature?.Length ?? 0) > 64 || e.LastSeen == default)
+                e.Level is < 0 or > 5 || e.LastEvidenceKind is < 0 or > 4 || e.EncounterCount < 0 || e.MoreEnglishCount < 0 || e.KnownConfirmationCount < 0 || e.SpacedEncounterCount < 0 || e.SpacedEncounterCount > e.EncounterCount || (e.LastContextSignature?.Length ?? 0) > 64 || e.LastSeen == default)
                 throw new InvalidDataException("The profile contains invalid learning progress.");
         }
         foreach (var incoming in archive.Words)
@@ -225,7 +230,7 @@ public sealed class VocabularyStore
             bool incomingReview = !hadProgress || incoming.LastReviewedAt > target.ReviewedAt || target.ReviewedAt is null && incoming.LastReviewedAt is not null;
             bool tied = incoming.LastReviewedAt == target.ReviewedAt;
             int incomingEffective = new VocabularyEntry { Level = incoming.Level, ReviewedAt = incoming.LastReviewedAt }.EffectiveLevel(now);
-            if (incomingReview || tied && incomingEffective < target.EffectiveLevel(now)) { target.Level = incoming.Level; target.ReviewedAt = incoming.LastReviewedAt; }
+            if (incomingReview || tied && incomingEffective < target.EffectiveLevel(now)) { target.Level = incoming.Level; target.ReviewedAt = incoming.LastReviewedAt; target.LastEvidenceKind = incoming.LastEvidenceKind; }
             if (!hadProgress) { target.Level = incoming.Level; target.ReviewedAt = incoming.LastReviewedAt; }
             target.Tracked = true; target.EncounterCount = Math.Max(target.EncounterCount, incoming.EncounterCount);
             target.MoreEnglishCount = Math.Max(target.MoreEnglishCount, incoming.MoreEnglishCount); target.KnownConfirmationCount = Math.Max(target.KnownConfirmationCount, incoming.KnownConfirmationCount);
@@ -245,6 +250,7 @@ public sealed class LearningArchive
 }
 public sealed class LearningWord
 {
+    public int? LastEvidenceKind { get; set; }
     public string Word { get; set; } = "";
     public int? KnowledgeLevel { get; set; }
     public double? Familiarity { get; set; }

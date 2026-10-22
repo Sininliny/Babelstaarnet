@@ -1,6 +1,6 @@
 namespace Babelstaarnet.Core;
 
-public enum ShortcutAction { ToggleLearning = 1, Known = 2, DontKnow = 3, TogglePin = 4 }
+public enum ShortcutAction { ToggleLearning = 1, Known = 2, DontKnow = 3, TogglePin = 4, SentenceMeaning = 5 }
 public enum HoldModifier { Alt, Control, Shift, Windows }
 public sealed record AppShortcut(uint Key, uint Modifiers)
 {
@@ -22,22 +22,23 @@ public sealed record HotKeyConfiguration
     public AppShortcut Known { get; init; } = new(49, 0);
     public AppShortcut DontKnow { get; init; } = new(50, 0);
     public AppShortcut TogglePin { get; init; } = new(51, 0);
+    public AppShortcut SentenceMeaning { get; init; } = new(52, 0);
     public HoldModifier HoldModifier { get; init; } = HoldModifier.Alt;
     public static HotKeyConfiguration Defaults => new();
     public AppShortcut For(ShortcutAction action) => action switch
-    { ShortcutAction.ToggleLearning => ToggleLearning, ShortcutAction.Known => Known, ShortcutAction.DontKnow => DontKnow, _ => TogglePin };
+    { ShortcutAction.ToggleLearning => ToggleLearning, ShortcutAction.Known => Known, ShortcutAction.DontKnow => DontKnow, ShortcutAction.SentenceMeaning => SentenceMeaning, _ => TogglePin };
     public HotKeyConfiguration With(ShortcutAction action, AppShortcut shortcut) => action switch
     {
         ShortcutAction.ToggleLearning => this with { ToggleLearning = shortcut }, ShortcutAction.Known => this with { Known = shortcut },
-        ShortcutAction.DontKnow => this with { DontKnow = shortcut }, _ => this with { TogglePin = shortcut }
+        ShortcutAction.DontKnow => this with { DontKnow = shortcut }, ShortcutAction.SentenceMeaning => this with { SentenceMeaning = shortcut }, _ => this with { TogglePin = shortcut }
     };
     public string? ValidationError()
     {
         if (Enum.GetValues<ShortcutAction>().Any(a => For(a) is null || !For(a).IsValid)) return "That key cannot be used as a shortcut.";
         if (ToggleLearning.Modifiers == 0) return "Toggle hover translation needs at least one modifier key.";
-        if (Enum.GetValues<ShortcutAction>().Select(For).Distinct().Count() != 4) return "Each action needs a different shortcut.";
+        if (Enum.GetValues<ShortcutAction>().Select(For).Distinct().Count() != Enum.GetValues<ShortcutAction>().Length) return "Each action needs a different shortcut.";
         return Enum.IsDefined(HoldModifier) ? null : "Choose a supported hold modifier.";
     }
     public static string Title(ShortcutAction action) => action switch
-    { ShortcutAction.ToggleLearning => "Toggle hover translation", ShortcutAction.Known => "Knew", ShortcutAction.DontKnow => "Don’t know", _ => "Pin or unpin" };
+    { ShortcutAction.ToggleLearning => "Toggle hover translation", ShortcutAction.Known => "Knew", ShortcutAction.DontKnow => "Don’t know", ShortcutAction.SentenceMeaning => "See sentence meaning", _ => "Pin or unpin" };
 }

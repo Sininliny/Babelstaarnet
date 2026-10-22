@@ -1,6 +1,7 @@
 import BabelCore
 import Combine
 import Foundation
+import CryptoKit
 #if canImport(FoundationXML)
 import FoundationXML
 #endif
@@ -33,6 +34,13 @@ public struct NewsPreferences: Codable {
     public var topic = 0
     public var digestHour = 18
     public var lastDigestDay: String?
+    public var lastDigestIds: [String]?
+    public var lastBookPage: Int?
+}
+private struct NewsShortVersion: Codable {
+    var text: String
+    var model: String
+    var created: Double
 }
 private struct NewsCache: Codable {
     var fetched: Double = 0
@@ -40,6 +48,7 @@ private struct NewsCache: Codable {
     var articles: [NewsArticle] = []
     var seen: [String: Double] = [:]
     var seenTitles: [String: Double] = [:]
+    var shortVersions: [String: NewsShortVersion]?
 }
 private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
@@ -54,18 +63,30 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     @Published public private(set) var cards: [NewsCard] = []
     @Published public private(set) var busy = false
     @Published public private(set) var status = "News is optional. Enable it to connect to DR."
+    @Published public private(set) var hasUpdates = false
+    @Published public private(set) var simplificationStates: [String: String] = [:]
+    @Published private var simplified: [String: NewsShortVersion] = [:]
+    public var pageVisible = false
     public var learningUnits: () -> [String] = { [] }
     public var readingActive: () -> Bool = { false }
     public var deliverDigest: (([NewsArticle]) async -> Bool)?
+    public var simplifyExcerpt: ((String) async throws -> String)?
+    public var modelAvailable: (() -> Bool)?
+    public var modelIdentity: () -> String = { "Local language model" }
+    public var meaningPreservationWords: [String] = []
+    public var excludedLearningUnits: Set<String> = []
     private let directory: URL
     private let clock: () -> Date
     private let downloadOverride: ((URL) async throws -> String)?
     private let session: URLSession
     private var cache: NewsCache
     private var lastAttempt: Date?
+    private var nextRetry: Date?
+    private var failedRequests = 0
     private var fetchTask: Task<String, Error>?
     private var backgroundTask: Task<Void, Never>?
     private var rotation = 0
+    private var generationTask: Task<String, Error>?
     private let dayFormat: DateFormatter = {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"; return formatter
     }()
@@ -93,6 +114,9 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         cache.articles = Array(cache.articles.filter(\.valid).prefix(256))
         if !cache.fetched.isFinite || cache.fetched < 0 || cache.fetched > clock().timeIntervalSince1970 + 3600 { cache.fetched = 0 }
         selectCards()
+        simplified = Dictionary(uniqueKeysWithValues: (cache.shortVersions ?? [:]).filter {
+            $0.key.count < 1000 && !$0.value.text.isEmpty && $0.value.text.utf8.count <= 3000 && $0.value.model.count <= 200 && $0.value.created.isFinite
+        }.sorted { $0.key < $1.key }.prefix(64).map { ($0.key, $0.value) })
     }
     private func save() {
         do {
@@ -105,16 +129,20 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         let changedTopic = preferences.topic != topic
         preferences.enabled = enabled; preferences.background = enabled && background; preferences.notify = enabled && background && notify
         preferences.topic = min(7, max(0, topic)); preferences.digestHour = min(20, max(9, hour))
-        if !enabled || changedTopic { fetchTask?.cancel(); rotation = 0 }
+        if !enabled || changedTopic { fetchTask?.cancel(); cancelGeneration(); rotation = 0 }
+        if changedTopic { nextRetry = nil; failedRequests = 0 }
         if !enabled { status = "News is off. Cached articles remain available offline." }
         save(); selectCards()
     }
     public func refresh(manual: Bool = false, background: Bool = false) async {
-        guard !busy else { return }
+        guard !busy, !(background && pageVisible) else { return }
         let now = clock()
+        if !manual, let nextRetry, now < nextRetry { return }
         let age = cache.topic == preferences.topic && cache.fetched > 0 ? now.timeIntervalSince1970 - cache.fetched : -1
         guard SharedPolicy.fetch(enabled: preferences.enabled, background: preferences.background, backgroundRequest: background,
-            manual: manual, attempt: lastAttempt.map { now.timeIntervalSince($0) } ?? -1, success: age) else { return }
+            manual: manual, attempt: lastAttempt.map { now.timeIntervalSince($0) } ?? -1, success: age) else {
+            if manual && preferences.enabled, let lastAttempt, now.timeIntervalSince(lastAttempt) < 60 { status = "Recently refreshed. Try again in a minute." }; return
+        }
         lastAttempt = now; busy = true; status = "Fetching public headlines from DR…"
         let topic = preferences.topic, url = SharedPolicy.feedURL(topic: preferences.topic)
         let task: Task<String, Error>
@@ -122,7 +150,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         else {
             let session = session
             task = Task {
-                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.5.1", forHTTPHeaderField: "User-Agent")
+                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.0", forHTTPHeaderField: "User-Agent")
                 let (bytes, response) = try await session.bytes(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.expectedContentLength <= 1_000_000 else { throw URLError(.badServerResponse) }
                 var data = Data()
@@ -138,11 +166,50 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
             let articles = try Self.parseFeed(xml, topic: topic)
             guard !articles.isEmpty else { throw URLError(.cannotParseResponse) }
             cache.articles = articles; cache.fetched = now.timeIntervalSince1970; cache.topic = topic; rotation = 0
-            save(); selectCards(); status = "Updated from DR · " + now.formatted(date: .abbreviated, time: .shortened)
+            failedRequests = 0; nextRetry = nil
+            save()
+            if cards.isEmpty || manual || !pageVisible { selectCards() } else { hasUpdates = true }
+            status = "Updated from DR · " + now.formatted(date: .abbreviated, time: .shortened)
         } catch is CancellationError { }
-        catch { if preferences.enabled && !task.isCancelled { status = "News could not be updated. Cached content remains available. " + error.localizedDescription } }
+        catch { if preferences.enabled && !task.isCancelled {
+            failedRequests = min(16, failedRequests + 1); nextRetry = clock().addingTimeInterval(SharedPolicy.retryDelay(failures: failedRequests))
+            status = "News could not be updated. Cached content remains available. " + error.localizedDescription
+        } }
     }
-    public func nextGroup() { rotation += 3; selectCards() }
+    public func nextGroup() { rotation += 3; hasUpdates = false; selectCards() }
+    public func acceptUpdates() { rotation = 0; hasUpdates = false; selectCards() }
+    public func setBookPage(_ page: Int) { preferences.lastBookPage = min(1, max(0, page)); save() }
+    public func simplifiedText(for article: NewsArticle) -> String? { simplified[excerptKey(article)]?.text }
+    public func simplifiedModel(for article: NewsArticle) -> String? { simplified[excerptKey(article)]?.model }
+    public func simplificationState(for article: NewsArticle) -> String? { simplificationStates[excerptKey(article)] }
+    private func excerptKey(_ article: NewsArticle) -> String {
+        // Source text, rather than a URL alone, versions the cached derivative.
+        article.id + ":v1:" + SHA256.hash(data: Data((article.summary + "\u{1f}" + SharedPolicy.rewritePrompt + "\u{1f}" + meaningPreservationWords.joined(separator: "\n")).utf8)).map { String(format: "%02X", $0) }.joined()
+    }
+    public func simplify(_ article: NewsArticle) async {
+        let key = excerptKey(article)
+        if simplified[key] != nil { return }
+        let decision = SharedPolicy.rewrite(sourceAllows: SharedPolicy.sourceCapability(2), textPresent: !article.summary.isEmpty, modelInstalled: modelAvailable?() ?? (simplifyExcerpt != nil), reading: readingActive())
+        guard decision == 1 else {
+            simplificationStates[key] = decision == 2 ? "Pause screen reading to simplify this excerpt. The original remains available." : "Install the optional local language model to simplify RSS excerpts."
+            return
+        }
+        guard generationTask == nil, let simplifyExcerpt else { return }
+        simplificationStates[key] = "Simplifying this RSS excerpt locally…"
+        let task = Task { try await simplifyExcerpt(article.summary) }; generationTask = task
+        let timeout = Task { try? await Task.sleep(for: .seconds(90)); if !Task.isCancelled { task.cancel() } }
+        defer { timeout.cancel(); generationTask = nil }
+        do {
+            let text = try await task.value
+            guard !task.isCancelled else { throw CancellationError() }
+            guard SharedPolicy.summaryValid(source: article.summary, summary: text, preservationWords: meaningPreservationWords) else { throw URLError(.cannotDecodeContentData) }
+            let version = NewsShortVersion(text: text, model: modelIdentity(), created: clock().timeIntervalSince1970)
+            simplified[key] = version; simplificationStates.removeValue(forKey: key)
+            if simplified.count > 64 { simplified = [key: version] }
+            cache.shortVersions = simplified; save()
+        } catch { simplificationStates[key] = "Short version unavailable; the original excerpt remains available." }
+    }
+    public func cancelGeneration() { generationTask?.cancel() }
     public func markSeen(_ article: NewsArticle) {
         let now = clock().timeIntervalSince1970
         cache.seen[article.id] = now; cache.seenTitles[article.title] = now
@@ -152,8 +219,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     }
     public func selectCards() {
         let now = clock().timeIntervalSince1970
-        let structural: Set<String> = ["og", "er", "en", "et", "at", "det", "de", "den", "der", "i", "på", "af", "til", "med", "som"]
-        let units = Array(Set(learningUnits().filter { !structural.contains($0.lowercased()) }).sorted().prefix(200))
+        let units = Array(Set(learningUnits().map { $0.precomposedStringWithCanonicalMapping.lowercased() }.filter { !excludedLearningUnits.contains($0) }).sorted().prefix(200))
         var ranked = cache.articles.filter { $0.valid && $0.topic == preferences.topic }.map { article -> NewsCard in
             let matches = Array(units.filter { SharedPolicy.contains(article.title + " " + article.summary, unit: $0) }.prefix(5))
             let seen = cache.seen[article.id].map { now - $0 <= 604800 } == true || cache.seenTitles.contains { now - $0.value <= 604800 && SharedPolicy.sameStory(article.title, $0.key) }
@@ -177,16 +243,22 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
                 try? await Task.sleep(for: .seconds(60)); guard let self, !Task.isCancelled else { return }
                 await self.refresh(background: true)
                 let now = self.clock(), hour = Calendar.current.component(.hour, from: now)
+                self.dayFormat.timeZone = .autoupdatingCurrent
                 let day = self.dayFormat.string(from: now)
+                let candidates = self.cards.map(\.article).filter { !(self.preferences.lastDigestIds ?? []).contains($0.id) && now.timeIntervalSince1970 - $0.published >= 0 && now.timeIntervalSince1970 - $0.published <= 604800 }
                 guard SharedPolicy.digest(enabled: self.preferences.enabled, background: self.preferences.background,
-                    notify: self.preferences.notify, permitted: self.deliverDigest != nil, reading: self.readingActive(),
+                    notify: self.preferences.notify, permitted: self.deliverDigest != nil, reading: self.readingActive() || self.pageVisible,
                     quiet: hour < 9 || hour >= 21 || hour != self.preferences.digestHour,
-                    sent: self.preferences.lastDigestDay == day ? 1 : 0, fresh: self.cards.count) else { continue }
-                if await self.deliverDigest?(self.cards.map(\.article)) == true { self.preferences.lastDigestDay = day; self.save() }
+                    sent: self.preferences.lastDigestDay == day ? 1 : 0, fresh: candidates.count) else { continue }
+                if await self.deliverDigest?(candidates) == true {
+                    self.preferences.lastDigestDay = day
+                    self.preferences.lastDigestIds = Array(((self.preferences.lastDigestIds ?? []) + candidates.prefix(1).map(\.id)).suffix(100))
+                    self.save()
+                }
             }
         }
     }
-    public func stop() { fetchTask?.cancel(); backgroundTask?.cancel(); backgroundTask = nil }
+    public func stop() { fetchTask?.cancel(); cancelGeneration(); backgroundTask?.cancel(); backgroundTask = nil }
     public static func parseFeed(_ xml: String, topic: Int) throws -> [NewsArticle] {
         guard xml.utf8.count <= 1_000_000, !xml.localizedCaseInsensitiveContains("<!DOCTYPE"), !xml.localizedCaseInsensitiveContains("<!ENTITY") else { throw URLError(.cannotParseResponse) }
         let parser = XMLParser(data: Data(xml.utf8)); parser.shouldResolveExternalEntities = false

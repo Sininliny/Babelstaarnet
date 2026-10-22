@@ -18,13 +18,19 @@ struct NewsView: View {
                     })) { ForEach(0..<NewsService.topics.count, id: \.self) { Text(NewsService.topics[$0]).tag($0) } }.frame(maxWidth: 240)
                     Button(news.busy ? "Fetching…" : "Refresh") { Task { await news.refresh(manual: true) } }.disabled(!news.preferences.enabled || news.busy)
                     Button("Another group") { news.nextGroup() }
+                    Button("Show new content") { news.acceptUpdates() }.disabled(!news.hasUpdates)
                 }
-                Text(news.status).font(.caption).foregroundStyle(.secondary)
+                Text(news.status).font(.caption).foregroundStyle(.secondary).frame(minHeight: 30, alignment: .topLeading)
                 ForEach(news.cards) { card in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(card.article.title).font(.title3.weight(.semibold)).textSelection(.enabled)
                         Text("DR · " + card.article.publishedDate.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                         if !card.article.summary.isEmpty { Text(card.article.summary).textSelection(.enabled) }
+                        if let text = news.simplifiedText(for: card.article) {
+                            Text("On-device AI · simplified RSS excerpt · " + (news.simplifiedModel(for: card.article) ?? "local model") + " · compare above").font(.caption).foregroundStyle(.secondary)
+                            Text(text).textSelection(.enabled)
+                        }
+                        if let state = news.simplificationState(for: card.article) { Text(state).font(.caption).foregroundStyle(.secondary) }
                         if !card.matches.isEmpty { Text("Title / summary includes: " + card.matches.joined(separator: " · ")).font(.caption).foregroundStyle(Color.accentColor) }
                         HStack {
                             Button("Read original · browser / internet") {
@@ -32,11 +38,12 @@ struct NewsView: View {
                             }
                             Button("Already seen") { news.markSeen(card.article) }
                         }
+                        if !card.article.summary.isEmpty { Button("Simplify excerpt · local AI") { Task { await news.simplify(card.article) } } }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
                 }
                 if news.cards.isEmpty && !news.busy { Text("No suitable new content yet. Try a different topic or come back later.").foregroundStyle(.secondary) }
             }.padding(22).frame(maxWidth: .infinity, alignment: .leading)
-        }.task { await news.refresh() }
+        }.task { news.pageVisible = true; await news.refresh() }.onDisappear { news.pageVisible = false }
     }
 }
 

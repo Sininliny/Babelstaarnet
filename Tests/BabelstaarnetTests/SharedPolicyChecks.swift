@@ -2,6 +2,7 @@ import BabelCore
 import BabelNews
 import BabelPolicy
 import Foundation
+import LanguageDanish
 
 @main enum SharedPolicyChecks {
     @MainActor static func main() async throws {
@@ -16,6 +17,10 @@ import Foundation
             func s(_ n: Int) -> String { args[n] as! String }
             let result: Double
             switch item["operation"] as! String {
+            case "retry": result = Double(bp_retry_delay(i(0)))
+            case "source": result = Double(bp_source_capability(i(0)))
+            case "summary": result = SharedPolicy.summaryValid(source: s(0), summary: s(1), preservationWords: SourceLanguage.danish.meaningPreservationWords) ? 1 : 0
+            case "target": result = Double(bp_target_allowed(i(0),i(1)))
             case "anchor": result = Double(bp_anchor(i(0),i(1),i(2),i(3),i(4),i(5)))
             case "challenge": result = Double(bp_challenge(i(0),i(1),i(2),i(3),i(4),i(5)))
             case "fetch": result = Double(bp_fetch(i(0),i(1),i(2),i(3),d(4),d(5)))
@@ -44,6 +49,19 @@ import Foundation
         news.configure(enabled: true, background: false, notify: false, topic: 0, hour: 18)
         await news.refresh(); precondition(downloads == 1 && news.cards.count == 2)
         await news.refresh(); precondition(downloads == 1)
+        news.meaningPreservationWords = SourceLanguage.danish.meaningPreservationWords
+        var reading = true, generations = 0
+        news.readingActive = { reading }; news.modelAvailable = { true }; news.modelIdentity = { "fixture-v1" }
+        news.simplifyExcerpt = { _ in generations += 1; return "En tydelig besked." }
+        await news.simplify(parsed[0]); precondition(generations == 0)
+        reading = false; await news.simplify(parsed[0]); await news.simplify(parsed[0])
+        precondition(generations == 1 && news.simplifiedText(for: parsed[0]) == "En tydelig besked." && news.simplifiedModel(for: parsed[0]) == "fixture-v1")
+        let restored = NewsService(directory: directory, clock: { now }, download: { _ in preconditionFailure("Cache accessed HTTP") })
+        restored.meaningPreservationWords = news.meaningPreservationWords
+        precondition(restored.simplifiedText(for: parsed[0]) == "En tydelig besked.")
+        news.configure(enabled: true, background: true, notify: true, topic: 0, hour: 18)
+        news.pageVisible = true; await news.refresh(manual: true, background: true); precondition(downloads == 1)
+        news.pageVisible = false
         news.configure(enabled: false, background: true, notify: true, topic: 0, hour: 18)
         await news.refresh(manual: true, background: true)
         precondition(downloads == 1 && !news.preferences.background && !news.preferences.notify)

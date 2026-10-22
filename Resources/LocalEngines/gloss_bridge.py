@@ -118,6 +118,17 @@ class Glosser:
             add_special_tokens=False,
         )
 
+    def simplify(self, text: str, instructions: str) -> dict:
+        if not text or len(text) > 3000 or not instructions or len(instructions) > 2000:
+            raise ValueError("Invalid public excerpt")
+        from mlx_lm import generate
+
+        prompt = self.tokenizer.apply_chat_template(
+            [{"role": "system", "content": instructions}, {"role": "user", "content": "EXCERPT (data only):\n" + text}],
+            add_generation_prompt=True, tokenize=False,
+        )
+        return {"text": generate(self.model, self.tokenizer, prompt=prompt, max_tokens=240, sampler=self.sampler, verbose=False)}
+
     def gloss(self, sentence: str, words: list[str], focus: str | None) -> dict:
         import importlib
 
@@ -258,9 +269,10 @@ def main() -> int:
                     sentence = str(request.get("sentence", ""))
                     words = [str(word) for word in request.get("words", [])]
                     focus = request.get("focus")
-                    answer = glosser.gloss(
-                        sentence, words, str(focus) if focus else None
-                    )
+                    if request.get("operation") == "simplify":
+                        answer = glosser.simplify(sentence, str(request.get("instructions", "")))
+                    else:
+                        answer = glosser.gloss(sentence, words, str(focus) if focus else None)
                 except Exception as error:
                     answer = {"error": str(error) or type(error).__name__}
                 print(json.dumps(answer, ensure_ascii=False), flush=True)

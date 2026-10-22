@@ -11,6 +11,7 @@ extern "C" {
 #endif
 /* Stable C ABI. No UI, filesystem, network, global state or model dependency. */
 BP_API int32_t bp_version(void);
+BP_API int32_t bp_retry_delay(int32_t failures);
 BP_API int32_t bp_anchor(int32_t level, int32_t supported, int32_t focus,
     int32_t new_sense, int32_t cooldown, int32_t challenge_selected);
 BP_API int32_t bp_challenge(int32_t supported, int32_t reliable,
@@ -29,6 +30,10 @@ BP_API int32_t bp_contains(const char *text, const char *unit);
 BP_API int32_t bp_same_story(const char *a, const char *b);
 BP_API const char *bp_feed_url(int32_t topic);
 BP_API const char *bp_rewrite_prompt(void);
+BP_API int32_t bp_summary_valid(const char *source, const char *summary, const char *preservation_words);
+BP_API int32_t bp_target_allowed(int32_t target_count, int32_t already_target);
+/* DR: 0 public RSS metadata, 1 full-article fetch/adaptation, 2 local RSS excerpt simplification. */
+BP_API int32_t bp_source_capability(int32_t capability);
 #ifdef __cplusplus
 }
 #endif

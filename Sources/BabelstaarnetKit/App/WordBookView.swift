@@ -14,6 +14,7 @@ public struct WordBookView: View {
     public init(model: AppModel) {
         self.model = model
         self.book = model.wordBook
+        _query = StateObject(wrappedValue: Query(news: model.news.preferences.lastBookPage == 1))
     }
 
     @MainActor
@@ -22,6 +23,7 @@ public struct WordBookView: View {
         @Published var filter = Filter.all
         @Published var review: WordReviewSession?
         @Published var news = false
+        init(news: Bool = false) { self.news = news }
     }
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -47,6 +49,8 @@ public struct WordBookView: View {
             }
         }
         .frame(minWidth: 460, minHeight: 360)
+        .onChange(of: query.news) { _, value in model.news.setBookPage(value ? 1 : 0) }
+        .onChange(of: model.newsWindowRequest) { _, _ in query.news = true }
         .task {
             await model.fillMissingWordBookMeanings()
         }

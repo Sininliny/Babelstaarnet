@@ -29,9 +29,13 @@ final class OverlayWindowController {
     private let bubbleState = OverlayState()
     var supportedReading = false
     var translateSentence: ((String) async throws -> String)?
+    var previousMeaning: ((String) -> String?)?
+    var learnedBefore: ((String) -> Bool)?
     private var sentenceMeaningTask: Task<Void, Never>?
     private var visibleAnchorKeys = Set<String>()
     private var helpHistory: [String: [Date]] = [:]
+    private var learningTargets = Set<String>()
+    func resetLearningSession() { helpHistory.removeAll(); learningTargets.removeAll(); visibleAnchorKeys.removeAll() }
     private var overlays: [CGDirectDisplayID: DisplayOverlay] = [:]
     private var mouseTimer: Timer?
     private var hoverSpeechTimer: Timer?
@@ -465,6 +469,7 @@ final class OverlayWindowController {
         for word: WordRegion,
         in region: TextRegion
     ) -> HoverCard {
+        bubbleState.sentenceMeaningShortcut = hotKeyConfiguration.sentenceMeaning.displayText
         let key = learnerProfile.normalizedKey(for: word.sourceText)
         let expanded = expandedEnglishWords.contains(key)
         let now = Date()
@@ -494,10 +499,18 @@ final class OverlayWindowController {
             let candidateKey = learnerProfile.normalizedKey(for: candidate)
             let level = knowledgeLevelForWord(candidate)
             let progress = learnerProfile.progress(for: candidate, at: now)
+            let currentMeaning = region.words.first { learnerProfile.normalizedKey(for: $0.sourceText) == candidateKey }?.translatedText
+            let priorMeaning = previousMeaning?(candidateKey)
+            let reliableMeaning = priorMeaning?.isEmpty == false && currentMeaning?.isEmpty == false && priorMeaning?.lowercased() == currentMeaning?.lowercased() && currentMeaning?.lowercased() != candidateKey
+            var newSense = false
+            if let previous = previousMeaning?(candidateKey), !previous.isEmpty, let currentMeaning, !currentMeaning.isEmpty,
+               learnerProfile.normalizedKey(for: currentMeaning) != candidateKey { newSense = previous.lowercased() != currentMeaning.lowercased() }
             let helps = (helpHistory[candidateKey] ?? []).filter { now.timeIntervalSince($0) < 600 }.count
-            if candidateKey != key && level == 3 && SharedPolicy.challenge(supported: supportedReading, reliable: true, learned: progress.knownConfirmationCount > 0,
-                helps: helps, used: selectedChallenge == nil ? 0 : 1) { selectedChallenge = candidateKey }
-            let anchor = visibleAnchorKeys.contains(candidateKey) || SharedPolicy.anchor(level: level, supported: supportedReading, cooldown: helps >= 2, selected: selectedChallenge == candidateKey)
+            if candidateKey != key && level == 3 && SharedPolicy.challenge(supported: supportedReading, reliable: reliableMeaning, learned: learnedBefore?(candidateKey) ?? (progress.knownConfirmationCount > 0),
+                newSense: newSense, helps: helps, used: selectedChallenge == nil ? 0 : 1) && SharedPolicy.targetAllowed(count: learningTargets.count, already: learningTargets.contains(candidateKey)) {
+                selectedChallenge = candidateKey; learningTargets.insert(candidateKey)
+            }
+            let anchor = visibleAnchorKeys.contains(candidateKey) || SharedPolicy.anchor(level: level, supported: supportedReading, newSense: newSense, cooldown: helps >= 2, selected: selectedChallenge == candidateKey)
             if anchor { visibleAnchorKeys.insert(candidateKey) }
             return anchor ? .learning : .known
         }
@@ -1103,6 +1116,8 @@ final class OverlayWindowController {
             markCurrentWordUnknown()
         case .togglePin:
             toggleBubblePin()
+        case .sentenceMeaning:
+            requestSentenceMeaning()
         }
     }
 

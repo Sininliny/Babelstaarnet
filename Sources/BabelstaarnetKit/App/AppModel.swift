@@ -14,6 +14,8 @@ import UserNotifications
 @MainActor
 public final class AppModel: ObservableObject {
     public let news = NewsService()
+    @Published public private(set) var newsWindowRequest = 0
+    private let newsNotifications = NewsNotificationDelegate()
     @Published var supportedReading = UserDefaults.standard.bool(forKey: "reading.supported") {
         didSet { UserDefaults.standard.set(supportedReading, forKey: "reading.supported"); overlayController.supportedReading = supportedReading }
     }
@@ -270,6 +272,11 @@ public final class AppModel: ObservableObject {
         }
         hasStarted = true
         overlayController.supportedReading = supportedReading
+        overlayController.previousMeaning = { [weak self] key in self?.wordBook.entries.first(where: { $0.id == key })?.meaning }
+        overlayController.learnedBefore = { [weak self] key in
+            guard let self else { return false }
+            return self.wordBook.entries.contains(where: { $0.id == key }) || self.learnerProfileStore.progress(forKey: key).knownConfirmationCount > 0
+        }
         overlayController.translateSentence = { [weak self] text in
             guard let self else { throw CancellationError() }
             if self.openSourceEnginesReady { return try await self.argosTranslationService.translate([text]).first ?? "" }
@@ -285,16 +292,28 @@ public final class AppModel: ObservableObject {
             return saved + self.learnerProfileStore.recentLearningUnits()
         }
         news.readingActive = { [weak self] in self?.learningModeActive == true }
+        news.meaningPreservationWords = languages.source.meaningPreservationWords
+        news.excludedLearningUnits = languages.source.structuralWords
+        news.modelAvailable = { [weak self] in self?.contextualGlossService.isInstalled == true }
+        news.modelIdentity = { [weak self] in self?.contextualGlossService.modelIdentity ?? "Local MLX" }
+        news.simplifyExcerpt = { [weak self] text in
+            guard let self else { throw CancellationError() }
+            return try await self.contextualGlossService.simplifyPublicExcerpt(text)
+        }
         news.deliverDigest = { [weak self] articles in
             let center = UNUserNotificationCenter.current()
             let settings = await center.notificationSettings()
-            guard let self, self.news.preferences.enabled, self.news.preferences.notify, !self.learningModeActive,
+            guard let self, self.news.preferences.enabled, self.news.preferences.notify, !self.learningModeActive, !self.news.pageVisible,
                   settings.authorizationStatus == .authorized, let first = articles.first else { return false }
             let content = UNMutableNotificationContent(); content.title = "DR · something new to read"; content.body = first.title
             content.interruptionLevel = .passive
             do { try await center.add(UNNotificationRequest(identifier: "Babelstaarnet.news.digest", content: content, trigger: nil)); return true } catch { return false }
         }
         news.startBackground()
+        newsNotifications.onOpen = { [weak self] in
+            guard let self else { return }; self.news.setBookPage(1); self.newsWindowRequest += 1
+        }
+        UNUserNotificationCenter.current().delegate = newsNotifications
         screenPermissionGranted = captureService.hasPermission
         refreshSpeechVoice()
         hotKeyService.register(
@@ -798,6 +817,8 @@ public final class AppModel: ObservableObject {
         }
 
         learningModeActive = true
+        overlayController.resetLearningSession()
+        news.cancelGeneration()
         detectionSuspendedForIdle = false
         consecutiveScanFailures = 0
         contextualGlossCoordinator.resetFailure()
@@ -813,6 +834,8 @@ public final class AppModel: ObservableObject {
     }
 
     func deactivateLearningMode() {
+        pendingSentenceHelp?.1.resume(throwing: CancellationError())
+        pendingSentenceHelp = nil
         learningModeActive = false
         detectionSuspendedForIdle = false
         scanGeneration = UUID()

@@ -19,6 +19,10 @@ internal sealed class HoverSession : IDisposable
     private Dictionary<string, string> glosses = [];
     private readonly HashSet<string> contextualKeys = [];
     private readonly HashSet<string> visibleAnchors = [];
+    private readonly HashSet<string> newSenseKeys = [];
+    private readonly HashSet<string> learningTargets = [];
+    public Func<string, string?>? PreviousMeaning { get; set; }
+    public bool NewSense => Current is { } hit && newSenseKeys.Contains(ReadingPolicy.Key(hit.Word.Text));
     private readonly Dictionary<string, DateTimeOffset[]> helpHistory = [];
     private IReadOnlyList<BridgeToken>? projectedTokens, projectedExplanation;
     public HoveredText? Current { get; private set; }
@@ -37,7 +41,9 @@ internal sealed class HoverSession : IDisposable
             if (projectedTokens is not null) return projectedTokens;
             if (Current is null) return projectedTokens = [];
             projectedTokens = BridgePresentation.Tokens(Current, glosses, known, KnowledgeLevel, SupportedReading, LearnedBefore,
-                key => helpHistory.GetValueOrDefault(key, []).Count(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)), visibleAnchors.Contains);
+                key => helpHistory.GetValueOrDefault(key, []).Count(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)), key => visibleAnchors.Contains(key) || newSenseKeys.Contains(key),
+                key => !newSenseKeys.Contains(key) && SharedPolicy.bp_target_allowed(learningTargets.Count, learningTargets.Contains(key) ? 1 : 0) != 0, key => learningTargets.Add(key),
+                key => PreviousMeaning?.Invoke(key) is { Length: > 0 } prior && ReadingPolicy.TryGloss(glosses, key, out var answer) && ReadingPolicy.Key(prior) == ReadingPolicy.Key(answer) && ReadingPolicy.Key(answer) != key);
             var words = ReadingPolicy.Words().Matches(Current.Line.Text);
             for (int i = 0; i < Math.Min(words.Count, projectedTokens.Count); i++) if (projectedTokens[i].English) visibleAnchors.Add(ReadingPolicy.Key(words[i].Value));
             return projectedTokens;
@@ -127,8 +133,17 @@ internal sealed class HoverSession : IDisposable
         void Apply(ContextualAnswer answer)
         {
             token.ThrowIfCancellationRequested();
-            foreach (var pair in answer.Glosses) { glosses[pair.Key] = pair.Value; contextualKeys.Add(pair.Key); }
-            if (answer.Focus.Meaning.Length > 0) { Meaning = answer.Focus.Meaning; glosses[ReadingPolicy.Key(hit.Word.Text)] = Meaning; contextualKeys.Add(ReadingPolicy.Key(hit.Word.Text)); }
+            foreach (var pair in answer.Glosses)
+            {
+                glosses[pair.Key] = pair.Value; contextualKeys.Add(pair.Key);
+                if (PreviousMeaning?.Invoke(pair.Key) is { Length: > 0 } previous && ReadingPolicy.Key(previous) != ReadingPolicy.Key(pair.Value)) newSenseKeys.Add(pair.Key);
+            }
+            if (answer.Focus.Meaning.Length > 0)
+            {
+                string key = ReadingPolicy.Key(hit.Word.Text); Meaning = answer.Focus.Meaning;
+                glosses[key] = Meaning; contextualKeys.Add(key);
+                if (PreviousMeaning?.Invoke(key) is { Length: > 0 } previous && ReadingPolicy.Key(previous) != ReadingPolicy.Key(Meaning)) newSenseKeys.Add(key);
+            }
             if (answer.Focus.Explanation.Length > 0) Explanation = answer.Focus.Explanation;
             if (answer.Focus.Lemma.Length > 0) LemmaFound?.Invoke(hit.Word.Text, answer.Focus.Lemma);
             Publish();
@@ -159,7 +174,8 @@ internal sealed class HoverSession : IDisposable
     {
         pending?.Cancel(); pending = null; sentenceRequest?.Cancel(); sentenceRequest = null; Current = null; Meaning = ""; Explanation = ""; SentenceMeaning = ""; SentenceHelp = false; glosses = []; contextualKeys.Clear(); InvalidateProjection();
         visibleAnchors.Clear();
+        newSenseKeys.Clear();
     }
-    public void ResetLearningSession() { helpHistory.Clear(); Clear(); }
+    public void ResetLearningSession() { helpHistory.Clear(); learningTargets.Clear(); Clear(); }
     public void Dispose() => Clear();
 }

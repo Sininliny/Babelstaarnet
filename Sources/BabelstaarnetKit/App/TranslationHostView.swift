@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Translation
 
 public struct TranslationHostView: View {
@@ -14,5 +15,9 @@ public struct TranslationHostView: View {
             .translationTask(model.translationConfiguration) { session in
                 await model.translatePendingRegions(using: session)
             }
+            .onChange(of: model.newsWindowRequest) { _, _ in
+                openWindow(id: WordBookView.windowID); NSApp.activate(ignoringOtherApps: true)
+            }
     }
+    @Environment(\.openWindow) private var openWindow
 }

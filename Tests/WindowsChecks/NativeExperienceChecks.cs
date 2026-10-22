@@ -47,6 +47,11 @@ internal static class NativeExperienceChecks
             Check(SentenceBoundary.StopLocations(text).Count == item.GetProperty("stops").GetInt32(), "Shared sentence stops must agree on both platforms.");
             Check(SentenceBoundary.EndsSentence(text) == item.GetProperty("ends").GetBoolean(), "Shared sentence ending must agree on both platforms.");
         }
+        foreach (var item in data.RootElement.GetProperty("learningPresentation").EnumerateArray())
+        {
+            int B(string name) => item.GetProperty(name).GetBoolean() ? 1 : 0;
+            Check(SharedPolicy.bp_anchor(item.GetProperty("level").GetInt32(), B("supported"), B("focus"), B("newSense"), B("cooldown"), B("selected")) == B("anchor"), "Shared reading help must remain available without changing a word's level.");
+        }
     }
     private static void PixelComparison()
     {

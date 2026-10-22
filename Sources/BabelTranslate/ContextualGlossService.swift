@@ -1,6 +1,7 @@
 import BabelCore
 import Foundation
 import Synchronization
+import CryptoKit
 
 public enum ContextualGlossError: LocalizedError {
     case unavailable
@@ -93,6 +94,30 @@ public actor ContextualGlossService {
     private var output: FileHandle?
     private var responseBuffer = Data()
     private let recentErrors = RecentOutput()
+    private nonisolated let cancellableWorker = Mutex<Process?>(nil)
+    public nonisolated var modelIdentity: String {
+        let config = (try? Data(contentsOf: modelDirectory.appendingPathComponent("config.json"))) ?? Data()
+        return "Local MLX · " + SHA256.hash(data: config).prefix(6).map { String(format: "%02X", $0) }.joined()
+    }
+
+    public func simplifyPublicExcerpt(_ text: String) async throws -> String {
+        guard text.count <= 3000, !text.isEmpty, isInstalled else { throw ContextualGlossError.unavailable }
+        try Task.checkCancellation()
+        return try await withTaskCancellationHandler {
+            do {
+                try ensureServer(); try Task.checkCancellation()
+                guard let input, let output else { throw ContextualGlossError.unavailable }
+                let object = ["operation": "simplify", "sentence": text, "instructions": SharedPolicy.rewritePrompt]
+                var data = try JSONSerialization.data(withJSONObject: object); data.append(0x0A); try input.write(contentsOf: data)
+                let reply = try JSONSerialization.jsonObject(with: readResponseLine(from: output)) as? [String: Any]
+                try Task.checkCancellation()
+                guard let answer = reply?["text"] as? String else { throw ContextualGlossError.invalidResponse }
+                return answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            } catch { resetServer(); throw error }
+        } onCancel: {
+            self.cancellableWorker.withLock { worker in if worker?.isRunning == true { worker?.terminate() } }
+        }
+    }
 
     /// Whether everything the worker needs is on disk.
     ///
@@ -259,6 +284,7 @@ public actor ContextualGlossService {
         }
 
         self.process = process
+        cancellableWorker.withLock { $0 = process }
         input = inputPipe.fileHandleForWriting
         output = outputPipe.fileHandleForReading
     }
@@ -285,6 +311,7 @@ public actor ContextualGlossService {
     }
 
     private func resetServer() {
+        cancellableWorker.withLock { $0 = nil }
         if process?.isRunning == true {
             process?.terminate()
         }

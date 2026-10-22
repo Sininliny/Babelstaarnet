@@ -47,6 +47,7 @@ See [the design guide](WINDOWS_DESIGN.md) for the conventions.
 | 1 | Mark the current word known |
 | 2 | Mark unknown and save to Word Book |
 | 3 | Pin / unpin and save the word |
+| 4 | Show full sentence meaning / return to the bridge |
 | Hold Alt | Keep the bubble while moving into its buttons |
 
 **Settings → Shortcuts** records replacements and changes the hold modifier.
@@ -215,3 +216,22 @@ Additional compiled `WindowsChecks.exe` modes:
 
 Microsoft references: [Windows OCR](https://learn.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrengine),
 [desktop Windows Runtime APIs](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-apis-desktop-apps).
+
+## Optional DR news
+
+**Word Book → Read something new** offers DR's public RSS headlines and excerpts.
+It is off by default and explicitly labelled as an internet feature. Topic choice,
+recent learning matches and seen stories stay on this PC; requests do not contain
+your vocabulary or screen content. DR still sees ordinary connection information.
+**Read original** opens your browser. **Simplify excerpt · local AI** uses an already
+installed contextual model, shows the original alongside it, and pauses for reading.
+
+Enable background refresh and daily digests separately under **Settings → News
+(internet)**. Digests work while the app runs, at most once daily, outside reading
+and quiet hours. Turning news off turns both options off. Cached content remains
+available; an unavailable feed never blocks offline translation or speech.
+
+Source builds require CMake and Visual Studio C++ build tools in addition to .NET
+10 and Python. The build includes `babel_policy.dll`, the same native learning and
+news rules statically compiled into the Mac client. End users need neither CMake
+nor Visual Studio. See [cross-platform development](DEVELOPMENT.md).

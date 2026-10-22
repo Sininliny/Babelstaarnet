@@ -77,6 +77,10 @@ enum HotKeyConfigurationChecks {
         )
         precondition(migrated.isValid, "Migrated configuration is unusable")
 
+        stored.removeValue(forKey: "sentenceMeaning")
+        stored["known"] = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(AppShortcut(keyCode: UInt32(kVK_ANSI_4), modifiers: [])))
+        let withSentenceHelp = try! JSONDecoder().decode(HotKeyConfiguration.self, from: JSONSerialization.data(withJSONObject: stored))
+        precondition(withSentenceHelp.known.keyCode == UInt32(kVK_ANSI_4) && withSentenceHelp.sentenceMeaning != withSentenceHelp.known && withSentenceHelp.isValid)
         print("Editable shortcut configuration checks passed")
     }
 }
