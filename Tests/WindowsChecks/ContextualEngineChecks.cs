@@ -3,6 +3,7 @@ using Babelstaarnet.Windows;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,7 +37,17 @@ internal static class ContextualEngineChecks
         const string excerpt = "Regeringen vil bruge 20 millioner kroner på grøn energi.";
         string simplified = await restarted.SimplifyPublicExcerptAsync(excerpt, deadline.Token);
         if (string.IsNullOrWhiteSpace(simplified)) throw new Exception("Local RSS excerpt generation returned no text.");
-        Console.WriteLine("Local excerpt generation completed; conservative display check: " + SharedPolicy.SummaryValid(excerpt, simplified, DanishLanguage.Shared.MeaningPreservationWords));
+        bool displayAllowed = SharedPolicy.SummaryValid(excerpt, simplified, DanishLanguage.Shared.MeaningPreservationWords);
+        if (!displayAllowed) throw new Exception("The controlled Danish excerpt must preserve its language and facts before display.");
+        Console.WriteLine("Local excerpt generation completed; conservative display check: " + displayAllowed + "\nFixture short version: " + simplified);
+        using (var cancelNews = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+        {
+            var cancellationWatch = Stopwatch.StartNew();
+            try { await restarted.SimplifyPublicExcerptAsync(string.Join(" ", Enumerable.Repeat(excerpt, 20)), cancelNews.Token); throw new Exception("Canceled news inference completed unexpectedly."); }
+            catch (OperationCanceledException) { }
+            if (cancellationWatch.Elapsed > TimeSpan.FromSeconds(5)) throw new Exception("News inference must release the local model promptly for reading.");
+            Console.WriteLine("Owned news model process yielded to cancellation.");
+        }
         File.WriteAllText(Path.Combine(data, "..", "windows-contextual-check.json"), System.Text.Json.JsonSerializer.Serialize(new { verb, noun, cached = true }));
         Console.WriteLine("Real offline contextual meaning, Danish explanation, lemma and cache checks passed.");
         return 0;

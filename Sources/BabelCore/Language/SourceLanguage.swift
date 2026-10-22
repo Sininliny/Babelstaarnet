@@ -141,6 +141,7 @@ public struct SourceLanguage: Sendable {
     /// learner feedback always overrides this prior.
     public let structuralWords: Set<String>
     public let meaningPreservationWords: [String]
+    public let newsSimplificationInstructions: String
     /// How this language says "means X", used when there is no bridge to show.
     public let meansPhrase: @Sendable (String) -> String
     /// What a local language model is asked, in this language, for the sense
@@ -171,6 +172,7 @@ public struct SourceLanguage: Sendable {
         vacuousExplanations: Set<String> = [],
         structuralWords: Set<String> = [],
         meaningPreservationWords: [String] = [],
+        newsSimplificationInstructions: String = "",
         contextualGlossPrompts: ContextualGlossPrompts? = nil,
         meansPhrase: @escaping @Sendable (String) -> String
     ) {
@@ -189,6 +191,7 @@ public struct SourceLanguage: Sendable {
         self.vacuousExplanations = vacuousExplanations
         self.structuralWords = structuralWords
         self.meaningPreservationWords = meaningPreservationWords
+        self.newsSimplificationInstructions = newsSimplificationInstructions
         self.meansPhrase = meansPhrase
         self.contextualGlossPrompts = contextualGlossPrompts
         self.locale = Locale(identifier: localeIdentifier)

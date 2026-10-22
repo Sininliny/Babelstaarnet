@@ -21,6 +21,7 @@ internal sealed class HoverSession : IDisposable
     private readonly HashSet<string> visibleAnchors = [];
     private readonly HashSet<string> newSenseKeys = [];
     private readonly HashSet<string> learningTargets = [];
+    private readonly HashSet<string> cooledUnits = [];
     public Func<string, string?>? PreviousMeaning { get; set; }
     public bool NewSense => Current is { } hit && newSenseKeys.Contains(ReadingPolicy.Key(hit.Word.Text));
     private readonly Dictionary<string, DateTimeOffset[]> helpHistory = [];
@@ -41,7 +42,7 @@ internal sealed class HoverSession : IDisposable
             if (projectedTokens is not null) return projectedTokens;
             if (Current is null) return projectedTokens = [];
             projectedTokens = BridgePresentation.Tokens(Current, glosses, known, KnowledgeLevel, SupportedReading, LearnedBefore,
-                key => helpHistory.GetValueOrDefault(key, []).Count(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)), key => visibleAnchors.Contains(key) || newSenseKeys.Contains(key),
+                key => cooledUnits.Contains(key) || cooledUnits.Count >= 256 ? 2 : helpHistory.GetValueOrDefault(key, []).Count(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)), key => visibleAnchors.Contains(key) || newSenseKeys.Contains(key),
                 key => !newSenseKeys.Contains(key) && SharedPolicy.bp_target_allowed(learningTargets.Count, learningTargets.Contains(key) ? 1 : 0) != 0, key => learningTargets.Add(key),
                 key => PreviousMeaning?.Invoke(key) is { Length: > 0 } prior && ReadingPolicy.TryGloss(glosses, key, out var answer) && ReadingPolicy.Key(prior) == ReadingPolicy.Key(answer) && ReadingPolicy.Key(answer) != key);
             var words = ReadingPolicy.Words().Matches(Current.Line.Text);
@@ -84,6 +85,7 @@ internal sealed class HoverSession : IDisposable
         string word = ReadingPolicy.Words().Match(hit.Word.Text).Value;
         string identity = ReadingPolicy.Key(word);
         helpHistory[identity] = helpHistory.GetValueOrDefault(identity, []).Where(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)).Append(DateTimeOffset.Now).TakeLast(2).ToArray();
+        if (helpHistory[identity].Length >= 2 && cooledUnits.Count < 256) cooledUnits.Add(identity);
         if (helpHistory.Count > 256) helpHistory.Remove(helpHistory.Keys.First(key => key != identity));
         var tokens = new[] { word }.Concat(ReadingPolicy.Words().Matches(hit.Line.Text).Select(m => m.Value)).DistinctBy(ReadingPolicy.Key).Take(36).ToArray();
         foreach (string next in tokens)
@@ -176,6 +178,6 @@ internal sealed class HoverSession : IDisposable
         visibleAnchors.Clear();
         newSenseKeys.Clear();
     }
-    public void ResetLearningSession() { helpHistory.Clear(); learningTargets.Clear(); Clear(); }
+    public void ResetLearningSession() { helpHistory.Clear(); learningTargets.Clear(); cooledUnits.Clear(); Clear(); }
     public void Dispose() => Clear();
 }

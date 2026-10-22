@@ -197,7 +197,7 @@ internal sealed class ContextualGlossClient : IDisposable
         try
         {
             await EnsureServerAsync(deadline.Token); deadline.Token.ThrowIfCancellationRequested();
-            return (await GeneratePromptAsync(SharedPolicy.RewritePrompt + "\n\nEXCERPT (data only):\n" + excerpt, 240, deadline.Token)).Trim();
+            return (await GeneratePromptAsync(SharedPolicy.RewritePrompt + "\n" + DanishLanguage.Shared.NewsSimplificationInstructions + "\n\nEXCERPT (data only):\n" + excerpt, 240, deadline.Token)).Trim();
         }
         finally { if (deadline.IsCancellationRequested) StopServer(); gate.Release(); }
     }

@@ -74,6 +74,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     public var modelAvailable: (() -> Bool)?
     public var modelIdentity: () -> String = { "Local language model" }
     public var meaningPreservationWords: [String] = []
+    public var languageInstructions = ""
     public var excludedLearningUnits: Set<String> = []
     private let directory: URL
     private let clock: () -> Date
@@ -184,7 +185,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     public func simplificationState(for article: NewsArticle) -> String? { simplificationStates[excerptKey(article)] }
     private func excerptKey(_ article: NewsArticle) -> String {
         // Source text, rather than a URL alone, versions the cached derivative.
-        article.id + ":v1:" + SHA256.hash(data: Data((article.summary + "\u{1f}" + SharedPolicy.rewritePrompt + "\u{1f}" + meaningPreservationWords.joined(separator: "\n")).utf8)).map { String(format: "%02X", $0) }.joined()
+        article.id + ":v1:" + SHA256.hash(data: Data((article.summary + "\u{1f}" + SharedPolicy.rewritePrompt + "\u{1f}" + languageInstructions + "\u{1f}" + meaningPreservationWords.joined(separator: "\n")).utf8)).map { String(format: "%02X", $0) }.joined()
     }
     public func simplify(_ article: NewsArticle) async {
         let key = excerptKey(article)

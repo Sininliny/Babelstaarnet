@@ -79,6 +79,7 @@ internal sealed class ReaderApp : Application
         news = new NewsService(AppPaths.DataDirectory) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
         news.ReadingActive = () => active;
         news.MeaningPreservationWords = DanishLanguage.Shared.MeaningPreservationWords;
+        news.LanguageInstructions = DanishLanguage.Shared.NewsSimplificationInstructions;
         news.SimplifyExcerpt = contextual.SimplifyPublicExcerptAsync; news.ModelAvailable = () => contextual.IsInstalled; news.ModelIdentity = () => contextual.ModelIdentity;
         model = new ReaderUiModel(preferences, vocabulary)
         {

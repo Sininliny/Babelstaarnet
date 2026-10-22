@@ -64,6 +64,7 @@ internal sealed class NewsService : IDisposable
     public Func<bool>? ModelAvailable { get; set; }
     public Func<string> ModelIdentity { get; set; } = () => "Local language model";
     public string[] MeaningPreservationWords { get; set; } = [];
+    public string LanguageInstructions { get; set; } = "";
     public Func<bool> ReadingActive { get; set; } = () => false;
     public bool PageVisible { get; set; }
     public bool HasUpdates { get; private set; }
@@ -179,7 +180,7 @@ internal sealed class NewsService : IDisposable
     public void NextGroup() { rotation += 3; HasUpdates = false; SelectCards(); Changed?.Invoke(); }
     public void AcceptUpdates() { rotation = 0; HasUpdates = false; SelectCards(); Changed?.Invoke(); }
     public void SetBookPage(int page) { Preferences.LastBookPage = Math.Clamp(page, 0, 1); Save(); }
-    private string ExcerptKey(NewsArticle a) => a.Id + ":v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(a.Summary + "\u001f" + SharedPolicy.RewritePrompt + "\u001f" + string.Join('\n', MeaningPreservationWords))));
+    private string ExcerptKey(NewsArticle a) => a.Id + ":v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(a.Summary + "\u001f" + SharedPolicy.RewritePrompt + "\u001f" + LanguageInstructions + "\u001f" + string.Join('\n', MeaningPreservationWords))));
     public string? Simplified(NewsArticle a) => simplified.GetValueOrDefault(ExcerptKey(a))?.Text;
     public string? SimplifiedModel(NewsArticle a) => simplified.GetValueOrDefault(ExcerptKey(a))?.Model;
     public string? SimplificationState(NewsArticle a) => simplificationStates.GetValueOrDefault(ExcerptKey(a));

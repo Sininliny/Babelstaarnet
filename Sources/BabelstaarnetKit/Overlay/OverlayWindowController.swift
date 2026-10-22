@@ -35,7 +35,8 @@ final class OverlayWindowController {
     private var visibleAnchorKeys = Set<String>()
     private var helpHistory: [String: [Date]] = [:]
     private var learningTargets = Set<String>()
-    func resetLearningSession() { helpHistory.removeAll(); learningTargets.removeAll(); visibleAnchorKeys.removeAll() }
+    private var cooledUnits = Set<String>()
+    func resetLearningSession() { helpHistory.removeAll(); learningTargets.removeAll(); cooledUnits.removeAll(); visibleAnchorKeys.removeAll() }
     private var overlays: [CGDirectDisplayID: DisplayOverlay] = [:]
     private var mouseTimer: Timer?
     private var hoverSpeechTimer: Timer?
@@ -399,6 +400,7 @@ final class OverlayWindowController {
             if let word = match?.word {
                 let key = learnerProfile.normalizedKey(for: word.sourceText), now = Date()
                 helpHistory[key] = Array((helpHistory[key] ?? []).filter { now.timeIntervalSince($0) < 600 }.suffix(1)) + [now]
+                if (helpHistory[key]?.count ?? 0) >= 2 && cooledUnits.count < 256 { cooledUnits.insert(key) }
                 if helpHistory.count > 256, let oldest = helpHistory.filter({ $0.key != key }).min(by: { ($0.value.last ?? .distantPast) < ($1.value.last ?? .distantPast) })?.key { helpHistory.removeValue(forKey: oldest) }
             }
         }
@@ -505,7 +507,7 @@ final class OverlayWindowController {
             var newSense = false
             if let previous = previousMeaning?(candidateKey), !previous.isEmpty, let currentMeaning, !currentMeaning.isEmpty,
                learnerProfile.normalizedKey(for: currentMeaning) != candidateKey { newSense = previous.lowercased() != currentMeaning.lowercased() }
-            let helps = (helpHistory[candidateKey] ?? []).filter { now.timeIntervalSince($0) < 600 }.count
+            let helps = cooledUnits.contains(candidateKey) || cooledUnits.count >= 256 ? 2 : (helpHistory[candidateKey] ?? []).filter { now.timeIntervalSince($0) < 600 }.count
             if candidateKey != key && level == 3 && SharedPolicy.challenge(supported: supportedReading, reliable: reliableMeaning, learned: learnedBefore?(candidateKey) ?? (progress.knownConfirmationCount > 0),
                 newSense: newSense, helps: helps, used: selectedChallenge == nil ? 0 : 1) && SharedPolicy.targetAllowed(count: learningTargets.count, already: learningTargets.contains(candidateKey)) {
                 selectedChallenge = candidateKey; learningTargets.insert(candidateKey)

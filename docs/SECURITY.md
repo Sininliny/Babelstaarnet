@@ -16,8 +16,9 @@ matching is local. DR receives ordinary access metadata such as IP addresses
 and requested URLs. Background refresh and daily notifications require separate
 opt-in. Turning news off stops new requests; cached news remains usable offline.
 Network adapters live in `Sources/BabelNews` and the Windows news engine;
-screen translation, contextual meaning and speech remain local. Their inputs
-are never handed to the public-feed client. The C policy component has no
+screen translation, contextual meaning and speech remain local. Screen pixels
+and recognized passages are never passed to the news adapter. Recent vocabulary
+is supplied to local matching only, never added to a public request. The C policy component has no
 networking capability; it receives only values supplied by native adapters.
 
 The August audit described an application without an HTTP client. That is no
@@ -25,7 +26,7 @@ longer a claim about the entire application. News metadata and cached AI
 simplifications are public source material; access to a selected source URL is
 visible to the source or browser even though the learning profile stays local.
 
-Three consequences worth stating plainly:
+Consequences worth stating plainly:
 
 - **Captures are never written to disk.** The cropped PNG goes to the OCR engine
   over a stdin pipe and is never given a filename. Nothing lands in a temporary

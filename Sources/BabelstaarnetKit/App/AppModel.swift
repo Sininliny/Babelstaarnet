@@ -293,6 +293,7 @@ public final class AppModel: ObservableObject {
         }
         news.readingActive = { [weak self] in self?.learningModeActive == true }
         news.meaningPreservationWords = languages.source.meaningPreservationWords
+        news.languageInstructions = languages.source.newsSimplificationInstructions
         news.excludedLearningUnits = languages.source.structuralWords
         news.modelAvailable = { [weak self] in self?.contextualGlossService.isInstalled == true }
         news.modelIdentity = { [weak self] in self?.contextualGlossService.modelIdentity ?? "Local MLX" }

@@ -65,6 +65,7 @@ public struct ContextualGloss: Equatable, Sendable {
 /// switch off and loads its model from a directory, never by name.
 public actor ContextualGlossService {
     private let prompts: ContextualGlossPrompts?
+    private let newsInstructions: String
     private let pythonPath: String
     private let modelDirectory: URL
 
@@ -85,6 +86,7 @@ public actor ContextualGlossService {
         modelDirectory: URL
     ) {
         self.prompts = language.contextualGlossPrompts
+        self.newsInstructions = SharedPolicy.rewritePrompt + "\n" + language.newsSimplificationInstructions
         self.pythonPath = pythonPath
         self.modelDirectory = modelDirectory
     }
@@ -107,7 +109,7 @@ public actor ContextualGlossService {
             do {
                 try ensureServer(); try Task.checkCancellation()
                 guard let input, let output else { throw ContextualGlossError.unavailable }
-                let object = ["operation": "simplify", "sentence": text, "instructions": SharedPolicy.rewritePrompt]
+                let object = ["operation": "simplify", "sentence": text, "instructions": newsInstructions]
                 var data = try JSONSerialization.data(withJSONObject: object); data.append(0x0A); try input.write(contentsOf: data)
                 let reply = try JSONSerialization.jsonObject(with: readResponseLine(from: output)) as? [String: Any]
                 try Task.checkCancellation()

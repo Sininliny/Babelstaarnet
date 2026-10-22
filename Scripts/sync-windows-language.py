@@ -15,6 +15,7 @@ def prompt(field):
 data = dict(source="Sources/LanguageDanish/Danish.swift", code="da",
     abbreviations=strings("abbreviations"), structuralWords=strings("structuralWords"), meaningPreservationWords=strings("meaningPreservationWords"),
     glosses=table("danishClosedClassGlosses"), beginner=table("danishBeginnerGlosses"),
+    newsSimplificationInstructions=prompt("newsSimplificationInstructions"),
     glossInstructions=prompt("glossInstructions"), explainInstructions=prompt("explainInstructions"))
 exact = re.search(r"exactGlosses: \[(.*?)\n        \]", source, re.S).group(1)
 data["glosses"].update(dict(re.findall(r'"([^"]+)": "([^"]*)"', exact)))

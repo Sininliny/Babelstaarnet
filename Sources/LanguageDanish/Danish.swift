@@ -88,6 +88,12 @@ public extension SourceLanguage {
             "var", "ved", "vi", "vil"
         ],
         meaningPreservationWords: ["ikke", "ingen", "aldrig", "muligvis", "ifølge", "mistænkt", "sigtet", "anklaget", "kan", "vil", "måske"],
+        newsSimplificationInstructions: """
+            Skriv kun en kortere og enklere version PÅ DANSK. Oversæt ikke til engelsk.
+            Bevar navne, tal, datoer, negation, forbehold og hvem der siger hvad.
+            Tilføj ingen fakta, overskrift, indledning eller citater. Hvis teksten allerede er enkel, gengiv den uændret.
+            Returner kun selve den danske tekst.
+            """,
         contextualGlossPrompts: Self.danishContextualGlossPrompts,
         meansPhrase: { meaning in "Betyder “\(meaning)”." }
     )

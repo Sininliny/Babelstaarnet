@@ -30,9 +30,10 @@ grammar stay Danish, and so does every word you can already read. Only the words
 you cannot read are swapped for English, in place — so you get one line to read
 rather than two texts to reconcile.
 
-**Which words those are is learned, not asked.** The app remembers what keeps
-coming back to you, and hands each word back in Danish as you learn it. That is
-the only progress signal there is: no lessons, no score, nothing to answer.
+**Help adapts as words become familiar.** Reading supplies exposure cues;
+optional feedback and review correct them. Those cues are estimates, not proof
+of mastery. A direct lookup always gives the available meaning, and there is
+no exercise to finish before you can keep reading.
 
 **Nothing leaves your computer while reading.** No screenshot, recognized text, definition, or audio
 is sent to a remote service.
