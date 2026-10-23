@@ -17,6 +17,7 @@ import LanguageDanish
             func s(_ n: Int) -> String { args[n] as! String }
             let result: Double
             switch item["operation"] as! String {
+            case "news-gloss": result = Double(bp_news_gloss(i(0),i(1),i(2)))
             case "reading-help": result = Double(bp_reading_help(i(0),i(1),i(2),i(3)))
             case "retry": result = Double(bp_retry_delay(i(0)))
             case "source": result = Double(bp_source_capability(i(0)))
@@ -71,27 +72,43 @@ import LanguageDanish
         reader.translate = { texts in translations += 1; return texts.map { "English: " + $0 } }
         reader.speak = { _ in spoken += 1 }; reader.saveWord = { _, _, context in savedContext = context }
         let headlineOnly = parsed.first { $0.summary.isEmpty }!
-        precondition(reader.showEnglish)
+        precondition(!reader.isVisible(headlineOnly))
         await reader.prepare(headlineOnly); await reader.prepare(headlineOnly)
-        precondition(translations == 1 && reader.meaning(headlineOnly)?.parts.count == 1)
-        reader.setEnglish(false); precondition(!reader.isVisible(headlineOnly))
-        await reader.prepare(headlineOnly); precondition(translations == 1)
-        await reader.prepare(headlineOnly, requested: true); precondition(reader.isVisible(headlineOnly) && translations == 1)
+        precondition(translations == 1 && reader.meaning(headlineOnly) == nil && !reader.isVisible(headlineOnly), "Default support must translate words, never a full English alternative")
+        await reader.prepare(headlineOnly, requested: true)
+        precondition(reader.isVisible(headlineOnly) && translations == 2 && reader.meaning(headlineOnly)?.parts.count == 1)
+        reader.hideTranslation(headlineOnly); await reader.prepare(headlineOnly)
+        precondition(!reader.isVisible(headlineOnly) && translations == 2)
+        await reader.prepare(headlineOnly, requested: true); precondition(translations == 2)
         await reader.lookup("får", article: headlineOnly); reader.saveSelection(article: headlineOnly)
         precondition(reader.selected?.meaning == "English: får" && savedContext.contains(headlineOnly.title) && spoken == 0)
+        // Legacy English-on files retain their useful cache, never their automatic reveal.
+        let file = directory.appendingPathComponent("news-reading.json")
+        var legacy = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+        legacy["showEnglish"] = true; try JSONSerialization.data(withJSONObject: legacy).write(to: file)
         let restoredReading = NewsReadingSupport(directory: directory)
-        precondition(!restoredReading.showEnglish && restoredReading.meaning(headlineOnly) != nil)
+        precondition(!restoredReading.isVisible(headlineOnly) && restoredReading.meaning(headlineOnly) != nil)
+        restoredReading.translate = { _ in preconditionFailure("Cached help must not rerun an engine") }
+        await restoredReading.prepare(headlineOnly); await restoredReading.prepare(headlineOnly, requested: true)
+        precondition(restoredReading.isVisible(headlineOnly))
+        reader.cancel(); precondition(!reader.isVisible(headlineOnly))
         var changed = headlineOnly; changed.title += " - updated"
         precondition(restoredReading.meaning(changed) == nil)
-        reader.setEnglish(true); var started = false
+        var started = false
         reader.translate = { texts in started = true; try await Task.sleep(for: .seconds(10)); return texts }
-        let pending = Task { await reader.prepare(changed) }
+        let pending = Task { await reader.prepare(changed, requested: true) }
         while !started { await Task.yield() }
         reader.cancel()
-        reader.translate = { $0.map { "Fresh: " + $0 } }; await reader.prepare(changed); await pending.value
+        reader.translate = { $0.map { "Fresh: " + $0 } }; await reader.prepare(changed, requested: true); await pending.value
         precondition(reader.meaning(changed)?.parts.first?.hasPrefix("Fresh:") == true)
-        changed.title = "Incomplete fixture"; reader.translate = { _ in [] }; await reader.prepare(changed)
+        changed.title = "Incomplete fixture"; reader.translate = { _ in [] }; await reader.prepare(changed, requested: true)
         precondition(reader.meaning(changed) == nil && reader.state(changed)?.contains("unavailable") == true)
+        var level = 0
+        reader.knowledgeLevel = { _ in level }; reader.cachedWordMeaning = { _ in "hint" }
+        await reader.prepare(changed); level = 5
+        precondition(reader.gloss("Incomplete", article: changed) == "hint", "Learning elsewhere must not withdraw already displayed help")
+        reader.cancel(); await reader.prepare(changed)
+        precondition(reader.gloss("Incomplete", article: changed) == nil, "A new visit uses the updated knowledge level")
         news.simplifyExcerpt = { $0 }; await news.simplify(headlineOnly)
         precondition(news.simplifiedText(for: headlineOnly) == headlineOnly.title)
         await reader.lookup("ny", article: headlineOnly, context: "En ny park.")

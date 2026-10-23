@@ -15,6 +15,22 @@ public struct MenuBarContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
+            Button {
+                openWindow(id: WordBookView.windowID)
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "book.closed").frame(width: 22)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Word Book").font(.system(size: 13, weight: .semibold))
+                        Text(wordBook.entries.isEmpty ? "Your words · Read something new" : "\(wordBook.entries.count) words · Read something new")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }.padding(11).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
+            }.buttonStyle(.plain).accessibilityLabel("Open Word Book")
+
             Divider()
 
             if model.screenPermissionGranted {
@@ -71,22 +87,10 @@ public struct MenuBarContentView: View {
             Divider()
 
             HStack {
-                Button {
-                    openWindow(id: WordBookView.windowID)
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    Label(
-                        wordBookTitle,
-                        systemImage: "book.closed"
-                    )
-                }
-                .buttonStyle(.plain)
-
                 SettingsLink {
                     Text("Settings")
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 8)
 
                 Spacer()
 
@@ -100,19 +104,6 @@ public struct MenuBarContentView: View {
         }
         .padding(14)
         .frame(width: 290)
-    }
-
-    /// The book's size, and how many of its words are waiting to be
-    /// reviewed — the one place outside the book that says so, and only as
-    /// a count; nothing interrupts reading to ask.
-    private var wordBookTitle: String {
-        guard !wordBook.entries.isEmpty else {
-            return "Word Book"
-        }
-        let due = model.wordBookDueCount
-        return due == 0
-            ? "Word Book (\(wordBook.entries.count))"
-            : "Word Book (\(wordBook.entries.count) · \(due) to review)"
     }
 
     private var header: some View {
@@ -272,6 +263,20 @@ public struct MenuBarContentView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+/// Available from the app menu without visiting Settings or enabling screen access.
+public struct WordBookCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+    public init() {}
+    public var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("Word Book") {
+                openWindow(id: WordBookView.windowID)
+                NSApp.activate(ignoringOtherApps: true)
+            }.keyboardShortcut("b", modifiers: [.command, .shift])
         }
     }
 }

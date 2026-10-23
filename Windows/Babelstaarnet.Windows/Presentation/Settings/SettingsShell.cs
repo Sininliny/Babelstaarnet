@@ -43,7 +43,7 @@ internal sealed class SettingsShell : Grid
             </Style>
             """);
         foreach (string name in new[] { "Translation", "Reading", "News (internet)", "Shortcuts", "What you have picked up", "Local engines", "Contextual meanings", "Appearance", "Access" })
-            navigation.Items.Add(new ListBoxItem { Style = itemStyle, Content = name == "What you have picked up" ? "Learning & Word Book" : name, Tag = name, Padding = new Thickness(12, 10, 8, 10), Margin = new Thickness(0, 2, 0, 2), FontFamily = Ui.Font, FontSize = 13, Foreground = Ui.Ink });
+            navigation.Items.Add(new ListBoxItem { Style = itemStyle, Content = name == "What you have picked up" ? "Learning profile" : name, Tag = name, Padding = new Thickness(12, 10, 8, 10), Margin = new Thickness(0, 2, 0, 2), FontFamily = Ui.Font, FontSize = 13, Foreground = Ui.Ink });
         rail.Children.Add(navigation); Children.Add(rail);
         var body = new DockPanel(); Grid.SetColumn(body, 1); Children.Add(body);
         title.Margin = new Thickness(24, 26, 20, 12); DockPanel.SetDock(title, Dock.Top); body.Children.Add(title);

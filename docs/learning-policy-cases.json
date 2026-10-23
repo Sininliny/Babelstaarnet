@@ -821,6 +821,61 @@
         "notification": "suppress",
         "claimOfClosedAppDelivery": false
       }
+    },
+    {
+      "id": "N20",
+      "rules": [
+        "NEWS-01",
+        "UX-03"
+      ],
+      "given": {
+        "action": "open_news_card",
+        "stableWords": [
+          "æbler"
+        ],
+        "unfamiliarWords": [
+          "får"
+        ],
+        "legacyEnglishSupport": true
+      },
+      "expected": {
+        "primaryLanguage": "da",
+        "automaticGlosses": [
+          "får"
+        ],
+        "fullEnglishVisible": false
+      }
+    },
+    {
+      "id": "N21",
+      "rules": [
+        "UX-01",
+        "UX-02"
+      ],
+      "given": {
+        "action": "request_sentence_help",
+        "wordLevel": 5
+      },
+      "expected": {
+        "fullEnglishVisible": true,
+        "requiredQuiz": false,
+        "wordLevelChanged": false,
+        "scope": "this_card_until_closed"
+      }
+    },
+    {
+      "id": "N22",
+      "rules": [
+        "NEWS-01"
+      ],
+      "given": {
+        "action": "open_tower_menu",
+        "screenPermission": false
+      },
+      "expected": {
+        "primaryWordBookAction": true,
+        "requiresSettings": false
+      }
     }
   ]
 }

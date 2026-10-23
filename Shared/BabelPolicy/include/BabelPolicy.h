@@ -11,8 +11,11 @@ extern "C" {
 #endif
 /* Stable C ABI. No UI, filesystem, network, global state or model dependency. */
 BP_API int32_t bp_version(void);
-/* 0 hidden, 1 cached meaning, 2 local translation, 3 setup needed. No network gate. */
+/* Full translation: explicit request only. The legacy preference is ignored.
+   0 hidden, 1 cached meaning, 2 local translation, 3 setup needed. */
 BP_API int32_t bp_reading_help(int32_t requested, int32_t english_enabled, int32_t cached, int32_t local_available);
+/* Small word glosses: unfamiliar/learning words get help; stable words stay Danish. */
+BP_API int32_t bp_news_gloss(int32_t level, int32_t available, int32_t different);
 BP_API int32_t bp_retry_delay(int32_t failures);
 BP_API int32_t bp_anchor(int32_t level, int32_t supported, int32_t focus,
     int32_t new_sense, int32_t cooldown, int32_t challenge_selected);

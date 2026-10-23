@@ -307,6 +307,7 @@ public final class AppModel: ObservableObject {
             return self.wordBook.entries.first(where: { $0.id == key && !$0.meaning.isEmpty })?.meaning
                 ?? self.languages.source.exactGlosses[key] ?? self.languages.source.closedClassGlosses[folded]
         }
+        news.reader.knowledgeLevel = { [weak self] word in self?.learnerProfileStore.progress(for: word).effectiveKnowledgeLevel() ?? 0 }
         news.reader.speak = { [weak self] text in
             guard let self else { return }; self.speechService.speak(text, language: self.languages.source.speechVoice)
         }

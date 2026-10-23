@@ -17,7 +17,7 @@ struct NewsView: View {
                     Spacer()
                     SettingsLink { Label("News settings", systemImage: "gearshape") }.font(.caption)
                 }
-                Text("Fresh Danish, with English to help you read. Select any Danish word for its meaning, pronunciation or Word Book.").foregroundStyle(.secondary)
+                Text("Read in Danish. Small word hints fill the gaps; words you know stay Danish. Select any word for more help.").foregroundStyle(.secondary)
                 if !news.preferences.enabled {
                     Toggle("DR news (internet)", isOn: Binding(get: { news.preferences.enabled }, set: { value in
                         news.configure(enabled: value, background: false, notify: false, topic: news.preferences.topic, hour: news.preferences.digestHour)
@@ -31,9 +31,6 @@ struct NewsView: View {
                     HStack { topic; buttons }
                     VStack(alignment: .leading) { topic; buttons }
                 }
-                Toggle("English support", isOn: Binding(get: { news.reader.showEnglish }, set: { news.reader.setEnglish($0) }))
-                    .help("On by default. Turn it off to try Danish first; Show English is always available.")
-                    .toggleStyle(.switch)
                 Text(news.status).font(.caption).foregroundStyle(.secondary)
                 ForEach(news.cards) { card in NewsReadingCardView(news: news, card: card) }
                 if news.cards.isEmpty && !news.busy { Text("No suitable new content yet. Try a different topic or come back later.").foregroundStyle(.secondary) }
@@ -67,17 +64,20 @@ struct NewsReadingCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("DR · " + article.publishedDate.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-            Text("DANISH · SELECT A WORD FOR HELP").font(.caption2).foregroundStyle(.secondary)
+            Text("DANISH · SMALL HINTS FOR UNFAMILIAR WORDS").font(.caption2).foregroundStyle(.secondary)
             source(article.title, headline: true)
-            if reader.isVisible(article) { english(part: 0) }
             if !article.summary.isEmpty {
                 source(article.summary, headline: false)
-                if reader.isVisible(article) { english(part: 1) }
             } else {
                 Text("Headline only · DR did not include an excerpt.").font(.caption).foregroundStyle(.secondary)
             }
-            if !reader.isVisible(article) {
-                Button("Show English") { Task { await reader.prepare(article, requested: true) } }
+            if let state = reader.wordState(article) { Text(state).font(.caption).foregroundStyle(.secondary) }
+            if reader.isVisible(article) {
+                english(part: 0)
+                if !article.summary.isEmpty { english(part: 1) }
+                Button("Back to Danish") { reader.hideTranslation(article) }.font(.caption)
+            } else {
+                Button("Help with this sentence") { Task { await reader.prepare(article, requested: true) } }.font(.caption)
             }
             if let word = reader.selected, word.articleKey == NewsReadingSupport.key(article) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -110,7 +110,7 @@ struct NewsReadingCardView: View {
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
         .background(.background, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.quaternary))
-        .task(id: NewsReadingSupport.key(article) + (reader.showEnglish ? ":en" : ":da")) { await reader.prepare(article) }
+        .task(id: NewsReadingSupport.key(article)) { await reader.prepare(article) }
     }
     @ViewBuilder private var readingActions: some View {
         Button("Listen to headline", systemImage: "speaker.wave.2") { reader.speak?(article.title) }.disabled(reader.speak == nil)
@@ -119,13 +119,13 @@ struct NewsReadingCardView: View {
     @ViewBuilder private func english(part: Int) -> some View {
         if let value = reader.meaning(article), value.parts.indices.contains(part) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("ENGLISH · ON THIS DEVICE").font(.caption2).foregroundStyle(.secondary)
+                Text("SENTENCE HELP · ENGLISH · ON THIS DEVICE").font(.caption2).foregroundStyle(.secondary)
                 Text(value.parts[part]).textSelection(.enabled)
             }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
         } else if part == 0 {
             VStack(alignment: .leading, spacing: 5) {
-                Text(reader.state(article) ?? "Preparing English on this device…").font(.caption).foregroundStyle(.secondary)
-                Button("Try English again") { Task { await reader.prepare(article, requested: true) } }.font(.caption)
+                Text(reader.state(article) ?? "Preparing sentence help on this device…").font(.caption).foregroundStyle(.secondary)
+                Button("Try sentence help again") { Task { await reader.prepare(article, requested: true) } }.font(.caption)
             }
         }
     }
@@ -134,9 +134,13 @@ struct NewsReadingCardView: View {
             ForEach(Array(NewsReadingSupport.pieces(text).enumerated()), id: \.offset) { _, piece in
                 if let word = NewsReadingSupport.word(piece) {
                     Button { Task { await reader.lookup(word, article: article, context: text) } } label: {
-                        Text(piece).font(headline ? .title3.weight(.semibold) : .body)
-                            .padding(.horizontal, 1).padding(.vertical, 2)
-                            .background(card.matches.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 3))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(piece).font(headline ? .title3.weight(.semibold) : .body)
+                                .background(card.matches.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 3))
+                            if let gloss = reader.gloss(word, article: article) {
+                                Text(gloss).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 140, alignment: .leading)
+                            }
+                        }.padding(.horizontal, 1).padding(.vertical, 3)
                     }.buttonStyle(.plain).help("Meaning of " + word).accessibilityLabel("Look up Danish word " + word)
                 } else { Text(piece).font(headline ? .title3.weight(.semibold) : .body) }
             }

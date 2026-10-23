@@ -149,5 +149,44 @@
         "EU-bidrag"
       ]
     }
+  ],
+  "newsScaffolding": [
+    {
+      "title": "Byen åbner en ny park.",
+      "levels": {
+        "byen": 4,
+        "åbner": 0,
+        "en": 4,
+        "ny": 3,
+        "park": 5
+      },
+      "meanings": {
+        "byen": "the town",
+        "åbner": "opens",
+        "en": "a",
+        "ny": "new",
+        "park": "park"
+      },
+      "hints": {
+        "åbner": "opens",
+        "ny": "new"
+      }
+    },
+    {
+      "title": "DR får 2.500 æbler.",
+      "levels": {
+        "dr": 0,
+        "får": 1,
+        "æbler": 4
+      },
+      "meanings": {
+        "dr": "DR",
+        "får": "gets",
+        "æbler": "apples"
+      },
+      "hints": {
+        "får": "gets"
+      }
+    }
   ]
 }

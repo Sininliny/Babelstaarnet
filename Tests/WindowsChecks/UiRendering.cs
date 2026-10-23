@@ -56,12 +56,18 @@ internal static class UiRendering
         news.Configure(true, false, false, 0, 18); news.RefreshAsync(true).GetAwaiter().GetResult();
         news.Reader.Translate = (texts, _) => System.Threading.Tasks.Task.FromResult<IReadOnlyList<string>>(texts.Select(text => text == "energi" ? "energy" : text.StartsWith("Regeringen") ? "The government presents a new plan for green energy." : text.StartsWith("Æbler") ? "Apples and sheep in the countryside." : "A short and clear message.").ToArray());
         news.Reader.Speak = _ => { }; news.Reader.SaveWord = (_, _, _) => { };
-        news.Reader.SetEnglish(true);
+        var newsGlosses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["regeringen"] = "the government", ["fremlægger"] = "presents", ["ny"] = "new", ["plan"] = "plan", ["for"] = "for", ["grøn"] = "green", ["energi"] = "energy", ["en"] = "a", ["kort"] = "short", ["tydelig"] = "clear", ["besked"] = "message", ["æbler"] = "apples", ["og"] = "and", ["får"] = "sheep", ["på"] = "in", ["landet"] = "the countryside" };
+        news.Reader.CachedWordMeaning = word => newsGlosses.GetValueOrDefault(word);
+        news.Reader.KnowledgeLevel = word => new[] { "æbler", "og", "en", "for", "plan" }.Contains(word.ToLowerInvariant()) ? 4 : 0;
         foreach (var article in news.Cards.Select(c => c.Article)) news.Reader.PrepareAsync(article).GetAwaiter().GetResult();
         Save(new NewsPanel(news), stem + "-news.png", 860, 950);
         var fixtureCard = news.Cards.First(); news.Reader.LookupAsync("energi", fixtureCard.Article).GetAwaiter().GetResult();
         var wordCard = new NewsReadingCard(news, fixtureCard); wordCard.Measure(new Size(760, double.PositiveInfinity));
         Save(wordCard, stem + "-news-word.png", 760, (int)Math.Ceiling(wordCard.DesiredSize.Height));
+        news.Reader.PrepareAsync(fixtureCard.Article, true).GetAwaiter().GetResult();
+        var sentenceCard = new NewsReadingCard(news, fixtureCard); sentenceCard.Measure(new Size(760, double.PositiveInfinity));
+        Save(sentenceCard, stem + "-news-sentence-help.png", 760, (int)Math.Ceiling(sentenceCard.DesiredSize.Height));
+        news.Reader.HideTranslation(fixtureCard.Article);
         Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
         var settings = new SettingsPanel(model); settings.Measure(new Size(480, 3000)); settings.Arrange(new Rect(0, 0, 480, 3000)); settings.UpdateLayout();
         // Render the actual grouped form without the viewport cropping its lower sections.

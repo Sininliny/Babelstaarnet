@@ -21,6 +21,7 @@ internal static class SharedPolicyChecks
             var a = c.GetProperty("args").EnumerateArray().ToArray(); int I(int n) => a[n].GetInt32(); double D(int n) => a[n].GetDouble(); string S(int n) => a[n].GetString()!;
             double result = c.GetProperty("operation").GetString() switch
             {
+                "news-gloss" => SharedPolicy.bp_news_gloss(I(0),I(1),I(2)),
                 "reading-help" => SharedPolicy.bp_reading_help(I(0),I(1),I(2),I(3)),
                 "retry" => SharedPolicy.bp_retry_delay(I(0)),
                 "source" => SharedPolicy.bp_source_capability(I(0)),
@@ -114,27 +115,40 @@ internal static class SharedPolicyChecks
         reader.Translate = (texts, _) => { calls++; return Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "English: " + t).ToArray()); };
         reader.Speak = _ => spoken++; reader.SaveWord = (word, meaning, context) => saved = word + "|" + meaning + "|" + context;
         var headlineOnly = articles.First(a => a.Summary.Length == 0);
-        Check(reader.ShowEnglish, "Beginners must receive English support by default, including old preference files.");
+        Check(!reader.IsVisible(headlineOnly), "Danish must be the default reading language.");
         await reader.PrepareAsync(headlineOnly); await reader.PrepareAsync(headlineOnly);
-        Check(calls == 1 && reader.Meaning(headlineOnly)?.Parts.Length == 1, "A title-only RSS item must still get English, cached without another request.");
-        reader.SetEnglish(false); Check(!reader.IsVisible(headlineOnly), "Trying Danish first must hide English voluntarily.");
-        await reader.PrepareAsync(headlineOnly); Check(calls == 1, "Danish-first mode must not start hidden work.");
-        await reader.PrepareAsync(headlineOnly, true); Check(reader.IsVisible(headlineOnly) && calls == 1, "Explicit help bypasses the practice preference and uses cached English.");
+        Check(calls == 1 && reader.Meaning(headlineOnly) is null && !reader.IsVisible(headlineOnly), "Automatic help translates words, never a full English alternative.");
+        await reader.PrepareAsync(headlineOnly, true);
+        Check(reader.IsVisible(headlineOnly) && calls == 2 && reader.Meaning(headlineOnly)?.Parts.Length == 1, "A direct sentence-help request must give immediate full help, including title-only RSS.");
+        reader.HideTranslation(headlineOnly); await reader.PrepareAsync(headlineOnly);
+        Check(!reader.IsVisible(headlineOnly) && calls == 2, "Returning to Danish must reuse small hints without re-revealing full English.");
+        await reader.PrepareAsync(headlineOnly, true); Check(calls == 2, "Repeated sentence help uses the cache.");
         await reader.LookupAsync("får", headlineOnly); reader.SaveSelection(headlineOnly);
         Check(reader.Selected?.Meaning == "English: får" && saved?.Contains(headlineOnly.Title) == true && spoken == 0, "Lookup/save must preserve Danish context and never autoplay audio.");
+        string cacheFile = Path.Combine(folder, "news-reading.json");
+        var legacy = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(cacheFile))!; legacy["showEnglish"] = true; File.WriteAllText(cacheFile, legacy.ToJsonString());
         using var restored = new NewsReadingSupport(folder);
-        Check(!restored.ShowEnglish && restored.Meaning(headlineOnly) is not null, "English and reading mode must survive restart without any network adapter.");
+        Check(!restored.IsVisible(headlineOnly) && restored.Meaning(headlineOnly) is not null, "Legacy English-on preferences retain cached meanings without revealing them automatically.");
+        restored.Translate = (_, _) => throw new Exception("Cached help must not rerun an engine.");
+        await restored.PrepareAsync(headlineOnly); await restored.PrepareAsync(headlineOnly, true);
+        Check(restored.IsVisible(headlineOnly), "Restarted word and sentence caches must work offline.");
+        reader.Cancel(); Check(!reader.IsVisible(headlineOnly), "Closing the reading page resets sentence-help disclosure.");
         var changed = headlineOnly with { Title = headlineOnly.Title + " - updated" };
         Check(restored.Meaning(changed) is null, "A changed headline must not inherit stale English.");
-        reader.SetEnglish(true); var pending = new TaskCompletionSource<System.Collections.Generic.IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<System.Collections.Generic.IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
         reader.Translate = (_, token) => pending.Task.WaitAsync(token);
-        var canceled = reader.PrepareAsync(changed); reader.Cancel();
+        var canceled = reader.PrepareAsync(changed, true); reader.Cancel();
         reader.Translate = (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "Fresh: " + t).ToArray());
-        await reader.PrepareAsync(changed); await canceled;
+        await reader.PrepareAsync(changed, true); await canceled;
         Check(reader.Meaning(changed)?.Parts[0].StartsWith("Fresh:") == true, "Canceled/stale work must not replace a newer reading aid.");
         var incomplete = changed with { Title = "Incomplete fixture" };
-        reader.Translate = (_, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>([]); await reader.PrepareAsync(incomplete);
+        reader.Translate = (_, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>([]); await reader.PrepareAsync(incomplete, true);
         Check(reader.Meaning(incomplete) is null && reader.State(incomplete)?.Contains("unavailable") == true, "Failed translation must show help status instead of claiming success.");
+        int level = 0; reader.KnowledgeLevel = _ => level; reader.CachedWordMeaning = _ => "hint";
+        await reader.PrepareAsync(incomplete); level = 5;
+        Check(reader.Gloss("Incomplete", incomplete) == "hint", "Learning elsewhere must not withdraw hints mid-read.");
+        reader.Cancel(); await reader.PrepareAsync(incomplete);
+        Check(reader.Gloss("Incomplete", incomplete) is null, "A new visit uses the updated knowledge level.");
         using var localNews = new NewsService(Path.Combine(directory, "card-actions"));
         localNews.Reader.Translate = (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "English: " + t).ToArray());
         localNews.Reader.Speak = _ => throw new Exception("No automatic audio is allowed.");
@@ -146,6 +160,12 @@ internal static class SharedPolicyChecks
             foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(node).OfType<System.Windows.DependencyObject>())
                 foreach (var nested in Tree(child)) yield return nested;
         }
+        Check(!Tree(card).OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text.StartsWith("SENTENCE HELP ·")), "The default native card must contain no full English pane.");
+        var help = Tree(card).OfType<System.Windows.Controls.Button>().Single(b => Equals(b.Content, "Help with this sentence"));
+        help.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); card.UpdateSupport();
+        Check(localNews.Reader.IsVisible(headlineOnly), "Keyboard-activatable sentence help must remain immediately available.");
+        help.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); card.UpdateSupport();
+        Check(!localNews.Reader.IsVisible(headlineOnly) && Tree(card).Contains(help), "Returning to Danish must preserve the focused help control.");
         var sourceButton = Tree(card).OfType<System.Windows.Controls.Button>().First(b => System.Windows.Automation.AutomationProperties.GetName(b).StartsWith("Look up Danish word "));
         sourceButton.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         Check(localNews.Reader.Selected is { Meaning.Length: > 0 } && localNews.Reader.Selected.Context == headlineOnly.Title, "Native word actions must work directly on source text without OCR or desktop capture.");
