@@ -34,6 +34,7 @@ internal sealed class NewsReadingSupport : IDisposable
     public NewsWordHelp? Selected { get; private set; }
     public Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<string>>>? Translate { get; set; }
     public Func<string, string?> CachedWordMeaning { get; set; } = _ => null;
+    public Action? BeforeHelp { get; set; }
     public Action<string>? Speak { get; set; }
     public Action<string, string, string>? SaveWord { get; set; }
     public event Action? Changed;
@@ -60,7 +61,7 @@ internal sealed class NewsReadingSupport : IDisposable
     {
         if (disposed) return;
         string key = Key(article);
-        if (requested) revealed.Add(key);
+        if (requested) { BeforeHelp?.Invoke(); revealed.Add(key); }
         int decision = SharedPolicy.bp_reading_help(requested ? 1 : 0, ShowEnglish ? 1 : 0, Meaning(article) is not null ? 1 : 0, Translate is not null ? 1 : 0);
         if (decision <= 1) { Changed?.Invoke(); return; }
         if (decision == 3) { states[key] = "Set up local translation in Settings to read this with English support."; Changed?.Invoke(); return; }
@@ -89,7 +90,7 @@ internal sealed class NewsReadingSupport : IDisposable
     public async Task LookupAsync(string word, NewsArticle article)
     {
         if (disposed) return;
-        wordRequest?.Cancel(); using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); wordRequest = request;
+        BeforeHelp?.Invoke(); wordRequest?.Cancel(); using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); wordRequest = request;
         string? cached = CachedWordMeaning(word);
         Selected = new(Key(article), word, cached ?? "", cached is null ? "Looking up on this device…" : "Word meaning · use the English sentence for context"); Changed?.Invoke();
         if (cached is not null) { wordRequest = null; return; }

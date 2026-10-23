@@ -64,6 +64,9 @@ Being accurate matters more than sounding absolute. Network access happens in th
    On-device simplification uses only a feed-provided excerpt, retains the
    original beside it, and makes no cloud call. News caches and preferences
    are separate `news-*.json` files in the local application data directory.
+   `news-reading.json` stores bounded on-device English meanings of public RSS
+   text and the English-support preference. Word help uses the same local
+   translator and voice as ordinary reading; saving a word is an explicit action.
 
 ## What is stored, and where
 

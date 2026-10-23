@@ -66,7 +66,7 @@ internal sealed class NewsReadingCard : Border
         content.Children.Add(wordHelp);
         if (news.Simplified(card.Article) is { } text) { content.Children.Add(Ui.Text("Simpler Danish · on-device AI · compare with the DR text above", 10)); content.Children.Add(Source(text, false)); }
         if (news.SimplificationState(card.Article) is { } state) content.Children.Add(Ui.Text(state, 11));
-        if (card.Matches.Length > 0) { var match = Ui.Text("Recently learned here: " + string.Join(" · ", card.Matches), 11); match.Foreground = Ui.Accent; content.Children.Add(match); }
+        if (card.Matches.Length > 0) { var match = Ui.Text("From your recent words: " + string.Join(" · ", card.Matches), 11); match.Foreground = Ui.Accent; content.Children.Add(match); }
         var reading = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
         var listen = Ui.Button("Listen to headline", () => news.Reader.Speak?.Invoke(card.Article.Title)); listen.IsEnabled = news.Reader.Speak is not null; reading.Children.Add(listen);
         reading.Children.Add(Ui.Button(card.Article.Summary.Length == 0 ? "Simpler headline · local AI" : "Simpler excerpt · local AI", () => _ = news.SimplifyAsync(card.Article))); content.Children.Add(reading);

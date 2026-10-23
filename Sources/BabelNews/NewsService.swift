@@ -117,6 +117,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         cache.articles = Array(cache.articles.filter(\.valid).prefix(256))
         if !cache.fetched.isFinite || cache.fetched < 0 || cache.fetched > clock().timeIntervalSince1970 + 3600 { cache.fetched = 0 }
         selectCards()
+        reader.beforeHelp = { [weak self] in self?.cancelGeneration() }
         simplified = Dictionary(uniqueKeysWithValues: (cache.shortVersions ?? [:]).filter {
             $0.key.count < 1000 && !$0.value.text.isEmpty && $0.value.text.utf8.count <= 3000 && $0.value.model.count <= 200 && $0.value.created.isFinite
         }.sorted { $0.key < $1.key }.prefix(64).map { ($0.key, $0.value) })

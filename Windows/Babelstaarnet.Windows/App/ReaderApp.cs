@@ -85,7 +85,7 @@ internal sealed class ReaderApp : Application
         };
         news.Reader.CachedWordMeaning = word => vocabulary.SavedMeaning(word) ?? (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, word, out var gloss) ? gloss : null);
         news.Reader.Speak = text => Speak(text);
-        news.Reader.SaveWord = (word, meaning, context) => { vocabulary.Save(word, meaning, context, DateTimeOffset.Now); vocabulary.Mark(word, false, DateTimeOffset.Now); };
+        news.Reader.SaveWord = (word, meaning, context) => { vocabulary.Save(word, meaning, context, DateTimeOffset.Now); };
 
         news.MeaningPreservationWords = DanishLanguage.Shared.MeaningPreservationWords;
         news.LanguageInstructions = DanishLanguage.Shared.NewsSimplificationInstructions;

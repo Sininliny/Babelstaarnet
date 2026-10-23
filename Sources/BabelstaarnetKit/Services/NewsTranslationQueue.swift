@@ -49,7 +49,7 @@ import Translation
                 let requests = request.texts.enumerated().map { TranslationSession.Request(sourceText: $0.element, clientIdentifier: String($0.offset)) }
                 let replies = try await session.translations(from: requests)
                 let values = Dictionary(uniqueKeysWithValues: replies.compactMap { reply in Int(reply.clientIdentifier ?? "").map { ($0, reply.targetText) } })
-                guard values.count == request.texts.count else { throw NewsTranslationError.incomplete }
+                guard request.texts.indices.allSatisfy({ values[$0] != nil }) else { throw NewsTranslationError.incomplete }
                 request.finish(.success(request.texts.indices.map { values[$0]! }))
             } catch { request.finish(.failure(error)) }
             pending.removeValue(forKey: id)

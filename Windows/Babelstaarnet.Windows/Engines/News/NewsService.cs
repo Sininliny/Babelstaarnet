@@ -78,7 +78,7 @@ internal sealed class NewsService : IDisposable
     public NewsService(string directory, Func<Uri, CancellationToken, Task<string>>? download = null, Func<DateTimeOffset>? clock = null)
     {
         this.clock = clock ?? (() => DateTimeOffset.Now);
-        Reader = new NewsReadingSupport(directory);
+        Reader = new NewsReadingSupport(directory) { BeforeHelp = CancelGeneration };
         preferencesPath = Path.Combine(directory, "news-preferences.json"); cachePath = Path.Combine(directory, "news-cache.json");
         Preferences = Load<NewsPreferences>(preferencesPath) ?? new(); cache = Load<NewsCache>(cachePath) ?? new();
         Preferences.Topic = Math.Clamp(Preferences.Topic, 0, Topics.Length - 1); Preferences.DigestHour = Math.Clamp(Preferences.DigestHour, 9, 20);

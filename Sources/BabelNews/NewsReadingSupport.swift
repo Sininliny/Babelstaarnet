@@ -27,6 +27,7 @@ private struct NewsReadingCache: Codable {
     @Published public private(set) var showEnglish = true
     public var translate: (([String]) async throws -> [String])?
     public var cachedWordMeaning: (String) -> String? = { _ in nil }
+    public var beforeHelp: (() -> Void)?
     public var speak: ((String) -> Void)?
     public var saveWord: ((String, String, String) -> Void)?
     private let path: URL
@@ -52,14 +53,14 @@ private struct NewsReadingCache: Codable {
     public func setEnglish(_ enabled: Bool) { showEnglish = enabled; revealed.removeAll(); if !enabled { cancel() }; persist() }
     public func prepare(_ article: NewsArticle, requested: Bool = false) async {
         let key = Self.key(article)
-        if requested { revealed.insert(key); objectWillChange.send() }
+        if requested { beforeHelp?(); revealed.insert(key); objectWillChange.send() }
         let decision = SharedPolicy.readingHelp(requested: requested, english: showEnglish, cached: meaning(article) != nil, available: translate != nil)
         guard decision > 1 else { return }
         guard decision == 2, let translate else { states[key] = "Set up local translation in Settings to read this with English support."; return }
         if let task = tasks[key] { await task.value; return }
         let owner = UUID(); owners[key] = owner
         states[key] = "Preparing English on this device…"
-        let task = Task { [weak self] in
+        let task = Task(priority: .utility) { [weak self] in
             do {
                 let texts = Self.sourceParts(article), translated = try await translate(texts)
                 try Task.checkCancellation()
@@ -76,13 +77,13 @@ private struct NewsReadingCache: Codable {
     }
     public func lookup(_ word: String, article: NewsArticle) async {
         // Lookup is explicit help, never evidence that the whole story was understood.
-        wordTask?.cancel()
+        beforeHelp?(); wordTask?.cancel()
         let key = Self.key(article), identity = UUID()
         selectionID = identity
         let cached = cachedWordMeaning(word)
         selected = NewsWordHelp(articleKey: key, word: word, meaning: cached ?? "", status: cached == nil ? "Looking up on this device…" : "Word meaning · use the English sentence for context")
         guard cached == nil, let translate else { if cached == nil { selected?.status = "Set up local translation in Settings for word meanings." }; return }
-        let task = Task { [weak self] in
+        let task = Task(priority: .userInitiated) { [weak self] in
             do {
                 let result = try await translate([word]); try Task.checkCancellation()
                 guard self?.selectionID == identity else { return }

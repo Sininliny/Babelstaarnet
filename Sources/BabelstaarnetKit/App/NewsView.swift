@@ -2,6 +2,7 @@ import AppKit
 import BabelNews
 import SwiftUI
 import Translation
+import UserNotifications
 
 struct NewsView: View {
     @ObservedObject var news: NewsService
@@ -94,7 +95,7 @@ struct NewsReadingCardView: View {
                 source(text, headline: false)
             }
             if let state = news.simplificationState(for: article) { Text(state).font(.caption).foregroundStyle(.secondary) }
-            if !card.matches.isEmpty { Text("Recently learned here: " + card.matches.joined(separator: " · ")).font(.caption).foregroundStyle(Color.accentColor) }
+            if !card.matches.isEmpty { Text("From your recent words: " + card.matches.joined(separator: " · ")).font(.caption).foregroundStyle(Color.accentColor) }
             ViewThatFits(in: .horizontal) {
                 HStack { readingActions }
                 VStack(alignment: .leading) { readingActions }

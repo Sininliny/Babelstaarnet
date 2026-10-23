@@ -313,7 +313,6 @@ public final class AppModel: ObservableObject {
         news.reader.saveWord = { [weak self] word, meaning, context in
             guard let self else { return }; let key = self.languages.source.normalized(word)
             self.wordBook.save(key: key, word: word, meaning: meaning, sentence: context)
-            self.learnerProfileStore.recordUnknown(for: key); self.refreshLearnerProfileSummary()
         }
 
         news.meaningPreservationWords = languages.source.meaningPreservationWords
