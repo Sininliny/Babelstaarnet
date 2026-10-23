@@ -84,6 +84,7 @@ internal sealed class ReaderApp : Application
             return await translator.TranslateAsync(texts, token);
         };
         news.Reader.CachedWordMeaning = word => vocabulary.SavedMeaning(word) ?? (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, word, out var gloss) ? gloss : null);
+        news.Reader.KnowledgeLevel = vocabulary.EffectiveLevel;
         news.Reader.Speak = text => Speak(text);
         news.Reader.SaveWord = (word, meaning, context) => { vocabulary.Save(word, meaning, context, DateTimeOffset.Now); };
 

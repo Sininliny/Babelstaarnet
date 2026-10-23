@@ -24,6 +24,9 @@ internal sealed class TrayPanel : Border
         System.Windows.Documents.TextElement.SetFontFamily(this, Ui.Font); var panel = new StackPanel(); Child = panel;
         var header = new DockPanel(); var image = headerLogo; image.Width = image.Height = 26; image.Margin = new Thickness(0, 0, 9, 0);
         header.Children.Add(image); var name = new StackPanel(); var title = Ui.Text("Babelstårnet", 14, true); title.Margin = new Thickness(0, 0, 0, 2); name.Children.Add(title); status.Margin = new Thickness(0); status.Foreground = Ui.Muted; name.Children.Add(status); header.Children.Add(name); panel.Children.Add(header);
+        book = Ui.ActionButton("Word Book", model.OpenBook); book.FontSize = 13; book.FontWeight = FontWeights.SemiBold; book.HorizontalContentAlignment = HorizontalAlignment.Left; book.Margin = new Thickness(0, 13, 0, 0);
+        System.Windows.Automation.AutomationProperties.SetName(book, "Open Word Book"); panel.Children.Add(book);
+        var bookHint = Ui.Text("Your words · Read something new", 11); bookHint.Foreground = Ui.Muted; bookHint.Margin = new Thickness(4, 3, 0, 5); panel.Children.Add(bookHint);
         var startContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left }; toggleTitle.Margin = new Thickness(0, 0, 0, 3); toggleDetail.Margin = new Thickness(0); toggleDetail.Foreground = Ui.Muted; startContent.Children.Add(toggleTitle); startContent.Children.Add(toggleDetail);
         start = Ui.ActionButton("", model.Toggle); start.Content = startContent; start.HorizontalContentAlignment = HorizontalAlignment.Stretch; start.Margin = new Thickness(0, 13, 0, 9); panel.Children.Add(start);
         failure.Foreground = Ui.ColorBrush(160, 54, 43); failure.MaxHeight = 48; failure.TextTrimming = TextTrimming.CharacterEllipsis; failure.Margin = new Thickness(0, 2, 0, 5); panel.Children.Add(failure); retry = Ui.Button("Retry", model.CheckEngines); panel.Children.Add(retry);
@@ -32,7 +35,6 @@ internal sealed class TrayPanel : Border
         foreach (var check in new[] { word, sentence }) { FormControls.Apply(check); check.FontSize = 12; check.Margin = new Thickness(0, 4, 0, 6); panel.Children.Add(check); check.Click += (_, _) => { if (refreshing) return; model.Preferences.WordMeaning = word.IsChecked == true; model.Preferences.WholeSentence = sentence.IsChecked == true; model.Commit(); }; }
         hints.Foreground = Ui.Muted; hints.Margin = new Thickness(0, 6, 0, 11); panel.Children.Add(hints);
         panel.Children.Add(new Border { Height = .7, Background = Ui.Stroke, Margin = new Thickness(0, 0, 0, 9) });
-        book = Footer("Word Book", model.OpenBook); panel.Children.Add(book);
         var bottom = new Grid(); bottom.ColumnDefinitions.Add(new ColumnDefinition()); bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bottom.Children.Add(Footer("Settings…", model.OpenSettings)); var quit = Footer("Quit", model.Quit); Grid.SetColumn(quit, 1); bottom.Children.Add(quit); panel.Children.Add(bottom);
         Loaded += (_, _) => { model.Changed += Refresh; Refresh(); }; Unloaded += (_, _) => model.Changed -= Refresh; Refresh();
     }

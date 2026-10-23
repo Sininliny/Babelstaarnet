@@ -60,6 +60,19 @@ internal static class NativeExperienceChecks
             string[] pieces = NewsReadingSupport.Pieces(title);
             Check(pieces.SequenceEqual(item.GetProperty("pieces").EnumerateArray().Select(p => p.GetString())) && pieces.Select(NewsReadingSupport.Word).SequenceEqual(item.GetProperty("words").EnumerateArray().Select(p => p.ValueKind == JsonValueKind.Null ? null : p.GetString())), "Native word buttons must preserve Danish spelling, punctuation and numbers.");
         }
+        foreach (var item in data.RootElement.GetProperty("newsScaffolding").EnumerateArray())
+        {
+            var article = new NewsArticle("fixture", item.GetProperty("title").GetString()!, "", "https://www.dr.dk/nyheder/fixture", 0, 0);
+            using var reader = new NewsReadingSupport(Path.Combine(Path.GetTempPath(), "scaffold-" + Guid.NewGuid()));
+            var levels = item.GetProperty("levels"); var meanings = item.GetProperty("meanings"); var hints = item.GetProperty("hints");
+            reader.KnowledgeLevel = word => levels.TryGetProperty(word.ToLowerInvariant(), out var level) ? level.GetInt32() : 0;
+            reader.CachedWordMeaning = word => meanings.TryGetProperty(word.ToLowerInvariant(), out var meaning) ? meaning.GetString() : null;
+            reader.Translate = (_, _) => throw new Exception("Available dictionary hints need no translation work.");
+            reader.PrepareAsync(article).GetAwaiter().GetResult();
+            foreach (string word in NewsReadingSupport.Pieces(article.Title).Select(NewsReadingSupport.Word).OfType<string>())
+                Check(reader.Gloss(word, article) == (hints.TryGetProperty(word.ToLowerInvariant(), out var hint) ? hint.GetString() : null), "Unfamiliar words get hints; known words and names remain Danish.");
+            Check(!reader.IsVisible(article) && reader.Meaning(article) is null, "Default hints must not create a full English alternative.");
+        }
     }
     private static void PixelComparison()
     {
@@ -103,6 +116,11 @@ internal static class NativeExperienceChecks
         string preferences = Path.Combine(directory, "appearance.json");
         var model = new ReaderUiModel(new(), new VocabularyStore(Path.Combine(directory, "appearance-words.json")), preferences);
         model.Apply = () => theme.Apply(model.Preferences.Appearance);
+        int bookOpens = 0; model.OpenBook = () => bookOpens++;
+        var tray = new TrayPanel(model); Layout(tray, 290, 650);
+        var book = Descendants<Button>(tray).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "Open Word Book");
+        book.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(bookOpens == 1 && book.IsTabStop && book.Focusable && Descendants<Button>(tray).First() == book, "Word Book must be a primary keyboard-accessible tray action independent of Settings.");
         var shell = new SettingsShell(model); Layout(shell, 880, 640);
         var navigation = Descendants<ListBox>(shell).Single(); navigation.SelectedItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Appearance"));
         Check(shell.SelectedPage == "Appearance", "Windows navigation must open its selected settings page.");

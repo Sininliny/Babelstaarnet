@@ -736,7 +736,7 @@
         0,
         1
       ],
-      "expected": 2
+      "expected": 0
     },
     {
       "id": "news-help-1",
@@ -747,7 +747,7 @@
         1,
         0
       ],
-      "expected": 1
+      "expected": 0
     },
     {
       "id": "news-help-2",
@@ -791,7 +791,68 @@
         0,
         0
       ],
+      "expected": 0
+    },
+    {
+      "id": "news-explicit-setup",
+      "operation": "reading-help",
+      "args": [
+        1,
+        0,
+        0,
+        0
+      ],
       "expected": 3
+    },
+    {
+      "id": "news-novice-word",
+      "operation": "news-gloss",
+      "args": [
+        0,
+        1,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "news-learning-word",
+      "operation": "news-gloss",
+      "args": [
+        3,
+        1,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "news-stable-word",
+      "operation": "news-gloss",
+      "args": [
+        4,
+        1,
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "news-missing-word",
+      "operation": "news-gloss",
+      "args": [
+        0,
+        0,
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "news-unchanged-name",
+      "operation": "news-gloss",
+      "args": [
+        0,
+        1,
+        0
+      ],
+      "expected": 0
     }
   ]
 }

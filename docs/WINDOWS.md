@@ -236,8 +236,13 @@ Source builds require CMake and Visual Studio C++ build tools in addition to .NE
 news rules statically compiled into the Mac client. End users need neither CMake
 nor Visual Studio. See [cross-platform development](DEVELOPMENT.md).
 
-News cards include English support by default, even for headline-only items.
-Select a Danish word directly to look it up, listen or save it with its source
-context. Turn off **English support** to try Danish first; **Show English** stays
-available. These actions use local translation and speech, and work on cached
-news with networking off. They do not require OCR or the optional language model.
+Word Book is a primary action at the top of the tower tray menu, beside the
+reading controls, and does not require opening Settings. News cards keep Danish
+prominent with short hints under unfamiliar words. Familiar words remain Danish;
+partly learned words still receive support. Hints stay stable while reading.
+Select a Danish word to look it up, listen or save it with its source context.
+**Help with this sentence** reveals full English for that card only;
+**Back to Danish** closes it. A previous English-on preference cannot make full
+translations appear automatically. Closing the news page resets that disclosure.
+These actions use local translation and speech, including cached news with
+networking off. They require neither OCR nor the optional language model.

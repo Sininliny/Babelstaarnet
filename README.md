@@ -40,9 +40,11 @@ is sent to a remote service.
 
 The Word Book also offers **Read something new**, an optional, default-off
 internet feature using DR's public RSS feeds. Matching recent learning happens
-on your computer. News cards show an on-device English meaning by default,
-including headlines without excerpts. Select a Danish word to look it up, listen
-or save it; turn English support off whenever you want to try Danish first.
+on your computer. Open **Word Book** directly from the tower menu (or
+**⇧⌘B** on Mac). Danish stays prominent: short hints help with unfamiliar
+words, while familiar words stay Danish. Select a word to look it up, listen
+or save it. **Help with this sentence** reveals a full local translation only
+for that card; **Back to Danish** closes it. There is no test or delay before help.
 DR receives normal web requests; your vocabulary and screen
 content are never sent with them. Background refresh and daily news digests
 are separate opt-ins. Cached news remains available offline. An installed local

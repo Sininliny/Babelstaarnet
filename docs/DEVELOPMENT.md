@@ -113,8 +113,11 @@ they stay in the local data directory and are not telemetry. See
 [performance notes](WINDOWS_PERFORMANCE.md) for the latest measured changes.
 
 News reader regressions belong in `Tests/Shared/reading-contract.json` and
-`SharedPolicyChecks`: include title-only RSS, default English support, explicit
-help in Danish-first mode, stale translation cancellation and restart without
-network access. `NewsReadingViewChecks` renders actual SwiftUI cards; Windows
+`SharedPolicyChecks`: include title-only RSS, selective word scaffolding,
+explicit sentence help, legacy English-on migration, stable hints during reading,
+stale translation cancellation and restart without network access. Shared
+`newsScaffolding` examples assert that known words remain Danish and unfamiliar
+words receive hints; neither default rendering nor a legacy preference can
+reveal full English. `NewsReadingViewChecks` renders actual SwiftUI cards; Windows
 renders the matching production controls through `--render-ui`. CI also builds
 the Mac package so both clients have installable artifacts.

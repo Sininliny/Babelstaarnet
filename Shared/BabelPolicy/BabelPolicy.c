@@ -4,9 +4,16 @@
 
 int32_t bp_version(void) { return 1; }
 int32_t bp_reading_help(int32_t requested, int32_t english, int32_t cached, int32_t available) {
-    if (!requested && !english) return 0;
+    /* Keep the old preference argument for ABI/cache compatibility. A legacy
+       English-on preference must never reveal a complete translation. */
+    (void)english;
+    if (!requested) return 0;
     if (cached) return 1;
     return available ? 2 : 3;
+}
+int32_t bp_news_gloss(int32_t level, int32_t available, int32_t different) {
+    /* News offers support, not an extra challenge for partially learned words. */
+    return available && different && bp_anchor(level, 1, 0, 0, 0, 0);
 }
 int32_t bp_retry_delay(int32_t failures) {
     if (failures <= 0) return 0;

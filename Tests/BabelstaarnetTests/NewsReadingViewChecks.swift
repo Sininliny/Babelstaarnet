@@ -19,22 +19,28 @@ import SwiftUI
             if text == "får" { return "sheep" }
             return "A short and clear message."
         } }
+        let glosses = ["æbler": "apples", "og": "and", "får": "sheep", "på": "in", "landet": "the countryside"]
+        news.reader.cachedWordMeaning = { glosses[$0.lowercased()] }
+        news.reader.knowledgeLevel = { ["æbler", "og"].contains($0.lowercased()) ? 4 : 0 }
         var audioCalls = 0
         news.reader.speak = { _ in audioCalls += 1 }; news.reader.saveWord = { _, _, _ in }
         let card = news.cards.first { $0.article.summary.isEmpty }!
         await news.reader.prepare(card.article)
-        await news.reader.lookup("får", article: card.article)
+        precondition(!news.reader.isVisible(card.article) && news.reader.meaning(card.article) == nil)
         let output = root.appendingPathComponent("build")
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
-            let view = NSHostingView(rootView: NewsReadingCardView(news: news, card: card).padding(16).frame(width: 560))
-            view.appearance = NSAppearance(named: appearance)
-            let size = view.fittingSize
-            precondition(size.width >= 500 && size.height > 200 && size.height < 1100, "News reading controls must fit a normal Word Book window")
-            view.setFrameSize(size); view.layoutSubtreeIfNeeded()
-            guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { preconditionFailure("News card could not render") }
-            view.cacheDisplay(in: view.bounds, to: bitmap)
-            try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("mac-news-" + name + ".png"))
+        for help in [false, true] {
+            if help { await news.reader.prepare(card.article, requested: true) }
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
+                let view = NSHostingView(rootView: NewsReadingCardView(news: news, card: card).padding(16).frame(width: 560))
+                view.appearance = NSAppearance(named: appearance)
+                let size = view.fittingSize
+                precondition(size.width >= 500 && size.height > 200 && size.height < 1100, "News reading controls must fit a normal Word Book window")
+                view.setFrameSize(size); view.layoutSubtreeIfNeeded()
+                guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { preconditionFailure("News card could not render") }
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("mac-news-" + name + (help ? "-sentence-help" : "") + ".png"))
+            }
         }
         precondition(audioCalls == 0, "Opening a news card must never autoplay speech")
         print("Native news cards rendered light/dark without windows, desktop capture or audio.")

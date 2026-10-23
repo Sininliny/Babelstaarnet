@@ -4,7 +4,6 @@ import SwiftUI
 
 public struct SettingsView: View {
     @ObservedObject var model: AppModel
-    @Environment(\.openWindow) private var openWindow
 
     public init(model: AppModel) {
         self.model = model
@@ -181,11 +180,6 @@ public struct SettingsView: View {
                             ? ", \(model.wordBookDueCount) to review"
                             : "")
                 )
-
-                Button("Open Word Book") {
-                    openWindow(id: WordBookView.windowID)
-                    NSApp.activate(ignoringOtherApps: true)
-                }
 
                 HStack {
                     Button("Export Profile") {

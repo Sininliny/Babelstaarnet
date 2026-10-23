@@ -79,7 +79,6 @@ internal sealed class SettingsPanel : ScrollViewer
         Value(learning, "Danish words seen", () => Words(model.Vocabulary.TrackedCount)); Value(learning, "Probably understood", () => Words(model.Vocabulary.FamiliarCount));
         Caption(learning, "Babelstårnet keeps track of which Danish words keep coming back to you and quietly shows less English for those. Reading is enough to move it. Knew and Don’t know correct it when needed. Stored only on this PC; imports merge without double-counting.");
         Value(learning, "In your word book", () => Words(model.Vocabulary.Saved.Count()) + (model.DueCount > 0 ? $", {model.DueCount} to review" : ""));
-        learning.Children.Add(Button("Open Word Book", model.OpenBook));
         var dataActions = new WrapPanel(); var export = Button("Export Profile", model.ExportProfile); dataActions.Children.Add(export); dataActions.Children.Add(Button("Import Profile", model.ImportProfile)); learning.Children.Add(dataActions);
         var dataMessage = Caption(learning, ""); refresh.Add(() => { export.IsEnabled = model.Vocabulary.TrackedCount > 0; dataMessage.Text = model.DataMessage ?? ""; dataMessage.Visibility = string.IsNullOrWhiteSpace(model.DataMessage) ? Visibility.Collapsed : Visibility.Visible; });
         var reset = Button("Reset what Babelstårnet has learned", model.ResetProfile); reset.Foreground = Ui.ColorBrush(172, 49, 44); learning.Children.Add(reset); refresh.Add(() => reset.IsEnabled = model.Vocabulary.TrackedCount > 0);

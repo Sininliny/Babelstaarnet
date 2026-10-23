@@ -32,7 +32,8 @@ struct BabelstaarnetApp: App {
         Window("Word Book", id: WordBookView.windowID) {
             WordBookView(model: model)
         }
-        .defaultSize(width: 560, height: 520)
+        .defaultSize(width: 640, height: 680)
+        .commands { WordBookCommands() }
 
         Settings {
             SettingsView(model: model)
