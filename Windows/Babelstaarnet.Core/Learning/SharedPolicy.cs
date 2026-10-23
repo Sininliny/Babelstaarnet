@@ -8,6 +8,7 @@ public static class SharedPolicy
 {
     private const string Library = "babel_policy";
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_version();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_reading_help(int requested, int english, int cached, int available);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_retry_delay(int failures);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_source_capability(int capability);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_target_allowed(int count, int already);

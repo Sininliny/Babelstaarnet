@@ -3,6 +3,11 @@
 #include <string.h>
 
 int32_t bp_version(void) { return 1; }
+int32_t bp_reading_help(int32_t requested, int32_t english, int32_t cached, int32_t available) {
+    if (!requested && !english) return 0;
+    if (cached) return 1;
+    return available ? 2 : 3;
+}
 int32_t bp_retry_delay(int32_t failures) {
     if (failures <= 0) return 0;
     int32_t delay = 60;

@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/Babelstaarnet.ico</ApplicationIcon>
     <AssemblyName>Babelstaarnet</AssemblyName>
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Assets/*.ico" LogicalName="Babelstaarnet.Assets.%(Filename)%(Extension)" />

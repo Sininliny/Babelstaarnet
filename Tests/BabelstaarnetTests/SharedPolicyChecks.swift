@@ -17,6 +17,7 @@ import LanguageDanish
             func s(_ n: Int) -> String { args[n] as! String }
             let result: Double
             switch item["operation"] as! String {
+            case "reading-help": result = Double(bp_reading_help(i(0),i(1),i(2),i(3)))
             case "retry": result = Double(bp_retry_delay(i(0)))
             case "source": result = Double(bp_source_capability(i(0)))
             case "summary": result = SharedPolicy.summaryValid(source: s(0), summary: s(1), preservationWords: SourceLanguage.danish.meaningPreservationWords) ? 1 : 0
@@ -65,6 +66,32 @@ import LanguageDanish
         news.configure(enabled: false, background: true, notify: true, topic: 0, hour: 18)
         await news.refresh(manual: true, background: true)
         precondition(downloads == 1 && !news.preferences.background && !news.preferences.notify)
+        let reader = news.reader
+        var translations = 0, spoken = 0, savedContext = ""
+        reader.translate = { texts in translations += 1; return texts.map { "English: " + $0 } }
+        reader.speak = { _ in spoken += 1 }; reader.saveWord = { _, _, context in savedContext = context }
+        let headlineOnly = parsed.first { $0.summary.isEmpty }!
+        precondition(reader.showEnglish)
+        await reader.prepare(headlineOnly); await reader.prepare(headlineOnly)
+        precondition(translations == 1 && reader.meaning(headlineOnly)?.parts.count == 1)
+        reader.setEnglish(false); precondition(!reader.isVisible(headlineOnly))
+        await reader.prepare(headlineOnly); precondition(translations == 1)
+        await reader.prepare(headlineOnly, requested: true); precondition(reader.isVisible(headlineOnly) && translations == 1)
+        await reader.lookup("får", article: headlineOnly); reader.saveSelection(article: headlineOnly)
+        precondition(reader.selected?.meaning == "English: får" && savedContext.contains(headlineOnly.title) && spoken == 0)
+        let restoredReading = NewsReadingSupport(directory: directory)
+        precondition(!restoredReading.showEnglish && restoredReading.meaning(headlineOnly) != nil)
+        var changed = headlineOnly; changed.title += " - updated"
+        precondition(restoredReading.meaning(changed) == nil)
+        reader.setEnglish(true); var started = false
+        reader.translate = { texts in started = true; try await Task.sleep(for: .seconds(10)); return texts }
+        let pending = Task { await reader.prepare(changed) }
+        while !started { await Task.yield() }
+        reader.cancel()
+        reader.translate = { $0.map { "Fresh: " + $0 } }; await reader.prepare(changed); await pending.value
+        precondition(reader.meaning(changed)?.parts.first?.hasPrefix("Fresh:") == true)
+        changed.title = "Incomplete fixture"; reader.translate = { _ in [] }; await reader.prepare(changed)
+        precondition(reader.meaning(changed) == nil && reader.state(changed)?.contains("unavailable") == true)
         print("Passed \(count) shared native policy vectors and offline news adapter checks.")
     }
 }

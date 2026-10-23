@@ -43,6 +43,7 @@ internal sealed class NewsCache
 // Source guide: https://www.dr.dk/nyheder/dr-nyheder-som-rss-feed (verified 2026-10-22).
 internal sealed class NewsService : IDisposable
 {
+    public NewsReadingSupport Reader { get; }
     public static readonly string[] Topics = ["Latest", "Denmark", "World", "Money", "Politics", "Science", "Culture", "Sport"];
     public const string Disclosure = "Connects to DR to fetch public news. Matching stays on this PC. No word list, screenshots or learning records are uploaded. DR receives ordinary requests, including your IP address and requested URLs. Opening an original uses your browser.";
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -77,6 +78,7 @@ internal sealed class NewsService : IDisposable
     public NewsService(string directory, Func<Uri, CancellationToken, Task<string>>? download = null, Func<DateTimeOffset>? clock = null)
     {
         this.clock = clock ?? (() => DateTimeOffset.Now);
+        Reader = new NewsReadingSupport(directory);
         preferencesPath = Path.Combine(directory, "news-preferences.json"); cachePath = Path.Combine(directory, "news-cache.json");
         Preferences = Load<NewsPreferences>(preferencesPath) ?? new(); cache = Load<NewsCache>(cachePath) ?? new();
         Preferences.Topic = Math.Clamp(Preferences.Topic, 0, Topics.Length - 1); Preferences.DigestHour = Math.Clamp(Preferences.DigestHour, 9, 20);
@@ -91,7 +93,7 @@ internal sealed class NewsService : IDisposable
         if (download is null)
         {
             http = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.1");
             this.download = DownloadAsync;
         }
         else this.download = download;
@@ -180,7 +182,8 @@ internal sealed class NewsService : IDisposable
     public void NextGroup() { rotation += 3; HasUpdates = false; SelectCards(); Changed?.Invoke(); }
     public void AcceptUpdates() { rotation = 0; HasUpdates = false; SelectCards(); Changed?.Invoke(); }
     public void SetBookPage(int page) { Preferences.LastBookPage = Math.Clamp(page, 0, 1); Save(); }
-    private string ExcerptKey(NewsArticle a) => a.Id + ":v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(a.Summary + "\u001f" + SharedPolicy.RewritePrompt + "\u001f" + LanguageInstructions + "\u001f" + string.Join('\n', MeaningPreservationWords))));
+    private static string ExcerptText(NewsArticle a) => a.Summary.Length == 0 ? a.Title : a.Summary;
+    private string ExcerptKey(NewsArticle a) => a.Id + ":v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ExcerptText(a) + "\u001f" + SharedPolicy.RewritePrompt + "\u001f" + LanguageInstructions + "\u001f" + string.Join('\n', MeaningPreservationWords))));
     public string? Simplified(NewsArticle a) => simplified.GetValueOrDefault(ExcerptKey(a))?.Text;
     public string? SimplifiedModel(NewsArticle a) => simplified.GetValueOrDefault(ExcerptKey(a))?.Model;
     public string? SimplificationState(NewsArticle a) => simplificationStates.GetValueOrDefault(ExcerptKey(a));
@@ -189,15 +192,15 @@ internal sealed class NewsService : IDisposable
         // Only the public RSS excerpt supplied by DR, never fetched full article text.
         string key = ExcerptKey(article);
         if (simplified.ContainsKey(key)) return;
-        int decision = SharedPolicy.bp_rewrite(SharedPolicy.bp_source_capability(2), article.Summary.Length > 0 ? 1 : 0, (ModelAvailable?.Invoke() ?? SimplifyExcerpt is not null) ? 1 : 0, ReadingActive() ? 1 : 0, 0);
+        int decision = SharedPolicy.bp_rewrite(SharedPolicy.bp_source_capability(2), ExcerptText(article).Length > 0 ? 1 : 0, (ModelAvailable?.Invoke() ?? SimplifyExcerpt is not null) ? 1 : 0, ReadingActive() ? 1 : 0, 0);
         if (decision != 1) { simplificationStates[key] = decision == 2 ? "Pause screen reading to simplify this excerpt. The original remains available." : "Install the optional local language model to simplify RSS excerpts."; Changed?.Invoke(); return; }
         if (generation is not null) return;
         using var request = new CancellationTokenSource(TimeSpan.FromSeconds(90)); generation = request;
         simplificationStates[key] = "Simplifying this RSS excerpt locally…"; Changed?.Invoke();
         try
         {
-            string text = await SimplifyExcerpt!(article.Summary, request.Token); request.Token.ThrowIfCancellationRequested();
-            if (!SharedPolicy.SummaryValid(article.Summary, text, MeaningPreservationWords)) throw new InvalidDataException("Short version did not pass the conservative checks. Read the original excerpt instead.");
+            string text = await SimplifyExcerpt!(ExcerptText(article), request.Token); request.Token.ThrowIfCancellationRequested();
+            if (!SharedPolicy.SummaryValid(ExcerptText(article), text, MeaningPreservationWords)) throw new InvalidDataException("Short version did not pass the conservative checks. Read the original excerpt instead.");
             if (simplified.Count >= 64) simplified.Clear();
             simplified[key] = new(text, ModelIdentity(), clock().ToUnixTimeSeconds()); simplificationStates.Remove(key); cache.ShortVersions = new(simplified); Save();
         }
@@ -236,5 +239,5 @@ internal sealed class NewsService : IDisposable
     }
     public IReadOnlyList<NewsArticle> DigestCandidates => Cards.Where(c => !Preferences.LastDigestIds.Contains(c.Article.Id) && clock().ToUnixTimeSeconds() - c.Article.Published is >= 0 and <= 604800).Select(c => c.Article).ToArray();
     public void DigestSent() { Preferences.LastDigestDay = clock().ToString("yyyy-MM-dd"); Preferences.LastDigestIds = Preferences.LastDigestIds.Concat(DigestCandidates.Take(1).Select(a => a.Id)).Distinct().TakeLast(100).ToArray(); Save(); }
-    public void Dispose() { disposed = true; fetch?.Cancel(); CancelGeneration(); http?.Dispose(); }
+    public void Dispose() { disposed = true; fetch?.Cancel(); CancelGeneration(); Reader.Dispose(); http?.Dispose(); }
 }

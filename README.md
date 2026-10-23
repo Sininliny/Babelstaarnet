@@ -40,7 +40,10 @@ is sent to a remote service.
 
 The Word Book also offers **Read something new**, an optional, default-off
 internet feature using DR's public RSS feeds. Matching recent learning happens
-on your computer. DR receives normal web requests; your vocabulary and screen
+on your computer. News cards show an on-device English meaning by default,
+including headlines without excerpts. Select a Danish word to look it up, listen
+or save it; turn English support off whenever you want to try Danish first.
+DR receives normal web requests; your vocabulary and screen
 content are never sent with them. Background refresh and daily news digests
 are separate opt-ins. Cached news remains available offline. An installed local
 language model can simplify an RSS excerpt on request, with the original kept

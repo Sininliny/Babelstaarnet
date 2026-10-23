@@ -3,6 +3,9 @@ import Foundation
 
 public enum SharedPolicy {
     public static let version = Int(bp_version())
+    public static func readingHelp(requested: Bool, english: Bool, cached: Bool, available: Bool) -> Int {
+        Int(bp_reading_help(requested ? 1 : 0, english ? 1 : 0, cached ? 1 : 0, available ? 1 : 0))
+    }
     public static func retryDelay(failures: Int) -> Double { Double(bp_retry_delay(Int32(failures))) }
     public static func evidence(event: Int, correct: Bool = false, hinted: Bool = false) -> Int {
         Int(bp_evidence(Int32(event), correct ? 1 : 0, hinted ? 1 : 0))

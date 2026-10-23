@@ -57,6 +57,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
 
 /// Native network/storage adapter. Decisions come from the same C component as Windows.
 @MainActor public final class NewsService: ObservableObject {
+    public let reader: NewsReadingSupport
     public static let topics = ["Latest", "Denmark", "World", "Money", "Politics", "Science", "Culture", "Sport"]
     public static let disclosure = "Connects to DR to fetch public news. Matching stays on this Mac. No word list, screenshots or learning records are uploaded. DR receives ordinary requests, including your IP address and requested URLs. Opening an original uses your browser."
     @Published public private(set) var preferences: NewsPreferences
@@ -95,6 +96,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
                 download: ((URL) async throws -> String)? = nil) {
         let storageDirectory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Babelstaarnet")
         self.directory = storageDirectory
+        reader = NewsReadingSupport(directory: storageDirectory)
         self.clock = clock; self.downloadOverride = download
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpShouldSetCookies = false; configuration.httpCookieStorage = nil; configuration.urlCache = nil
@@ -151,7 +153,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         else {
             let session = session
             task = Task {
-                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.0", forHTTPHeaderField: "User-Agent")
+                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.1", forHTTPHeaderField: "User-Agent")
                 let (bytes, response) = try await session.bytes(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.expectedContentLength <= 1_000_000 else { throw URLError(.badServerResponse) }
                 var data = Data()
@@ -183,27 +185,28 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     public func simplifiedText(for article: NewsArticle) -> String? { simplified[excerptKey(article)]?.text }
     public func simplifiedModel(for article: NewsArticle) -> String? { simplified[excerptKey(article)]?.model }
     public func simplificationState(for article: NewsArticle) -> String? { simplificationStates[excerptKey(article)] }
+    private func excerptText(_ article: NewsArticle) -> String { article.summary.isEmpty ? article.title : article.summary }
     private func excerptKey(_ article: NewsArticle) -> String {
         // Source text, rather than a URL alone, versions the cached derivative.
-        article.id + ":v1:" + SHA256.hash(data: Data((article.summary + "\u{1f}" + SharedPolicy.rewritePrompt + "\u{1f}" + languageInstructions + "\u{1f}" + meaningPreservationWords.joined(separator: "\n")).utf8)).map { String(format: "%02X", $0) }.joined()
+        article.id + ":v1:" + SHA256.hash(data: Data((excerptText(article) + "\u{1f}" + SharedPolicy.rewritePrompt + "\u{1f}" + languageInstructions + "\u{1f}" + meaningPreservationWords.joined(separator: "\n")).utf8)).map { String(format: "%02X", $0) }.joined()
     }
     public func simplify(_ article: NewsArticle) async {
         let key = excerptKey(article)
         if simplified[key] != nil { return }
-        let decision = SharedPolicy.rewrite(sourceAllows: SharedPolicy.sourceCapability(2), textPresent: !article.summary.isEmpty, modelInstalled: modelAvailable?() ?? (simplifyExcerpt != nil), reading: readingActive())
+        let decision = SharedPolicy.rewrite(sourceAllows: SharedPolicy.sourceCapability(2), textPresent: !excerptText(article).isEmpty, modelInstalled: modelAvailable?() ?? (simplifyExcerpt != nil), reading: readingActive())
         guard decision == 1 else {
             simplificationStates[key] = decision == 2 ? "Pause screen reading to simplify this excerpt. The original remains available." : "Install the optional local language model to simplify RSS excerpts."
             return
         }
         guard generationTask == nil, let simplifyExcerpt else { return }
         simplificationStates[key] = "Simplifying this RSS excerpt locally…"
-        let task = Task { try await simplifyExcerpt(article.summary) }; generationTask = task
+        let task = Task { try await simplifyExcerpt(excerptText(article)) }; generationTask = task
         let timeout = Task { try? await Task.sleep(for: .seconds(90)); if !Task.isCancelled { task.cancel() } }
         defer { timeout.cancel(); generationTask = nil }
         do {
             let text = try await task.value
             guard !task.isCancelled else { throw CancellationError() }
-            guard SharedPolicy.summaryValid(source: article.summary, summary: text, preservationWords: meaningPreservationWords) else { throw URLError(.cannotDecodeContentData) }
+            guard SharedPolicy.summaryValid(source: excerptText(article), summary: text, preservationWords: meaningPreservationWords) else { throw URLError(.cannotDecodeContentData) }
             let version = NewsShortVersion(text: text, model: modelIdentity(), created: clock().timeIntervalSince1970)
             simplified[key] = version; simplificationStates.removeValue(forKey: key)
             if simplified.count > 64 { simplified = [key: version] }
@@ -259,7 +262,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
             }
         }
     }
-    public func stop() { fetchTask?.cancel(); cancelGeneration(); backgroundTask?.cancel(); backgroundTask = nil }
+    public func stop() { fetchTask?.cancel(); cancelGeneration(); reader.cancel(); backgroundTask?.cancel(); backgroundTask = nil }
     public static func parseFeed(_ xml: String, topic: Int) throws -> [NewsArticle] {
         guard xml.utf8.count <= 1_000_000, !xml.localizedCaseInsensitiveContains("<!DOCTYPE"), !xml.localizedCaseInsensitiveContains("<!ENTITY") else { throw URLError(.cannotParseResponse) }
         let parser = XMLParser(data: Data(xml.utf8)); parser.shouldResolveExternalEntities = false

@@ -56,7 +56,7 @@ internal sealed class ReaderApp : Application
         {
             try
             {
-                if (SharedPolicy.bp_version() != 1) return 4;
+                if (SharedPolicy.bp_version() != 1 || SharedPolicy.bp_reading_help(1, 0, 1, 0) != 1) return 4;
                 _ = ScreenReader.DanishAvailable; _ = BrandIcons.AppImage;
                 using var brand = new BrandIcons(); _ = brand.Tray(false); _ = brand.Tray(true);
                 if (!File.Exists(AppPaths.Bridge) || !File.Exists(AppPaths.Installer) || !File.Exists(AppPaths.SpeechBridge) || !File.Exists(AppPaths.SpeechInstaller)) return 2;
@@ -78,6 +78,15 @@ internal sealed class ReaderApp : Application
         vocabulary = new VocabularyStore(Path.Combine(AppPaths.DataDirectory, "vocabulary.json"));
         news = new NewsService(AppPaths.DataDirectory) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
         news.ReadingActive = () => active;
+        news.Reader.Translate = async (texts, token) =>
+        {
+            if (!translator.IsInstalled) throw new InvalidOperationException("Install local translation in Settings → Local engines first.");
+            return await translator.TranslateAsync(texts, token);
+        };
+        news.Reader.CachedWordMeaning = word => vocabulary.SavedMeaning(word) ?? (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, word, out var gloss) ? gloss : null);
+        news.Reader.Speak = text => Speak(text);
+        news.Reader.SaveWord = (word, meaning, context) => { vocabulary.Save(word, meaning, context, DateTimeOffset.Now); vocabulary.Mark(word, false, DateTimeOffset.Now); };
+
         news.MeaningPreservationWords = DanishLanguage.Shared.MeaningPreservationWords;
         news.LanguageInstructions = DanishLanguage.Shared.NewsSimplificationInstructions;
         news.SimplifyExcerpt = contextual.SimplifyPublicExcerptAsync; news.ModelAvailable = () => contextual.IsInstalled; news.ModelIdentity = () => contextual.ModelIdentity;
@@ -353,7 +362,7 @@ internal sealed class ReaderApp : Application
     {
         DismissTray(); ClearBubble();
         if (book is not null) { book.Activate(); return; }
-        book = new WordBookWindow(vocabulary, word => Speak(word), preferences, FillMissingMeanings, news); book.Closed += (_, _) => book = null; book.Show();
+        book = new WordBookWindow(vocabulary, word => Speak(word), preferences, FillMissingMeanings, news, () => { ShowSettings(); if (settings?.Content is SettingsShell shell) shell.SelectPage("News (internet)"); }); book.Closed += (_, _) => book = null; book.Show();
     }
     private async void FillMissingMeanings()
     {

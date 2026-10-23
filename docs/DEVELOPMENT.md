@@ -17,7 +17,7 @@ See [the shared-policy decision](ADR-001-SHARED-POLICY.md) for the ABI and bound
 | --- | --- |
 | `Sources/BabelCore` | Swift reading primitives and language contracts |
 | `Shared/BabelPolicy` | One C11 implementation of learning and news decisions, compiled by both clients |
-| `Sources/BabelNews` | Mac public-feed, cache and notification scheduling adapter |
+| `Sources/BabelNews` | Mac public-feed/cache adapter and network-free news reading support |
 | `Sources/LanguageDanish` | Canonical Danish tables, prompts and rules |
 | `Sources/BabelOCR`, `BabelTranslate`, `BabelLexicon`, `BabelSpeech` | Mac capability adapters |
 | `Sources/BabelstaarnetKit`, `Babelstaarnet` | Mac application and SwiftUI presentation |
@@ -111,3 +111,10 @@ Runtime diagnostics contain numeric timings rather than recognized text.
 Local translation/context caches can contain recognized words and sentences;
 they stay in the local data directory and are not telemetry. See
 [performance notes](WINDOWS_PERFORMANCE.md) for the latest measured changes.
+
+News reader regressions belong in `Tests/Shared/reading-contract.json` and
+`SharedPolicyChecks`: include title-only RSS, default English support, explicit
+help in Danish-first mode, stale translation cancellation and restart without
+network access. `NewsReadingViewChecks` renders actual SwiftUI cards; Windows
+renders the matching production controls through `--render-ui`. CI also builds
+the Mac package so both clients have installable artifacts.

@@ -106,5 +106,48 @@
       "selected": true,
       "anchor": true
     }
+  ],
+  "newsReading": [
+    {
+      "title": "Byen åbner en ny park.",
+      "summary": "",
+      "parts": [
+        "Byen åbner en ny park."
+      ],
+      "pieces": [
+        "Byen",
+        "åbner",
+        "en",
+        "ny",
+        "park."
+      ],
+      "words": [
+        "Byen",
+        "åbner",
+        "en",
+        "ny",
+        "park"
+      ]
+    },
+    {
+      "title": "2.500 får og EU-bidrag",
+      "summary": "Æbler, smør og mælk.",
+      "parts": [
+        "2.500 får og EU-bidrag",
+        "Æbler, smør og mælk."
+      ],
+      "pieces": [
+        "2.500",
+        "får",
+        "og",
+        "EU-bidrag"
+      ],
+      "words": [
+        null,
+        "får",
+        "og",
+        "EU-bidrag"
+      ]
+    }
   ]
 }

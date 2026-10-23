@@ -658,7 +658,7 @@ private enum EnglishGlossTone {
     }
 }
 
-private struct InlineTokenLayout: Layout {
+struct InlineTokenLayout: Layout {
     let spacing: CGFloat
     let lineSpacing: CGFloat
 

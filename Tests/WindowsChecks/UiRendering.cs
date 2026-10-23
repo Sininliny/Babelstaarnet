@@ -54,7 +54,13 @@ internal static class UiRendering
         using var news = new NewsService(Path.Combine(fixture, "news"), (_, _) => System.Threading.Tasks.Task.FromResult(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shared", "news-feed.xml"))), () => DateTimeOffset.Parse("2026-10-22T12:00:00Z", CultureInfo.InvariantCulture));
         news.LearningUnits = () => ["æbler", "energi"]; model.News = news;
         news.Configure(true, false, false, 0, 18); news.RefreshAsync(true).GetAwaiter().GetResult();
+        news.Reader.Translate = (texts, _) => System.Threading.Tasks.Task.FromResult<IReadOnlyList<string>>(texts.Select(text => text.StartsWith("Regeringen") ? "The government presents a new plan for green energy." : text.StartsWith("Æbler") ? "Apples and sheep in the countryside." : "A short and clear message.").ToArray());
+        news.Reader.Speak = _ => { }; news.Reader.SaveWord = (_, _, _) => { };
+        news.Reader.SetEnglish(true);
+        foreach (var article in news.Cards.Select(c => c.Article)) news.Reader.PrepareAsync(article).GetAwaiter().GetResult();
         Save(new NewsPanel(news), stem + "-news.png", 860, 950);
+        var fixtureCard = news.Cards.First(); news.Reader.LookupAsync("energi", fixtureCard.Article).GetAwaiter().GetResult();
+        Save(new NewsReadingCard(news, fixtureCard), stem + "-news-word.png", 760, 600);
         Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
         var settings = new SettingsPanel(model); settings.Measure(new Size(480, 3000)); settings.Arrange(new Rect(0, 0, 480, 3000)); settings.UpdateLayout();
         // Render the actual grouped form without the viewport cropping its lower sections.

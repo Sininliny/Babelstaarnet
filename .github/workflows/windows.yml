@@ -18,6 +18,16 @@ jobs:
         run: python3 Scripts/check-repository.py
       - name: Check Mac behavior remains compatible
         run: make test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-news-previews
+          path: build/mac-news-*.png
+      - name: Package Mac app
+        run: make release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Babelstaarnet-macOS
+          path: dist/*-macOS.zip
 
   windows:
     runs-on: windows-latest

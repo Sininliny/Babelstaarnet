@@ -21,6 +21,7 @@ internal static class SharedPolicyChecks
             var a = c.GetProperty("args").EnumerateArray().ToArray(); int I(int n) => a[n].GetInt32(); double D(int n) => a[n].GetDouble(); string S(int n) => a[n].GetString()!;
             double result = c.GetProperty("operation").GetString() switch
             {
+                "reading-help" => SharedPolicy.bp_reading_help(I(0),I(1),I(2),I(3)),
                 "retry" => SharedPolicy.bp_retry_delay(I(0)),
                 "source" => SharedPolicy.bp_source_capability(I(0)),
                 "summary" => SharedPolicy.SummaryValid(S(0),S(1), DanishLanguage.Shared.MeaningPreservationWords) ? 1 : 0,
@@ -80,11 +81,60 @@ internal static class SharedPolicyChecks
         Check(migrated.Shortcuts.Known == new AppShortcut(52, 0) && migrated.Shortcuts.SentenceMeaning != migrated.Shortcuts.Known && migrated.Shortcuts.ValidationError() is null, "Adding sentence help must preserve legacy shortcut choices.");
         var evidence = new VocabularyStore(Path.Combine(directory, "evidence.json")); evidence.Save("æbler", "apples", "Jeg spiser æbler.", now); evidence.Mark("æbler", true, now);
         Check(evidence.Saved.Single().LastEvidenceKind == 2, "Knew is self-report, not verified recall.");
+        checks += await ReadingSupportOnOwnerThread(directory, parsed);
         using var session = new HoverSession(_ => "word", (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => t.Contains(' ') ? "A full sentence." : "word").ToArray()), _ => true);
         var word = new RecognizedWord("ord", new(1,1,10,10)); await session.FocusAsync(new(word, new("Et ord her.", [word])));
         await session.ToggleSentenceMeaningAsync();
         Check(session.SentenceHelp && session.SentenceMeaning == "A full sentence.", "Sentence help must work after background word translation has completed.");
         session.Clear(); Check(!session.SentenceHelp && session.SentenceMeaning.Length == 0, "Sentence help must not leak into another focus.");
+        return checks;
+    }
+    private static Task<int> ReadingSupportOnOwnerThread(string directory, NewsArticle[] articles)
+    {
+        var result = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+            SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(dispatcher));
+            async void Start()
+            {
+                try { result.SetResult(await ReadingSupportAsync(directory, articles)); }
+                catch (Exception error) { result.SetException(error); }
+                finally { dispatcher.BeginInvokeShutdown(System.Windows.Threading.DispatcherPriority.Background); }
+            }
+            dispatcher.BeginInvoke(new Action(Start)); System.Windows.Threading.Dispatcher.Run();
+        });
+        thread.SetApartmentState(ApartmentState.STA); thread.Start(); return result.Task;
+    }
+    private static async Task<int> ReadingSupportAsync(string directory, NewsArticle[] articles)
+    {
+        int checks = 0; void Check(bool value, string message) { if (!value) throw new Exception(message); checks++; }
+        string folder = Path.Combine(directory, "beginner-news");
+        using var reader = new NewsReadingSupport(folder); int calls = 0, spoken = 0; string? saved = null;
+        reader.Translate = (texts, _) => { calls++; return Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "English: " + t).ToArray()); };
+        reader.Speak = _ => spoken++; reader.SaveWord = (word, meaning, context) => saved = word + "|" + meaning + "|" + context;
+        var headlineOnly = articles.First(a => a.Summary.Length == 0);
+        Check(reader.ShowEnglish, "Beginners must receive English support by default, including old preference files.");
+        await reader.PrepareAsync(headlineOnly); await reader.PrepareAsync(headlineOnly);
+        Check(calls == 1 && reader.Meaning(headlineOnly)?.Parts.Length == 1, "A title-only RSS item must still get English, cached without another request.");
+        reader.SetEnglish(false); Check(!reader.IsVisible(headlineOnly), "Trying Danish first must hide English voluntarily.");
+        await reader.PrepareAsync(headlineOnly); Check(calls == 1, "Danish-first mode must not start hidden work.");
+        await reader.PrepareAsync(headlineOnly, true); Check(reader.IsVisible(headlineOnly) && calls == 1, "Explicit help bypasses the practice preference and uses cached English.");
+        await reader.LookupAsync("får", headlineOnly); reader.SaveSelection(headlineOnly);
+        Check(reader.Selected?.Meaning == "English: får" && saved?.Contains(headlineOnly.Title) == true && spoken == 0, "Lookup/save must preserve Danish context and never autoplay audio.");
+        using var restored = new NewsReadingSupport(folder);
+        Check(!restored.ShowEnglish && restored.Meaning(headlineOnly) is not null, "English and reading mode must survive restart without any network adapter.");
+        var changed = headlineOnly with { Title = headlineOnly.Title + " - updated" };
+        Check(restored.Meaning(changed) is null, "A changed headline must not inherit stale English.");
+        reader.SetEnglish(true); var pending = new TaskCompletionSource<System.Collections.Generic.IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        reader.Translate = (_, token) => pending.Task.WaitAsync(token);
+        var canceled = reader.PrepareAsync(changed); reader.Cancel();
+        reader.Translate = (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "Fresh: " + t).ToArray());
+        await reader.PrepareAsync(changed); await canceled;
+        Check(reader.Meaning(changed)?.Parts[0].StartsWith("Fresh:") == true, "Canceled/stale work must not replace a newer reading aid.");
+        var incomplete = changed with { Title = "Incomplete fixture" };
+        reader.Translate = (_, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>([]); await reader.PrepareAsync(incomplete);
+        Check(reader.Meaning(incomplete) is null && reader.State(incomplete)?.Contains("unavailable") == true, "Failed translation must show help status instead of claiming success.");
         return checks;
     }
 }

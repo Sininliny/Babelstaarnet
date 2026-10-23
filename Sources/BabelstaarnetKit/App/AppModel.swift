@@ -14,6 +14,8 @@ import UserNotifications
 @MainActor
 public final class AppModel: ObservableObject {
     public let news = NewsService()
+    lazy var newsTranslator = NewsTranslationQueue(languages: languages)
+    private var argosEngineReady = false
     @Published public private(set) var newsWindowRequest = 0
     private let newsNotifications = NewsNotificationDelegate()
     @Published var supportedReading = UserDefaults.standard.bool(forKey: "reading.supported") {
@@ -292,6 +294,28 @@ public final class AppModel: ObservableObject {
             return saved + self.learnerProfileStore.recentLearningUnits()
         }
         news.readingActive = { [weak self] in self?.learningModeActive == true }
+        newsTranslator.local = { [weak self] texts in
+            guard let self, self.argosEngineReady else { return nil }
+            return try await self.argosTranslationService.translate(texts)
+        }
+        news.reader.translate = { [weak self] texts in
+            guard let self else { throw CancellationError() }; return try await self.newsTranslator.translate(texts)
+        }
+        news.reader.cachedWordMeaning = { [weak self] word in
+            guard let self else { return nil }
+            let key = self.languages.source.normalized(word), folded = self.languages.source.folded(word)
+            return self.wordBook.entries.first(where: { $0.id == key && !$0.meaning.isEmpty })?.meaning
+                ?? self.languages.source.exactGlosses[key] ?? self.languages.source.closedClassGlosses[folded]
+        }
+        news.reader.speak = { [weak self] text in
+            guard let self else { return }; self.speechService.speak(text, language: self.languages.source.speechVoice)
+        }
+        news.reader.saveWord = { [weak self] word, meaning, context in
+            guard let self else { return }; let key = self.languages.source.normalized(word)
+            self.wordBook.save(key: key, word: word, meaning: meaning, sentence: context)
+            self.learnerProfileStore.recordUnknown(for: key); self.refreshLearnerProfileSummary()
+        }
+
         news.meaningPreservationWords = languages.source.meaningPreservationWords
         news.languageInstructions = languages.source.newsSimplificationInstructions
         news.excludedLearningUnits = languages.source.structuralWords
@@ -364,6 +388,7 @@ public final class AppModel: ObservableObject {
             argosCheck,
             wordBridgeCheck
         )
+        argosEngineReady = argosReady
         wordBridgeEngineReady = wordBridgeReady
 
         ocrEngineName = tesseractReady
