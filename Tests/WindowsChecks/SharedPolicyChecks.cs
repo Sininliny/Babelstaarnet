@@ -135,6 +135,22 @@ internal static class SharedPolicyChecks
         var incomplete = changed with { Title = "Incomplete fixture" };
         reader.Translate = (_, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>([]); await reader.PrepareAsync(incomplete);
         Check(reader.Meaning(incomplete) is null && reader.State(incomplete)?.Contains("unavailable") == true, "Failed translation must show help status instead of claiming success.");
+        using var localNews = new NewsService(Path.Combine(directory, "card-actions"));
+        localNews.Reader.Translate = (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "English: " + t).ToArray());
+        localNews.Reader.Speak = _ => throw new Exception("No automatic audio is allowed.");
+        await localNews.Reader.PrepareAsync(headlineOnly);
+        var card = new NewsReadingCard(localNews, new NewsCard(headlineOnly, [], .5));
+        System.Collections.Generic.IEnumerable<System.Windows.DependencyObject> Tree(System.Windows.DependencyObject node)
+        {
+            yield return node;
+            foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(node).OfType<System.Windows.DependencyObject>())
+                foreach (var nested in Tree(child)) yield return nested;
+        }
+        var sourceButton = Tree(card).OfType<System.Windows.Controls.Button>().First(b => System.Windows.Automation.AutomationProperties.GetName(b).StartsWith("Look up Danish word "));
+        sourceButton.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        Check(localNews.Reader.Selected is { Meaning.Length: > 0 } && localNews.Reader.Selected.Context == headlineOnly.Title, "Native word actions must work directly on source text without OCR or desktop capture.");
+        localNews.SimplifyExcerpt = (source, _) => Task.FromResult(source); await localNews.SimplifyAsync(headlineOnly);
+        Check(localNews.Simplified(headlineOnly) == headlineOnly.Title, "Title-only news must also support optional local plain Danish.");
         return checks;
     }
 }

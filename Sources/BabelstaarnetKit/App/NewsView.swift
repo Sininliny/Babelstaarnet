@@ -133,7 +133,7 @@ struct NewsReadingCardView: View {
         InlineTokenLayout(spacing: 4, lineSpacing: 5) {
             ForEach(Array(NewsReadingSupport.pieces(text).enumerated()), id: \.offset) { _, piece in
                 if let word = NewsReadingSupport.word(piece) {
-                    Button { Task { await reader.lookup(word, article: article) } } label: {
+                    Button { Task { await reader.lookup(word, article: article, context: text) } } label: {
                         Text(piece).font(headline ? .title3.weight(.semibold) : .body)
                             .padding(.horizontal, 1).padding(.vertical, 2)
                             .background(card.matches.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 3))

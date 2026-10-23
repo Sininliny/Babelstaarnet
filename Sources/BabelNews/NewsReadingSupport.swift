@@ -10,6 +10,7 @@ public struct NewsEnglish: Codable, Sendable {
 public struct NewsWordHelp: Sendable {
     public let articleKey: String
     public let word: String
+    public let context: String
     public var meaning: String
     public var status: String
     public var saved = false
@@ -75,13 +76,13 @@ private struct NewsReadingCache: Codable {
         }
         tasks[key] = task; await task.value
     }
-    public func lookup(_ word: String, article: NewsArticle) async {
+    public func lookup(_ word: String, article: NewsArticle, context: String? = nil) async {
         // Lookup is explicit help, never evidence that the whole story was understood.
         beforeHelp?(); wordTask?.cancel()
         let key = Self.key(article), identity = UUID()
         selectionID = identity
         let cached = cachedWordMeaning(word)
-        selected = NewsWordHelp(articleKey: key, word: word, meaning: cached ?? "", status: cached == nil ? "Looking up on this device…" : "Word meaning · use the English sentence for context")
+        selected = NewsWordHelp(articleKey: key, word: word, context: context ?? Self.sourceParts(article).joined(separator: " "), meaning: cached ?? "", status: cached == nil ? "Looking up on this device…" : "Word meaning · use the English sentence for context")
         guard cached == nil, let translate else { if cached == nil { selected?.status = "Set up local translation in Settings for word meanings." }; return }
         let task = Task(priority: .userInitiated) { [weak self] in
             do {
@@ -96,7 +97,7 @@ private struct NewsReadingCache: Codable {
     private var selectionID = UUID()
     public func saveSelection(article: NewsArticle) {
         guard var value = selected, value.articleKey == Self.key(article), !value.meaning.isEmpty, let saveWord else { return }
-        saveWord(value.word, value.meaning, Self.sourceParts(article).joined(separator: " "))
+        saveWord(value.word, value.meaning, value.context)
         value.saved = true; selected = value
     }
     public func cancel() { for task in tasks.values { task.cancel() }; tasks.removeAll(); owners.removeAll(); states.removeAll(); wordTask?.cancel(); selectionID = UUID(); selected = nil }

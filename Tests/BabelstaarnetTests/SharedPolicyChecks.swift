@@ -92,6 +92,10 @@ import LanguageDanish
         precondition(reader.meaning(changed)?.parts.first?.hasPrefix("Fresh:") == true)
         changed.title = "Incomplete fixture"; reader.translate = { _ in [] }; await reader.prepare(changed)
         precondition(reader.meaning(changed) == nil && reader.state(changed)?.contains("unavailable") == true)
+        news.simplifyExcerpt = { $0 }; await news.simplify(headlineOnly)
+        precondition(news.simplifiedText(for: headlineOnly) == headlineOnly.title)
+        await reader.lookup("ny", article: headlineOnly, context: "En ny park.")
+        precondition(reader.selected?.context == "En ny park.")
         print("Passed \(count) shared native policy vectors and offline news adapter checks.")
     }
 }

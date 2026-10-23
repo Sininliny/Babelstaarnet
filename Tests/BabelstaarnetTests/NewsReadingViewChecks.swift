@@ -13,7 +13,12 @@ import SwiftUI
         let date = ISO8601DateFormatter().date(from: "2026-10-22T12:00:00Z")!
         let news = NewsService(directory: directory, clock: { date }, download: { _ in xml })
         news.configure(enabled: true, background: false, notify: false, topic: 0, hour: 18); await news.refresh()
-        news.reader.translate = { $0.map { "English support: " + $0 } }
+        news.reader.translate = { texts in texts.map { text in
+            if text.hasPrefix("Regeringen") { return "The government presents a new plan for green energy." }
+            if text.hasPrefix("Æbler") { return "Apples and sheep in the countryside." }
+            if text == "får" { return "sheep" }
+            return "A short and clear message."
+        } }
         var audioCalls = 0
         news.reader.speak = { _ in audioCalls += 1 }; news.reader.saveWord = { _, _, _ in }
         let card = news.cards.first { $0.article.summary.isEmpty }!

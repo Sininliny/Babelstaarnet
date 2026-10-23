@@ -80,7 +80,7 @@ internal sealed class NewsReadingCard : Border
         {
             if (NewsReadingSupport.Word(piece) is { } word)
             {
-                var button = Ui.ActionButton(piece, () => _ = news.Reader.LookupAsync(word, card.Article));
+                var button = Ui.ActionButton(piece, () => _ = news.Reader.LookupAsync(word, card.Article, text));
                 button.FontSize = headline ? 18 : 13; button.FontWeight = headline ? FontWeights.SemiBold : FontWeights.Normal;
                 button.Padding = new Thickness(1, 2, 1, 2); button.MinHeight = 24; button.Margin = new Thickness(0, 0, 4, 3); button.BorderThickness = new Thickness(0); button.MaxWidth = 390;
                 button.Background = card.Matches.Contains(word, StringComparer.OrdinalIgnoreCase) ? Ui.AccentSoft : Brushes.Transparent;

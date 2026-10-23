@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace Babelstaarnet.Windows;
 internal sealed record NewsEnglish(string[] Parts, double Created);
-internal sealed record NewsWordHelp(string ArticleKey, string Word, string Meaning, string Status, bool Saved = false);
+internal sealed record NewsWordHelp(string ArticleKey, string Word, string Context, string Meaning, string Status, bool Saved = false);
 internal sealed class NewsReadingCache
 {
     public Dictionary<string, NewsEnglish> English { get; set; } = [];
@@ -87,18 +87,18 @@ internal sealed class NewsReadingSupport : IDisposable
         states[key] = "Preparing English on this device…";
         Changed?.Invoke(); await Work();
     }
-    public async Task LookupAsync(string word, NewsArticle article)
+    public async Task LookupAsync(string word, NewsArticle article, string? context = null)
     {
         if (disposed) return;
         BeforeHelp?.Invoke(); wordRequest?.Cancel(); using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); wordRequest = request;
         string? cached = CachedWordMeaning(word);
-        Selected = new(Key(article), word, cached ?? "", cached is null ? "Looking up on this device…" : "Word meaning · use the English sentence for context"); Changed?.Invoke();
+        Selected = new(Key(article), word, context ?? string.Join(' ', SourceParts(article)), cached ?? "", cached is null ? "Looking up on this device…" : "Word meaning · use the English sentence for context"); Changed?.Invoke();
         if (cached is not null) { wordRequest = null; return; }
         if (Translate is null) { Selected = Selected with { Status = "Set up local translation in Settings for word meanings." }; Changed?.Invoke(); wordRequest = null; return; }
         try
         {
             var result = await Translate([word], request.Token); request.Token.ThrowIfCancellationRequested();
-            if (ReferenceEquals(wordRequest, request)) Selected = new(Key(article), word, result.FirstOrDefault() ?? "", "Word meaning · use the English sentence for context");
+            if (ReferenceEquals(wordRequest, request)) Selected = new(Key(article), word, context ?? string.Join(' ', SourceParts(article)), result.FirstOrDefault() ?? "", "Word meaning · use the English sentence for context");
         }
         catch (OperationCanceledException) { }
         catch { if (ReferenceEquals(wordRequest, request)) Selected = Selected! with { Status = "Word meaning unavailable. The English sentence above can help." }; }
@@ -107,7 +107,7 @@ internal sealed class NewsReadingSupport : IDisposable
     public void SaveSelection(NewsArticle article)
     {
         if (Selected is { } value && value.ArticleKey == Key(article) && value.Meaning.Length > 0 && SaveWord is not null)
-        { SaveWord(value.Word, value.Meaning, string.Join(' ', SourceParts(article))); Selected = value with { Saved = true }; Changed?.Invoke(); }
+        { SaveWord(value.Word, value.Meaning, value.Context); Selected = value with { Saved = true }; Changed?.Invoke(); }
     }
     public void Cancel() { if (disposed) return; lifetime.Cancel(); lifetime.Dispose(); lifetime = new(); tasks.Clear(); owners.Clear(); states.Clear(); wordRequest?.Cancel(); wordRequest = null; Selected = null; }
     public void Dispose() { if (disposed) return; Cancel(); disposed = true; lifetime.Dispose(); }
