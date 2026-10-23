@@ -52,6 +52,14 @@ internal static class NativeExperienceChecks
             int B(string name) => item.GetProperty(name).GetBoolean() ? 1 : 0;
             Check(SharedPolicy.bp_anchor(item.GetProperty("level").GetInt32(), B("supported"), B("focus"), B("newSense"), B("cooldown"), B("selected")) == B("anchor"), "Shared reading help must remain available without changing a word's level.");
         }
+        foreach (var item in data.RootElement.GetProperty("newsReading").EnumerateArray())
+        {
+            string title = item.GetProperty("title").GetString()!, summary = item.GetProperty("summary").GetString()!;
+            var article = new NewsArticle("fixture", title, summary, "https://www.dr.dk/nyheder/fixture", 0, 0);
+            Check(NewsReadingSupport.SourceParts(article).SequenceEqual(item.GetProperty("parts").EnumerateArray().Select(p => p.GetString())), "Reading aid must not depend on an RSS description.");
+            string[] pieces = NewsReadingSupport.Pieces(title);
+            Check(pieces.SequenceEqual(item.GetProperty("pieces").EnumerateArray().Select(p => p.GetString())) && pieces.Select(NewsReadingSupport.Word).SequenceEqual(item.GetProperty("words").EnumerateArray().Select(p => p.ValueKind == JsonValueKind.Null ? null : p.GetString())), "Native word buttons must preserve Danish spelling, punctuation and numbers.");
+        }
     }
     private static void PixelComparison()
     {

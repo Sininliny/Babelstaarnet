@@ -726,6 +726,72 @@
         "En “kort” besked."
       ],
       "expected": 0
+    },
+    {
+      "id": "news-help-0",
+      "operation": "reading-help",
+      "args": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "expected": 2
+    },
+    {
+      "id": "news-help-1",
+      "operation": "reading-help",
+      "args": [
+        0,
+        1,
+        1,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "news-help-2",
+      "operation": "reading-help",
+      "args": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "news-help-3",
+      "operation": "reading-help",
+      "args": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "expected": 1
+    },
+    {
+      "id": "news-help-4",
+      "operation": "reading-help",
+      "args": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "expected": 2
+    },
+    {
+      "id": "news-help-5",
+      "operation": "reading-help",
+      "args": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "expected": 3
     }
   ]
 }

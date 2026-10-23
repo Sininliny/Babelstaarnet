@@ -11,6 +11,8 @@ extern "C" {
 #endif
 /* Stable C ABI. No UI, filesystem, network, global state or model dependency. */
 BP_API int32_t bp_version(void);
+/* 0 hidden, 1 cached meaning, 2 local translation, 3 setup needed. No network gate. */
+BP_API int32_t bp_reading_help(int32_t requested, int32_t english_enabled, int32_t cached, int32_t local_available);
 BP_API int32_t bp_retry_delay(int32_t failures);
 BP_API int32_t bp_anchor(int32_t level, int32_t supported, int32_t focus,
     int32_t new_sense, int32_t cooldown, int32_t challenge_selected);

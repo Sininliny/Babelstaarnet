@@ -235,3 +235,9 @@ Source builds require CMake and Visual Studio C++ build tools in addition to .NE
 10 and Python. The build includes `babel_policy.dll`, the same native learning and
 news rules statically compiled into the Mac client. End users need neither CMake
 nor Visual Studio. See [cross-platform development](DEVELOPMENT.md).
+
+News cards include English support by default, even for headline-only items.
+Select a Danish word directly to look it up, listen or save it with its source
+context. Turn off **English support** to try Danish first; **Show English** stays
+available. These actions use local translation and speech, and work on cached
+news with networking off. They do not require OCR or the optional language model.
