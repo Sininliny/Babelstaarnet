@@ -113,6 +113,40 @@ import LanguageDanish
         precondition(news.simplifiedText(for: headlineOnly) == headlineOnly.title)
         await reader.lookup("ny", article: headlineOnly, context: "En ny park.")
         precondition(reader.selected?.context == "En ny park.")
+        try await popupChecks(directory: directory.appendingPathComponent("scheduled-news"), xml: xml)
         print("Passed \(count) shared native policy vectors and offline news adapter checks.")
     }
+    @MainActor private static func popupChecks(directory: URL, xml: String) async throws {
+        var now = ISO8601DateFormatter().date(from: "2026-10-22T12:00:00Z")!
+        var reading = false, generations = 0, shown = 0
+        let news = NewsService(directory: directory, clock: { now }, download: { _ in xml })
+        news.configure(enabled: true, background: true, notify: false, topic: 0, hour: 18); await news.refresh()
+        news.readingActive = { reading }; news.modelAvailable = { true }; news.modelIdentity = { "fixture-local-model" }
+        news.simplifyExcerpt = { text in generations += 1; return text.replacingOccurrences(of: " & ", with: " og ") }
+        var displayed: NewsPopupItem?
+        news.presentPopup = { item in shown += 1; displayed = item; return true }
+        await news.tickPopup(); precondition(shown == 0 && generations == 0, "Legacy news opt-in is not popup permission")
+        news.configurePopups(enabled: true, interval: 60)
+        now += 59 * 60; await news.tickPopup(); precondition(shown == 0)
+        now += 60; reading = true; await news.tickPopup(); precondition(generations == 0)
+        reading = false; news.pageVisible = true; await news.tickPopup(); precondition(generations == 0)
+        news.pageVisible = false; await news.tickPopup()
+        precondition(shown == 1 && generations == 1 && displayed?.model == "fixture-local-model" && displayed?.original.title != displayed?.adapted.title)
+        await news.tickPopup(); precondition(shown == 1, "No catch-up bursts")
+        let restored = NewsService(directory: directory, clock: { now }, download: { _ in preconditionFailure("Restart accessed HTTP") })
+        precondition(restored.popupPreferences.enabled && restored.popupPreferences.ids.count == 1 && !restored.popupDue())
+        news.pausePopupsForToday(true); now += 3600; await news.tickPopup(); precondition(shown == 1 && news.popupsPaused)
+        news.pausePopupsForToday(false)
+        var resume: CheckedContinuation<String, Never>?
+        news.simplifyExcerpt = { _ in await withCheckedContinuation { resume = $0 } }
+        let late = Task { await news.tickPopup() }
+        while resume == nil { await Task.yield() }
+        news.configurePopups(enabled: false, interval: 60); resume?.resume(returning: news.cards[1].article.title); await late.value
+        precondition(shown == 1 && !news.popupPreferences.enabled, "A canceled generation must not show a late popup")
+        news.configurePopups(enabled: true, interval: 60); now += 3600; news.modelAvailable = { false }; await news.tickPopup()
+        precondition(shown == 1 && news.popupStatus.contains("local AI"))
+        news.configure(enabled: false, background: true, notify: false, topic: 0, hour: 18)
+        precondition(!news.popupPreferences.enabled && !news.preferences.background)
+    }
+
 }

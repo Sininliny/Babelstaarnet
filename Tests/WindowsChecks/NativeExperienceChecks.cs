@@ -73,6 +73,11 @@ internal static class NativeExperienceChecks
                 Check(reader.Gloss(word, article) == (hints.TryGetProperty(word.ToLowerInvariant(), out var hint) ? hint.GetString() : null), "Unfamiliar words get hints; known words and names remain Danish.");
             Check(!reader.IsVisible(article) && reader.Meaning(article) is null, "Default hints must not create a full English alternative.");
         }
+        foreach (var item in data.RootElement.GetProperty("newsPopupSchedule").EnumerateArray())
+        {
+            int B(string key) => item.GetProperty(key).GetBoolean() ? 1 : 0; int I(string key) => item.GetProperty(key).GetInt32();
+            Check(SharedPolicy.bp_news_popup_due(B("enabled"), B("background"), B("optedIn"), B("blocked"), I("hour"), item.GetProperty("elapsed").GetDouble(), I("interval"), I("shown"), I("fresh")) == B("due"), "Shared popup schedule: " + item.GetProperty("id").GetString());
+        }
     }
     private static void PixelComparison()
     {
@@ -121,6 +126,10 @@ internal static class NativeExperienceChecks
         var book = Descendants<Button>(tray).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "Open Word Book");
         book.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(bookOpens == 1 && book.IsTabStop && book.Focusable && Descendants<Button>(tray).First() == book, "Word Book must be a primary keyboard-accessible tray action independent of Settings.");
+        using var menu = new TrayMenu(model);
+        Check(menu.Items[0].Name == "word-book" && menu.Items[1].Name == "news" && menu.Items[2].Name == "news-cards", "Native tray first-level menu must expose Word Book, news and scheduling.");
+        ((System.Windows.Forms.ToolStripMenuItem)menu.Items[0]).PerformClick();
+        Check(bookOpens == 2 && !menu.Visible, "Native menu actions must work without opening Settings or activating a test window.");
         var shell = new SettingsShell(model); Layout(shell, 880, 640);
         var navigation = Descendants<ListBox>(shell).Single(); navigation.SelectedItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Appearance"));
         Check(shell.SelectedPage == "Appearance", "Windows navigation must open its selected settings page.");

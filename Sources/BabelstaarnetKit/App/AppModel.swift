@@ -17,6 +17,10 @@ public final class AppModel: ObservableObject {
     lazy var newsTranslator = NewsTranslationQueue(languages: languages)
     private var argosEngineReady = false
     @Published public private(set) var newsWindowRequest = 0
+    @Published public private(set) var wordBookWindowRequest = 0
+    private lazy var newsPopup = NewsPopupController(news: news, translator: newsTranslator, openBook: { [weak self] in self?.openNewsBook() })
+    public func openWordBook() { news.setBookPage(0); wordBookWindowRequest += 1 }
+    public func openNewsBook() { news.setBookPage(1); newsWindowRequest += 1 }
     private let newsNotifications = NewsNotificationDelegate()
     @Published var supportedReading = UserDefaults.standard.bool(forKey: "reading.supported") {
         didSet { UserDefaults.standard.set(supportedReading, forKey: "reading.supported"); overlayController.supportedReading = supportedReading }
@@ -293,7 +297,7 @@ public final class AppModel: ObservableObject {
             let saved = self.wordBook.entries.filter { Date().timeIntervalSince($0.savedAt) <= 14 * 86400 }.map(\.word)
             return saved + self.learnerProfileStore.recentLearningUnits()
         }
-        news.readingActive = { [weak self] in self?.learningModeActive == true }
+        news.readingActive = { [weak self] in self?.learningModeActive == true && self?.detectionSuspendedForIdle != true }
         newsTranslator.local = { [weak self] texts in
             guard let self, self.argosEngineReady else { return nil }
             return try await self.argosTranslationService.translate(texts)
@@ -334,9 +338,11 @@ public final class AppModel: ObservableObject {
             content.interruptionLevel = .passive
             do { try await center.add(UNNotificationRequest(identifier: "Babelstaarnet.news.digest", content: content, trigger: nil)); return true } catch { return false }
         }
+        news.popupAllowed = { [weak self] in self?.newsPopup.allowed == true }
+        news.presentPopup = { [weak self] item in self?.newsPopup.present(item) == true }
         news.startBackground()
         newsNotifications.onOpen = { [weak self] in
-            guard let self else { return }; self.news.setBookPage(1); self.newsWindowRequest += 1
+            self?.openNewsBook()
         }
         UNUserNotificationCenter.current().delegate = newsNotifications
         screenPermissionGranted = captureService.hasPermission
@@ -364,6 +370,7 @@ public final class AppModel: ObservableObject {
             MainActor.assumeIsolated {
                 self?.learnerProfileStore.flushPersistence()
                 self?.news.stop()
+                self?.newsPopup.dismiss()
             }
         }
         Task {
@@ -1694,6 +1701,7 @@ public final class AppModel: ObservableObject {
         guard detectionSuspendedForIdle else {
             return
         }
+        news.cancelGeneration()
         detectionSuspendedForIdle = false
         lastCapturePoint = nil
         lastCaptureDate = nil

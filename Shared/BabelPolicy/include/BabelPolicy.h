@@ -16,6 +16,10 @@ BP_API int32_t bp_version(void);
 BP_API int32_t bp_reading_help(int32_t requested, int32_t english_enabled, int32_t cached, int32_t local_available);
 /* Small word glosses: unfamiliar/learning words get help; stable words stay Danish. */
 BP_API int32_t bp_news_gloss(int32_t level, int32_t available, int32_t different);
+/* Opt-in news cards: local 09–21, >=1h apart, at most three/day, no catch-up queue. */
+BP_API int32_t bp_news_popup_due(int32_t enabled, int32_t background, int32_t opted_in,
+    int32_t blocked, int32_t local_hour, double elapsed_seconds, int32_t interval_minutes,
+    int32_t shown_today, int32_t fresh_count);
 BP_API int32_t bp_retry_delay(int32_t failures);
 BP_API int32_t bp_anchor(int32_t level, int32_t supported, int32_t focus,
     int32_t new_sense, int32_t cooldown, int32_t challenge_selected);

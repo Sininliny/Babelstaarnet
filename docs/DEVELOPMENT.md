@@ -121,3 +121,9 @@ words receive hints; neither default rendering nor a legacy preference can
 reveal full English. `NewsReadingViewChecks` renders actual SwiftUI cards; Windows
 renders the matching production controls through `--render-ui`. CI also builds
 the Mac package so both clients have installable artifacts.
+
+Scheduled news cards use `bp_news_popup_due` and the shared `newsPopupSchedule`
+examples. Services own opt-in, clocks, deduplication, bounded local adaptation
+and cancellation; native presenters own nonactivating windows and session state.
+Tests advance fixture clocks and inject a fake local model/presenter. Never wait
+for real timers, fetch live news or open a visible popup in an automated check.

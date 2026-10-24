@@ -24,6 +24,7 @@ internal sealed class WordBookWindow : Window
         PreviewKeyDown += (_, e) => { if (Content is not TabControl tabs || tabs.SelectedIndex == 0) view.HandleReviewKey(e); };
         Loaded += (_, _) => fillMeanings?.Invoke();
     }
+    public void OpenWords() { if (Content is TabControl tabs) tabs.SelectedIndex = 0; }
     public void OpenNews() { if (Content is TabControl tabs) tabs.SelectedIndex = 1; }
 }
 

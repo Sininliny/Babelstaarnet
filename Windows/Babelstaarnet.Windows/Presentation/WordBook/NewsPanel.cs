@@ -50,31 +50,34 @@ internal sealed class NewsReadingCard : Border
 {
     private readonly NewsService news;
     private readonly NewsCard card;
+    private readonly NewsReadingSupport reader;
     private readonly StackPanel titleEnglish = new(), summaryEnglish = new(), wordHelp = new();
     private readonly List<(TextBlock Label, string Word)> glosses = [];
     private readonly TextBlock wordState = Ui.Text("", 11);
     private readonly Button sentenceHelp;
-    public NewsReadingCard(NewsService news, NewsCard card)
+    public NewsReadingCard(NewsService news, NewsCard card, bool compact = false, NewsReadingSupport? reader = null)
     {
-        this.news = news; this.card = card;
+        this.news = news; this.card = card; this.reader = reader ?? news.Reader;
         Background = Ui.Surface; BorderBrush = Ui.Stroke; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(10); Margin = new Thickness(0, 12, 0, 0);
         var content = new StackPanel { Margin = new Thickness(18) }; Child = content;
         var date = Ui.Text("DR · " + DateTimeOffset.FromUnixTimeSeconds((long)card.Article.Published).ToLocalTime().ToString("g"), 11); date.Foreground = Ui.Muted; content.Children.Add(date);
         var hint = Ui.Text("DANISH · SMALL HINTS FOR UNFAMILIAR WORDS", 10); hint.Foreground = Ui.Muted; content.Children.Add(hint);
-        content.Children.Add(Source(card.Article.Title, true));
+        content.Children.Add(Source(card.Article.Title, !compact));
         if (card.Article.Summary.Length > 0) { content.Children.Add(Source(card.Article.Summary, false)); }
-        else { var note = Ui.Text("Headline only · DR did not include an excerpt.", 11); note.Foreground = Ui.Muted; content.Children.Add(note); }
+        else if (!compact) { var note = Ui.Text("Headline only · DR did not include an excerpt.", 11); note.Foreground = Ui.Muted; content.Children.Add(note); }
         wordState.Foreground = Ui.Muted; content.Children.Add(wordState);
-        sentenceHelp = Ui.Button("Help with this sentence", () => { if (news.Reader.IsVisible(card.Article)) news.Reader.HideTranslation(card.Article); else _ = news.Reader.PrepareAsync(card.Article, true); });
+        sentenceHelp = Ui.Button("Help with this sentence", () => { if (this.reader.IsVisible(card.Article)) this.reader.HideTranslation(card.Article); else _ = this.reader.PrepareAsync(card.Article, true); });
         sentenceHelp.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(sentenceHelp);
         content.Children.Add(titleEnglish); content.Children.Add(summaryEnglish); content.Children.Add(wordHelp);
         if (news.Simplified(card.Article) is { } text) { content.Children.Add(Ui.Text("Simpler Danish · on-device AI · compare with the DR text above", 10)); content.Children.Add(Source(text, false)); }
         if (news.SimplificationState(card.Article) is { } state) content.Children.Add(Ui.Text(state, 11));
         if (card.Matches.Length > 0) { var match = Ui.Text("From your recent words: " + string.Join(" · ", card.Matches), 11); match.Foreground = Ui.Accent; content.Children.Add(match); }
+        if (!compact) {
         var reading = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-        var listen = Ui.Button("Listen to headline", () => news.Reader.Speak?.Invoke(card.Article.Title)); listen.IsEnabled = news.Reader.Speak is not null; reading.Children.Add(listen);
+        var listen = Ui.Button("Listen to headline", () => this.reader.Speak?.Invoke(card.Article.Title)); listen.IsEnabled = this.reader.Speak is not null; reading.Children.Add(listen);
         reading.Children.Add(Ui.Button(card.Article.Summary.Length == 0 ? "Simpler headline · local AI" : "Simpler excerpt · local AI", () => _ = news.SimplifyAsync(card.Article))); content.Children.Add(reading);
         var links = new WrapPanel(); links.Children.Add(Ui.Button("Full story · browser / internet", () => { if (NewsService.ValidArticle(card.Article)) Process.Start(new ProcessStartInfo(card.Article.Url) { UseShellExecute = true }); news.MarkSeen(card.Article); })); links.Children.Add(Ui.Button("Already seen", () => news.MarkSeen(card.Article))); content.Children.Add(links);
+        }
         UpdateSupport();
     }
     private WrapPanel Source(string text, bool headline)
@@ -84,7 +87,7 @@ internal sealed class NewsReadingCard : Border
         {
             if (NewsReadingSupport.Word(piece) is { } word)
             {
-                var button = Ui.ActionButton(piece, () => _ = news.Reader.LookupAsync(word, card.Article, text));
+                var button = Ui.ActionButton(piece, () => _ = this.reader.LookupAsync(word, card.Article, text));
                 var token = new StackPanel(); var source = Ui.Text(piece, headline ? 18 : 13, headline); source.Margin = new Thickness(0); token.Children.Add(source);
                 var gloss = Ui.Text("", 11); gloss.Foreground = Ui.Muted; gloss.Margin = new Thickness(0, 3, 0, 0); gloss.MaxWidth = 140; token.Children.Add(gloss); glosses.Add((gloss, word)); button.Content = token; button.VerticalAlignment = VerticalAlignment.Top;
                 button.FontSize = headline ? 18 : 13; button.FontWeight = headline ? FontWeights.SemiBold : FontWeights.Normal;
@@ -98,7 +101,7 @@ internal sealed class NewsReadingCard : Border
     }
     public void UpdateSupport()
     {
-        titleEnglish.Children.Clear(); summaryEnglish.Children.Clear(); wordHelp.Children.Clear(); var reader = news.Reader;
+        titleEnglish.Children.Clear(); summaryEnglish.Children.Clear(); wordHelp.Children.Clear(); var reader = this.reader;
         foreach (var (label, word) in glosses) { label.Text = reader.Gloss(word, card.Article) ?? ""; label.Visibility = label.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed; }
         wordState.Text = reader.WordState(card.Article) ?? ""; wordState.Visibility = wordState.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         sentenceHelp.Content = reader.IsVisible(card.Article) ? "Back to Danish" : "Help with this sentence";

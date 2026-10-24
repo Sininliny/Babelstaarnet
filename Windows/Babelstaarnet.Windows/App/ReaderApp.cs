@@ -46,6 +46,9 @@ internal sealed class ReaderApp : Application
     private NewsService news = null!;
     private readonly DispatcherTimer newsTimer = new() { Interval = TimeSpan.FromMinutes(1) };
     private TrayPopup? popup;
+    private TrayMenu? trayMenu;
+    private NewsPopupWindow? newsPopup;
+    private bool newsTickBusy;
     private Process? installer;
     private Task? initialization;
 
@@ -77,7 +80,7 @@ internal sealed class ReaderApp : Application
         if (preferences.SpeechEngine == "windows") speech.SelectEngine(new WindowsDanishEngine());
         vocabulary = new VocabularyStore(Path.Combine(AppPaths.DataDirectory, "vocabulary.json"));
         news = new NewsService(AppPaths.DataDirectory) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
-        news.ReadingActive = () => active;
+        news.ReadingActive = () => active && !idle;
         news.Reader.Translate = async (texts, token) =>
         {
             if (!translator.IsInstalled) throw new InvalidOperationException("Install local translation in Settings → Local engines first.");
@@ -93,7 +96,8 @@ internal sealed class ReaderApp : Application
         news.SimplifyExcerpt = contextual.SimplifyPublicExcerptAsync; news.ModelAvailable = () => contextual.IsInstalled; news.ModelIdentity = () => contextual.ModelIdentity;
         model = new ReaderUiModel(preferences, vocabulary)
         {
-            Toggle = Toggle, OpenSettings = ShowSettings, OpenBook = ShowBook, Quit = Shutdown, Apply = ApplyPreferences,
+            Toggle = Toggle, OpenSettings = ShowSettings, OpenBook = () => { ShowBook(); book?.OpenWords(); },
+            OpenNews = () => { ShowBook(); book?.OpenNews(); }, OpenNewsSettings = () => { ShowSettings(); if (settings?.Content is SettingsShell shell) shell.SelectPage("News (internet)"); }, OpenReadingControls = ShowTray, Quit = Shutdown, Apply = ApplyPreferences,
             SelectVoice = SelectVoice, InstallTranslation = () => StartInstall(false), InstallVoice = () => StartInstall(true),
             CheckEngines = CheckEngines, TryVoice = () => Speak("Jeg spiser æbler. Det er en anspændt situation, men vi finder en løsning."),
             OpenLanguageSettings = () => Process.Start(new ProcessStartInfo("ms-settings:regionlanguage") { UseShellExecute = true }),
@@ -116,15 +120,35 @@ internal sealed class ReaderApp : Application
         overlay.SentenceMeaningRequested += () => _ = session.ToggleSentenceMeaningAsync();
         overlay.Listen += () => { if (current is not null) Speak(current.Word.Text); };
         tray = new Forms.NotifyIcon { Text = "Babelstårnet · inactive", Icon = icons.Tray(false), Visible = true };
-        tray.MouseClick += (_, _) => Ui.Try(ShowTray);
+        trayMenu = new TrayMenu(model); tray.ContextMenuStrip = trayMenu;
+        tray.MouseClick += (_, mouse) => { if (mouse.Button == Forms.MouseButtons.Left) Ui.Try(() => trayMenu.Show(Forms.Cursor.Position)); };
+        news.PopupAllowed = () => !shuttingDown && NotificationsAccepted();
+        news.PresentPopup = item =>
+        {
+            if (newsPopup is not null || !news.PopupAllowed()) return false;
+            NewsPopupWindow? next = null;
+            try {
+                next = new NewsPopupWindow(news, item, () => { ShowBook(); book?.OpenNews(); }); newsPopup = next;
+                next.Closed += (_, _) => { if (ReferenceEquals(newsPopup, next)) newsPopup = null; }; next.ShowCard(); return true;
+            } catch (Exception error) {
+                next?.Close(); newsPopup = null;
+                if (Ui.ErrorRaised is { } report) report(error);
+                model.DataMessage = "News card could not open: " + error.Message; model.Notify(); return false;
+            }
+        };
         tray.BalloonTipClicked += (_, _) => Ui.Try(() => { ShowBook(); book?.OpenNews(); });
         newsTimer.Tick += async (_, _) =>
         {
+            if (newsTickBusy) return;
+            newsTickBusy = true;
+            try {
             await news.RefreshAsync(background: true);
+            await news.TickPopupAsync();
             if (news.DigestDue(active, NotificationsAccepted()) && news.DigestCandidates.Count > 0)
             { tray.ShowBalloonTip(7000, "DR · something new to read", news.DigestCandidates[0].Title, Forms.ToolTipIcon.Info); news.DigestSent(); }
+            } finally { newsTickBusy = false; }
         };
-        news.Changed += () => newsTimer.IsEnabled = news.Preferences.Enabled && news.Preferences.Background;
+        news.Changed += () => { newsTimer.IsEnabled = news.Preferences.Enabled && news.Preferences.Background; model.Notify(); };
         newsTimer.IsEnabled = news.Preferences.Enabled && news.Preferences.Background;
         SystemEvents.UserPreferenceChanged += ThemeChanged;
         try
@@ -255,7 +279,7 @@ internal sealed class ReaderApp : Application
         if (!active) return;
         bool shouldIdle = preferences.FollowScreenChanges && preferences.PowerSaving && NativeMethods.InputIdle >= TimeSpan.FromSeconds(5);
         timer.Interval = shouldIdle ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromMilliseconds(35);
-        if (idle != shouldIdle) { idle = shouldIdle; if (!idle) { lastScanPoint = null; lastScan = default; } UpdateTray(); }
+        if (idle != shouldIdle) { idle = shouldIdle; if (!idle) { news.CancelGeneration(); lastScanPoint = null; lastScan = default; } UpdateTray(); }
         if (idle || pinned || Holding || NativeMethods.IsOwnForegroundWindow() || !NativeMethods.GetCursorPos(out var position)) return;
         var pointer = new PixelPoint(position.X, position.Y); if (overlay.Contains(pointer)) return;
         var now = DateTimeOffset.UtcNow;
@@ -427,7 +451,7 @@ internal sealed class ReaderApp : Application
     }
     protected override void OnExit(ExitEventArgs e)
     {
-        shuttingDown = true; timer.Stop(); newsTimer.Stop(); news.Dispose(); CancelPending(); CancelSpeech(); SystemEvents.UserPreferenceChanged -= ThemeChanged;
+        shuttingDown = true; timer.Stop(); newsTimer.Stop(); newsPopup?.Close(); trayMenu?.Dispose(); news.Dispose(); CancelPending(); CancelSpeech(); SystemEvents.UserPreferenceChanged -= ThemeChanged;
         hotkeys?.Dispose(); session.Dispose(); overlay.Dispose(); translator.Dispose(); speech.Dispose(); contextual.Dispose(); vocabulary.Flush();
         if (tray is not null) { tray.Visible = false; tray.Dispose(); } icons.Dispose(); base.OnExit(e);
     }

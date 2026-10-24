@@ -50,6 +50,7 @@ public struct WordBookView: View {
         }
         .frame(minWidth: 460, minHeight: 360)
         .onChange(of: query.news) { _, value in model.news.setBookPage(value ? 1 : 0) }
+        .onChange(of: model.wordBookWindowRequest) { _, _ in query.news = false }
         .onChange(of: model.newsWindowRequest) { _, _ in query.news = true }
         .task {
             await model.fillMissingWordBookMeanings()

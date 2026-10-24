@@ -59,10 +59,21 @@ internal sealed class SettingsPanel : ScrollViewer
             void Set(bool enabled, bool background, bool notify) => news.Configure(enabled, background, notify, news.Preferences.Topic, news.Preferences.DigestHour);
             Toggle(newsSection, "News recommendations (internet)", () => news.Preferences.Enabled, v => Set(v, news.Preferences.Background, news.Preferences.Notify));
             Toggle(newsSection, "Background refresh", () => news.Preferences.Background, v => Set(news.Preferences.Enabled, v, news.Preferences.Notify), () => news.Preferences.Enabled);
-            Toggle(newsSection, "Daily news digest · while this app runs", () => news.Preferences.Notify, v => Set(news.Preferences.Enabled, news.Preferences.Background, v), () => news.Preferences.Enabled && news.Preferences.Background);
+            Toggle(newsSection, "Scheduled adapted news cards", () => news.PopupPreferences.Enabled, v => news.ConfigurePopups(v, news.PopupPreferences.IntervalMinutes), () => news.Preferences.Enabled && news.Preferences.Background);
+            var intervals = new[] { 60, 120, 240 };
+            var cadence = new ComboBox { Width = 140, ItemsSource = new[] { "1 hour", "2 hours", "4 hours" }, SelectedIndex = Array.IndexOf(intervals, news.PopupPreferences.IntervalMinutes) }; FormControls.Apply(cadence);
+            cadence.SelectionChanged += (_, _) => { if (!refreshing && cadence.SelectedIndex >= 0) news.ConfigurePopups(news.PopupPreferences.Enabled, intervals[cadence.SelectedIndex]); };
+            Row(newsSection, "Show a card every", cadence); refresh.Add(() => cadence.SelectedIndex = Array.IndexOf(intervals, news.PopupPreferences.IntervalMinutes));
+            Caption(newsSection, "While the app runs · 09:00–21:00 · at most 3 cards a day. No catch-up queue, sound or focus stealing. Reading takes priority. Enable background refresh above to schedule cards.");
+            Caption(newsSection, "Each card uses installed local AI to simplify DR text, with Danish word hints. No local AI means no scheduled cards; the original remains in Word Book.");
+            var popupActions = new WrapPanel(); popupActions.Children.Add(Button("Try a card now", () => _ = TryCard()));
+            async System.Threading.Tasks.Task TryCard() { await news.RefreshAsync(true); await news.TickPopupAsync(preview: true); }
+            var resume = Button("Resume news cards", () => news.PausePopupsForToday(false)); popupActions.Children.Add(resume); refresh.Add(() => resume.Visibility = news.PopupsPaused ? Visibility.Visible : Visibility.Collapsed); newsSection.Children.Add(popupActions);
+            var popupStatus = Ui.Text("", 11); popupStatus.Foreground = Ui.Muted; newsSection.Children.Add(popupStatus); refresh.Add(() => popupStatus.Text = news.PopupsPaused ? "News cards are paused for today." : news.PopupStatus);
+            Toggle(newsSection, "Daily headline notification · alternative to cards", () => news.Preferences.Notify, v => Set(news.Preferences.Enabled, news.Preferences.Background, v), () => news.Preferences.Enabled && news.Preferences.Background);
             var hour = new ComboBox { Width = 140, ItemsSource = Enumerable.Range(9, 12).Select(h => h.ToString("00") + ":00").ToArray(), SelectedIndex = news.Preferences.DigestHour - 9 };
             FormControls.Apply(hour); hour.SelectionChanged += (_, _) => { if (hour.SelectedIndex >= 0) news.Configure(news.Preferences.Enabled, news.Preferences.Background, news.Preferences.Notify, news.Preferences.Topic, hour.SelectedIndex + 9); }; Row(newsSection, "Digest time", hour);
-            Caption(newsSection, "At most one daily digest. Quiet hours 21:00–09:00; no notification while reading. Turning news off also turns background refresh and notifications off.");
+            Caption(newsSection, "Enabling this notification turns scheduled cards off. At most one daily digest. Quiet hours 21:00–09:00; no notification while reading. Turning news off also turns background refresh and notifications off.");
         }
         var shortcuts = Section("Shortcuts");
         foreach (var action in Enum.GetValues<ShortcutAction>())

@@ -11,6 +11,8 @@ enum CrossPlatformContractChecks {
         struct Presentation: Decodable { let level: Int; let supported: Bool; let focus: Bool; let newSense: Bool; let cooldown: Bool; let selected: Bool; let anchor: Bool }
         struct News: Decodable { let title: String; let summary: String; let parts: [String]; let pieces: [String]; let words: [String?] }
         struct Scaffold: Decodable { let title: String; let levels: [String: Int]; let meanings: [String: String]; let hints: [String: String] }
+        struct Popup: Decodable { let id: String; let enabled, background, optedIn, blocked: Bool; let hour: Int; let elapsed: Double; let interval, shown, fresh: Int; let due: Bool }
+        let newsPopupSchedule: [Popup]
         let newsScaffolding: [Scaffold]
         let newsReading: [News]
         let learningPresentation: [Presentation]
@@ -55,6 +57,9 @@ enum CrossPlatformContractChecks {
                 precondition(reader.gloss(word, article: article) == item.hints[word.lowercased()], "Unfamiliar words get hints; known words and names remain Danish")
             }
             precondition(!reader.isVisible(article) && reader.meaning(article) == nil)
+        }
+        for item in contract.newsPopupSchedule {
+            precondition(SharedPolicy.newsPopupDue(enabled: item.enabled, background: item.background, optedIn: item.optedIn, blocked: item.blocked, hour: item.hour, elapsed: item.elapsed, interval: item.interval, shown: item.shown, fresh: item.fresh) == item.due, "Shared news popup: " + item.id)
         }
         print("Cross-platform Danish contract passed")
     }

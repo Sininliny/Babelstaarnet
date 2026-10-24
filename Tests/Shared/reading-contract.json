@@ -188,5 +188,163 @@
         "får": "gets"
       }
     }
+  ],
+  "newsPopupSchedule": [
+    {
+      "id": "ready",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": true
+    },
+    {
+      "id": "off",
+      "enabled": false,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "no-background",
+      "enabled": true,
+      "background": false,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "no-opt-in",
+      "enabled": true,
+      "background": true,
+      "optedIn": false,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "reading-or-busy",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": true,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "too-soon",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7199,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "quiet-early",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 8,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "quiet-late",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 21,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "daily-cap",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 3,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "no-new-story",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 0,
+      "due": false
+    },
+    {
+      "id": "clock-backwards",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": -10,
+      "interval": 120,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    },
+    {
+      "id": "invalid-cadence",
+      "enabled": true,
+      "background": true,
+      "optedIn": true,
+      "blocked": false,
+      "hour": 12,
+      "elapsed": 7200,
+      "interval": 0,
+      "shown": 0,
+      "fresh": 2,
+      "due": false
+    }
   ]
 }

@@ -82,12 +82,43 @@ internal static class SharedPolicyChecks
         Check(migrated.Shortcuts.Known == new AppShortcut(52, 0) && migrated.Shortcuts.SentenceMeaning != migrated.Shortcuts.Known && migrated.Shortcuts.ValidationError() is null, "Adding sentence help must preserve legacy shortcut choices.");
         var evidence = new VocabularyStore(Path.Combine(directory, "evidence.json")); evidence.Save("æbler", "apples", "Jeg spiser æbler.", now); evidence.Mark("æbler", true, now);
         Check(evidence.Saved.Single().LastEvidenceKind == 2, "Knew is self-report, not verified recall.");
+        checks += await PopupChecksAsync(directory, xml);
         checks += await ReadingSupportOnOwnerThread(directory, parsed);
         using var session = new HoverSession(_ => "word", (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => t.Contains(' ') ? "A full sentence." : "word").ToArray()), _ => true);
         var word = new RecognizedWord("ord", new(1,1,10,10)); await session.FocusAsync(new(word, new("Et ord her.", [word])));
         await session.ToggleSentenceMeaningAsync();
         Check(session.SentenceHelp && session.SentenceMeaning == "A full sentence.", "Sentence help must work after background word translation has completed.");
         session.Clear(); Check(!session.SentenceHelp && session.SentenceMeaning.Length == 0, "Sentence help must not leak into another focus.");
+        return checks;
+    }
+    private static async Task<int> PopupChecksAsync(string directory, string xml)
+    {
+        int checks = 0; void Check(bool ok, string reason) { if (!ok) throw new Exception(reason); checks++; }
+        var now = DateTimeOffset.Parse("2026-10-22T12:00:00Z", CultureInfo.InvariantCulture); bool reading = false; int generations = 0, shown = 0;
+        string folder = Path.Combine(directory, "scheduled-news");
+        using var news = new NewsService(folder, (_, _) => Task.FromResult(xml), () => now);
+        news.Configure(true, true, false, 0, 18); await news.RefreshAsync();
+        news.ReadingActive = () => reading; news.ModelAvailable = () => true; news.ModelIdentity = () => "fixture-local-model";
+        news.SimplifyExcerpt = (text, _) => { generations++; return Task.FromResult(text.Replace(" & ", " og ")); };
+        NewsPopupItem? displayed = null; news.PresentPopup = item => { shown++; displayed = item; return true; };
+        await news.TickPopupAsync(); Check(shown == 0 && generations == 0, "Legacy news/background opt-ins must never silently authorize popups.");
+        news.ConfigurePopups(true, 60); now = now.AddMinutes(59); await news.TickPopupAsync(); Check(shown == 0, "Enabling cards starts a fresh interval.");
+        now = now.AddMinutes(1); reading = true; await news.TickPopupAsync(); Check(generations == 0, "Automatic adaptation must defer to screen reading.");
+        reading = false; news.PageVisible = true; await news.TickPopupAsync(); Check(generations == 0, "Do not interrupt someone already reading the news page.");
+        news.PageVisible = false; await news.TickPopupAsync();
+        Check(shown == 1 && generations == 1 && displayed?.Model == "fixture-local-model" && displayed.Adapted.Title == displayed.Text && displayed.Original.Title != displayed.Text, "Scheduled cards must contain the actual local adaptation, preserving the original separately.");
+        await news.TickPopupAsync(); Check(shown == 1, "Minute ticks must never catch up with a burst of cards.");
+        using (var restored = new NewsService(folder, (_, _) => throw new Exception("Restart must use cache"), () => now))
+            Check(restored.PopupPreferences.Enabled && restored.PopupPreferences.Ids.Length == 1 && !restored.PopupDue(), "Cadence and displayed-story IDs must survive restart.");
+        news.PausePopupsForToday(true); now = now.AddHours(1); await news.TickPopupAsync(); Check(shown == 1 && news.PopupsPaused, "Pause today must suppress cards without turning news off.");
+        news.PausePopupsForToday(false);
+        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        news.SimplifyExcerpt = (_, _) => pending.Task;
+        var late = news.TickPopupAsync(); news.ConfigurePopups(false, 60); pending.SetResult(news.Cards[1].Article.Title); await late;
+        Check(shown == 1 && !news.PopupPreferences.Enabled, "A late model result cannot show a card after the user turns cards off.");
+        news.ConfigurePopups(true, 60); now = now.AddHours(1); news.ModelAvailable = () => false; await news.TickPopupAsync();
+        Check(shown == 1 && news.PopupStatus.Contains("local AI"), "Missing local AI must never fall back to an unadapted headline.");
+        news.Configure(false, true, false, 0, 18); Check(!news.PopupPreferences.Enabled && !news.Preferences.Background, "Disabling news revokes background cards too.");
         return checks;
     }
     private static Task<int> ReadingSupportOnOwnerThread(string directory, NewsArticle[] articles)
@@ -169,6 +200,16 @@ internal static class SharedPolicyChecks
         var sourceButton = Tree(card).OfType<System.Windows.Controls.Button>().First(b => System.Windows.Automation.AutomationProperties.GetName(b).StartsWith("Look up Danish word "));
         sourceButton.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         Check(localNews.Reader.Selected is { Meaning.Length: > 0 } && localNews.Reader.Selected.Context == headlineOnly.Title, "Native word actions must work directly on source text without OCR or desktop capture.");
+        await localNews.Reader.PrepareAsync(headlineOnly, true);
+        using (var popupReader = localNews.MakePopupReader())
+            Check(localNews.Reader.IsVisible(headlineOnly) && !popupReader.IsVisible(headlineOnly) && popupReader.Meaning(headlineOnly) is not null, "A popup shares cached answers but never inherits the book's revealed English state.");
+        bool dismissed = false;
+        var item = new NewsPopupItem(headlineOnly, "En ny park.", "fixture-local-model");
+        var popup = new NewsPopupWindow(localNews, item, () => { });
+        Check(!popup.ShowActivated && !popup.ShowInTaskbar && !popup.IsVisible, "Creating a news popup must never activate or display a test window."); popup.Close();
+        var panel = new NewsPopupPanel(localNews, item, () => dismissed = true, () => { });
+        Tree(panel).OfType<System.Windows.Controls.Button>().Single(b => Equals(b.Content, "Turn off")).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        Check(dismissed && !localNews.PopupPreferences.Enabled, "The popup must offer a direct turn-off action without a settings detour.");
         localNews.SimplifyExcerpt = (source, _) => Task.FromResult(source); await localNews.SimplifyAsync(headlineOnly);
         Check(localNews.Simplified(headlineOnly) == headlineOnly.Title, "Title-only news must also support optional local plain Danish.");
         return checks;
