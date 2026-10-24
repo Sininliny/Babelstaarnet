@@ -1,6 +1,7 @@
 import AppKit
 import BabelNews
 import Foundation
+import LanguageDanish
 import SwiftUI
 @testable import BabelstaarnetKit
 
@@ -41,6 +42,21 @@ import SwiftUI
                 view.cacheDisplay(in: view.bounds, to: bitmap)
                 try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("mac-news-" + name + (help ? "-sentence-help" : "") + ".png"))
             }
+        }
+        let translator = NewsTranslationQueue(languages: .danishToEnglish)
+        let item = NewsPopupItem(original: card.article, text: "Æbler og får på landet", model: "fixture local AI")
+        let popupReader = news.makePopupReader()
+        precondition(news.reader.isVisible(card.article) && !popupReader.isVisible(item.adapted), "Popup and Word Book reading states must be independent")
+        let controller = NewsPopupController(news: news, translator: translator, openBook: {})
+        let panel = controller.makePanel(item)
+        precondition(!panel.isVisible && panel.styleMask.contains(.nonactivatingPanel), "Creating a popup must not activate a test window")
+        panel.close()
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
+            let host = NSHostingView(rootView: NewsPopupView(news: news, translator: translator, reader: news.makePopupReader(), item: item, close: {}, openBook: {}))
+            host.appearance = NSAppearance(named: appearance); host.setFrameSize(NSSize(width: 440, height: 390)); host.layoutSubtreeIfNeeded()
+            guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { preconditionFailure("News popup could not render") }
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("mac-news-popup-" + name + ".png"))
         }
         precondition(audioCalls == 0, "Opening a news card must never autoplay speech")
         print("Native news cards rendered light/dark without windows, desktop capture or audio.")

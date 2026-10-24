@@ -6,6 +6,7 @@ namespace Babelstaarnet.Core;
 // Only marshaling lives here; the rules are compiled from Shared/BabelPolicy.
 public static class SharedPolicy
 {
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_popup_due(int enabled, int background, int optedIn, int blocked, int hour, double elapsed, int interval, int shown, int fresh);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_gloss(int level, int available, int different);
     private const string Library = "babel_policy";
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_version();

@@ -30,6 +30,9 @@ internal sealed class ReaderUiModel
     public Action GetContextRuntime { get; set; } = () => { };
     public Action Toggle { get; set; } = () => { };
     public Action OpenSettings { get; set; } = () => { };
+    public Action OpenNews { get; set; } = () => { };
+    public Action OpenNewsSettings { get; set; } = () => { };
+    public Action OpenReadingControls { get; set; } = () => { };
     public Action OpenBook { get; set; } = () => { };
     public Action Quit { get; set; } = () => { };
     public Action Apply { get; set; } = () => { };

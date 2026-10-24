@@ -26,8 +26,31 @@ public struct NewsCard: Identifiable {
     public var matches: [String]
     public var score: Double
     public var id: String { article.id }
+    public init(article: NewsArticle, matches: [String], score: Double) {
+        self.article = article; self.matches = matches; self.score = score
+    }
+}
+public struct NewsPopupPreferences: Codable {
+    public var enabled = false
+    public var intervalMinutes = 120
+    public var lastShown: Double?
+    public var day: String?
+    public var shown = 0
+    public var ids: [String] = []
+    public var pausedUntil: Double?
+}
+public struct NewsPopupItem {
+    public let original: NewsArticle
+    public let adapted: NewsArticle
+    public let model: String
+    public let preview: Bool
+    public init(original: NewsArticle, text: String, model: String, preview: Bool = false) {
+        self.original = original; self.model = model; self.preview = preview
+        var adapted = original; adapted.title = text; adapted.summary = ""; self.adapted = adapted
+    }
 }
 public struct NewsPreferences: Codable {
+    public var popup: NewsPopupPreferences?
     public var enabled = false
     public var background = false
     public var notify = false
@@ -67,6 +90,15 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
     @Published public private(set) var hasUpdates = false
     @Published public private(set) var simplificationStates: [String: String] = [:]
     @Published private var simplified: [String: NewsShortVersion] = [:]
+    @Published public private(set) var popupStatus = "Scheduled cards are off."
+    public var popupVisible = false
+    public var popupAllowed: () -> Bool = { true }
+    public var presentPopup: ((NewsPopupItem) -> Bool)?
+    private var popupPreparing = false
+    private var popupRevision = UUID()
+    private var popupRetry: Date?
+    public var popupPreferences: NewsPopupPreferences { preferences.popup ?? NewsPopupPreferences() }
+    public var popupsPaused: Bool { (popupPreferences.pausedUntil ?? 0) > clock().timeIntervalSince1970 }
     public var pageVisible = false
     public var learningUnits: () -> [String] = { [] }
     public var readingActive: () -> Bool = { false }
@@ -113,9 +145,17 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         cache = load("news-cache.json", type: NewsCache.self) ?? NewsCache()
         preferences.topic = min(7, max(0, preferences.topic)); preferences.digestHour = min(20, max(9, preferences.digestHour))
         if !preferences.enabled { preferences.background = false; preferences.notify = false }
-        if !preferences.background { preferences.notify = false }
+        if !preferences.background { preferences.notify = false; preferences.popup?.enabled = false }
+        if var popup = preferences.popup {
+            popup.intervalMinutes = [60, 120, 240].contains(popup.intervalMinutes) ? popup.intervalMinutes : 120
+            popup.shown = min(3, max(0, popup.shown)); popup.ids = Array(popup.ids.filter { $0.count < 512 }.suffix(100))
+            if let at = popup.lastShown, !at.isFinite || at > clock().timeIntervalSince1970 { popup.lastShown = clock().timeIntervalSince1970 }
+            if let until = popup.pausedUntil, !until.isFinite || until > clock().timeIntervalSince1970 + 86400 { popup.pausedUntil = nil }
+            preferences.popup = popup
+        }
         cache.articles = Array(cache.articles.filter(\.valid).prefix(256))
         if !cache.fetched.isFinite || cache.fetched < 0 || cache.fetched > clock().timeIntervalSince1970 + 3600 { cache.fetched = 0 }
+        popupStatus = popupPreferences.enabled ? (popupsPaused ? "News cards are paused for today." : "Scheduled cards are on.") : "Scheduled cards are off."
         selectCards()
         reader.beforeHelp = { [weak self] in self?.cancelGeneration() }
         simplified = Dictionary(uniqueKeysWithValues: (cache.shortVersions ?? [:]).filter {
@@ -136,6 +176,8 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         if !enabled || changedTopic { fetchTask?.cancel(); cancelGeneration(); rotation = 0 }
         if changedTopic { nextRetry = nil; failedRequests = 0 }
         if !enabled { status = "News is off. Cached articles remain available offline." }
+        if !enabled || !background || notify { preferences.popup?.enabled = false; popupRevision = UUID() }
+        if changedTopic { popupRevision = UUID() }
         save(); selectCards()
     }
     public func refresh(manual: Bool = false, background: Bool = false) async {
@@ -154,7 +196,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         else {
             let session = session
             task = Task {
-                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.2", forHTTPHeaderField: "User-Agent")
+                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.3", forHTTPHeaderField: "User-Agent")
                 let (bytes, response) = try await session.bytes(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.expectedContentLength <= 1_000_000 else { throw URLError(.badServerResponse) }
                 var data = Data()
@@ -241,12 +283,68 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         cards = Array(ranked.dropFirst(rotation).prefix(3))
         if cache.fetched > 0 && !busy { status = "Cached on " + Date(timeIntervalSince1970: cache.fetched).formatted(date: .abbreviated, time: .shortened) + (preferences.enabled ? " · matching stays on this Mac" : " · news is off") }
     }
+    public func makePopupReader() -> NewsReadingSupport {
+        let popupReader = NewsReadingSupport(directory: directory)
+        popupReader.translate = reader.translate; popupReader.cachedWordMeaning = reader.cachedWordMeaning
+        popupReader.knowledgeLevel = reader.knowledgeLevel; popupReader.speak = reader.speak
+        popupReader.saveWord = reader.saveWord; popupReader.beforeHelp = reader.beforeHelp
+        return popupReader
+    }
+    public func configurePopups(enabled: Bool, interval: Int) {
+        var popup = popupPreferences
+        let allowed = enabled && preferences.enabled && preferences.background
+        if allowed && (!popup.enabled || popup.intervalMinutes != interval) { popup.lastShown = clock().timeIntervalSince1970 }
+        popup.enabled = allowed; popup.intervalMinutes = [60, 120, 240].contains(interval) ? interval : 120
+        if allowed { preferences.notify = false } else { cancelGeneration() }
+        preferences.popup = popup; popupRevision = UUID(); popupRetry = nil
+        popupStatus = allowed ? "Scheduled cards are on. The first card follows your chosen interval." : "Scheduled cards are off."
+        save()
+    }
+    public func pausePopupsForToday(_ paused: Bool) {
+        var popup = popupPreferences
+        popup.pausedUntil = paused ? Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: clock()))!.timeIntervalSince1970 : nil
+        preferences.popup = popup; popupRevision = UUID(); cancelGeneration(); save()
+        popupStatus = paused ? "News cards are paused for today." : "News cards resumed."
+    }
+    public func popupDue() -> Bool {
+        let now = clock(), popup = popupPreferences
+        dayFormat.timeZone = .autoupdatingCurrent
+        return SharedPolicy.newsPopupDue(enabled: preferences.enabled, background: preferences.background, optedIn: popup.enabled,
+            blocked: readingActive() || pageVisible || popupVisible || popupsPaused || !popupAllowed() || (popupRetry.map { now < $0 } ?? false),
+            hour: Calendar.current.component(.hour, from: now), elapsed: now.timeIntervalSince1970 - (popup.lastShown ?? now.timeIntervalSince1970),
+            interval: popup.intervalMinutes, shown: popup.day == dayFormat.string(from: now) ? popup.shown : 0, fresh: popupCandidates.count)
+    }
+    private var popupCandidates: [NewsArticle] { cards.map(\.article).filter { !(popupPreferences.ids).contains($0.id) && clock().timeIntervalSince1970 - $0.published >= 0 && clock().timeIntervalSince1970 - $0.published <= 172800 } }
+    /// Called by the app's minute tick. No window or model is opened by the service itself.
+    public func tickPopup(preview: Bool = false) async {
+        func eligible() -> Bool { preview ? preferences.enabled && !readingActive() && !popupVisible && popupAllowed() : popupDue() }
+        guard !popupPreparing, eligible(), let candidate = (preview ? cards.map(\.article) : popupCandidates).first, let presentPopup else {
+            if preview { popupStatus = "Pause screen reading, enable DR news, and refresh news before trying a card." }; return
+        }
+        guard modelAvailable?() ?? (simplifyExcerpt != nil) else { popupStatus = "Install local AI in Settings to receive adapted news cards."; return }
+        popupPreparing = true; let revision = popupRevision
+        defer { popupPreparing = false }
+        await simplify(candidate)
+        guard popupRevision == revision, eligible() else { return }
+        guard let text = simplifiedText(for: candidate), let model = simplifiedModel(for: candidate) else {
+            popupStatus = "Adapted card unavailable. Will try again later; the original remains in Word Book."
+            popupRetry = clock().addingTimeInterval(600); return
+        }
+        // Recheck after local generation: turning off or pausing must win over a late result.
+        if presentPopup(NewsPopupItem(original: candidate, text: text, model: model, preview: preview)) {
+            var popup = popupPreferences; let now = clock(); let day = dayFormat.string(from: now)
+            popup.shown = (popup.day == day ? popup.shown : 0) + 1; popup.day = day; popup.lastShown = now.timeIntervalSince1970
+            popup.ids = Array((popup.ids + [candidate.id]).suffix(100)); preferences.popup = popup
+            popupStatus = "A short Danish news card was shown."; save()
+        }
+    }
     public func startBackground() {
         guard backgroundTask == nil else { return }
         backgroundTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60)); guard let self, !Task.isCancelled else { return }
                 await self.refresh(background: true)
+                await self.tickPopup()
                 let now = self.clock(), hour = Calendar.current.component(.hour, from: now)
                 self.dayFormat.timeZone = .autoupdatingCurrent
                 let day = self.dayFormat.string(from: now)
@@ -263,7 +361,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
             }
         }
     }
-    public func stop() { fetchTask?.cancel(); cancelGeneration(); reader.cancel(); backgroundTask?.cancel(); backgroundTask = nil }
+    public func stop() { popupRevision = UUID(); fetchTask?.cancel(); cancelGeneration(); reader.cancel(); backgroundTask?.cancel(); backgroundTask = nil }
     public static func parseFeed(_ xml: String, topic: Int) throws -> [NewsArticle] {
         guard xml.utf8.count <= 1_000_000, !xml.localizedCaseInsensitiveContains("<!DOCTYPE"), !xml.localizedCaseInsensitiveContains("<!ENTITY") else { throw URLError(.cannotParseResponse) }
         let parser = XMLParser(data: Data(xml.utf8)); parser.shouldResolveExternalEntities = false

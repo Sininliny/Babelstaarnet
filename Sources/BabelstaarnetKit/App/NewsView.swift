@@ -59,16 +59,17 @@ struct NewsReadingCardView: View {
     @ObservedObject var news: NewsService
     @ObservedObject var reader: NewsReadingSupport
     let card: NewsCard
-    init(news: NewsService, card: NewsCard) { self.news = news; self.reader = news.reader; self.card = card }
+    let compact: Bool
+    init(news: NewsService, card: NewsCard, compact: Bool = false, reader: NewsReadingSupport? = nil) { self.news = news; self.reader = reader ?? news.reader; self.card = card; self.compact = compact }
     private var article: NewsArticle { card.article }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("DR · " + article.publishedDate.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
             Text("DANISH · SMALL HINTS FOR UNFAMILIAR WORDS").font(.caption2).foregroundStyle(.secondary)
-            source(article.title, headline: true)
+            source(article.title, headline: !compact)
             if !article.summary.isEmpty {
                 source(article.summary, headline: false)
-            } else {
+            } else if !compact {
                 Text("Headline only · DR did not include an excerpt.").font(.caption).foregroundStyle(.secondary)
             }
             if let state = reader.wordState(article) { Text(state).font(.caption).foregroundStyle(.secondary) }
@@ -96,6 +97,7 @@ struct NewsReadingCardView: View {
             }
             if let state = news.simplificationState(for: article) { Text(state).font(.caption).foregroundStyle(.secondary) }
             if !card.matches.isEmpty { Text("From your recent words: " + card.matches.joined(separator: " · ")).font(.caption).foregroundStyle(Color.accentColor) }
+            if !compact {
             ViewThatFits(in: .horizontal) {
                 HStack { readingActions }
                 VStack(alignment: .leading) { readingActions }
@@ -106,6 +108,7 @@ struct NewsReadingCardView: View {
                 }
                 Button("Already seen") { news.markSeen(article) }
             }.font(.caption)
+            }
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
         .background(.background, in: RoundedRectangle(cornerRadius: 12))
@@ -159,7 +162,21 @@ struct NewsSettings: View {
             Toggle("News recommendations (internet)", isOn: Binding(get: { news.preferences.enabled }, set: { value in set(value); Task { await news.refresh() } }))
             Text(NewsService.disclosure).font(.caption).foregroundStyle(.secondary)
             Toggle("Background refresh", isOn: Binding(get: { news.preferences.background }, set: { set(background: $0) })).disabled(!news.preferences.enabled)
-            Toggle("Daily news digest · while this app runs", isOn: Binding(get: { news.preferences.notify }, set: { value in
+            Divider()
+            Toggle("Scheduled adapted news cards", isOn: Binding(get: { news.popupPreferences.enabled }, set: { news.configurePopups(enabled: $0, interval: news.popupPreferences.intervalMinutes) }))
+                .disabled(!news.preferences.enabled || !news.preferences.background)
+            Picker("Show a card every", selection: Binding(get: { news.popupPreferences.intervalMinutes }, set: { news.configurePopups(enabled: news.popupPreferences.enabled, interval: $0) })) {
+                Text("1 hour").tag(60); Text("2 hours").tag(120); Text("4 hours").tag(240)
+            }.frame(maxWidth: 250)
+            Text("While the app runs · 09:00–21:00 · at most 3 cards a day. No catch-up queue, sound or focus stealing. Reading takes priority. Enable background refresh above to schedule cards.").font(.caption).foregroundStyle(.secondary)
+            Text("Each card uses installed local AI to simplify DR text, with Danish word hints. No local AI means no scheduled cards; the original remains in Word Book.").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button("Try a card now") { Task { await news.refresh(manual: true); await news.tickPopup(preview: true) } }.disabled(!news.preferences.enabled)
+                if news.popupsPaused { Button("Resume news cards") { news.pausePopupsForToday(false) } }
+            }
+            Text(news.popupsPaused ? "News cards are paused for today." : news.popupStatus).font(.caption).foregroundStyle(.secondary)
+            Divider()
+            Toggle("Daily headline notification · alternative to cards", isOn: Binding(get: { news.preferences.notify }, set: { value in
                 if !value { set(notify: false); UNUserNotificationCenter.current().removeAllPendingNotificationRequests(); return }
                 Task {
                     let allowed = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert])) == true
@@ -169,7 +186,7 @@ struct NewsSettings: View {
             Picker("Digest time", selection: Binding(get: { news.preferences.digestHour }, set: { set(hour: $0) })) {
                 ForEach(9..<21, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
             }.frame(maxWidth: 220)
-            Text("At most one daily digest. Quiet hours 21:00–09:00; no notification while reading. Turning news off also turns background refresh and notifications off.").font(.caption).foregroundStyle(.secondary)
+            Text("Enabling this notification turns scheduled cards off. At most one daily digest. Quiet hours 21:00–09:00; no notification while reading. Turning news off also turns background refresh and notifications off.").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

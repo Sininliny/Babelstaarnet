@@ -68,6 +68,8 @@ internal static class UiRendering
         var sentenceCard = new NewsReadingCard(news, fixtureCard); sentenceCard.Measure(new Size(760, double.PositiveInfinity));
         Save(sentenceCard, stem + "-news-sentence-help.png", 760, (int)Math.Ceiling(sentenceCard.DesiredSize.Height));
         news.Reader.HideTranslation(fixtureCard.Article);
+        var popupItem = new NewsPopupItem(fixtureCard.Article, "Regeringen har en ny plan for grøn energi.", "fixture local AI");
+        Save(new NewsPopupPanel(news, popupItem, () => { }, () => { }), stem + "-news-popup.png", 460, 400);
         Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
         var settings = new SettingsPanel(model); settings.Measure(new Size(480, 3000)); settings.Arrange(new Rect(0, 0, 480, 3000)); settings.UpdateLayout();
         // Render the actual grouped form without the viewport cropping its lower sections.

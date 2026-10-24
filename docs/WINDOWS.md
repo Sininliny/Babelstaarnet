@@ -246,3 +246,15 @@ Select a Danish word to look it up, listen or save it with its source context.
 translations appear automatically. Closing the news page resets that disclosure.
 These actions use local translation and speech, including cached news with
 networking off. They require neither OCR nor the optional language model.
+
+The tower icon now opens a native first-level menu: **Word Book**, **Read
+something new**, and **Scheduled news cards…**. Enable DR news and background
+refresh, then opt into **Scheduled adapted news cards**. Choose 1, 2 or 4 hours;
+the first automatic card waits that interval. Cards require installed local AI,
+appear 09:00–21:00 at most three times daily, and never repeat a shown story.
+They do not activate a window or play audio automatically. Busy reading and
+Windows notification suppression defer them without a catch-up queue.
+**Try a card now**, **Pause today**, **Resume news cards**, and **Turn off** are
+explicit controls. A preview does not turn scheduling on. Original RSS text is
+retained; no full article is fetched for adaptation. Legacy daily headline
+notifications are an alternative, not a second simultaneous schedule.

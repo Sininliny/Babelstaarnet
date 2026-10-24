@@ -3,6 +3,9 @@ import Foundation
 
 public enum SharedPolicy {
     public static let version = Int(bp_version())
+    public static func newsPopupDue(enabled: Bool, background: Bool, optedIn: Bool, blocked: Bool, hour: Int, elapsed: Double, interval: Int, shown: Int, fresh: Int) -> Bool {
+        bp_news_popup_due(enabled ? 1 : 0, background ? 1 : 0, optedIn ? 1 : 0, blocked ? 1 : 0, Int32(hour), elapsed, Int32(interval), Int32(shown), Int32(fresh)) != 0
+    }
     public static func newsGloss(level: Int, available: Bool = true, different: Bool = true) -> Bool {
         bp_news_gloss(Int32(level), available ? 1 : 0, different ? 1 : 0) != 0
     }

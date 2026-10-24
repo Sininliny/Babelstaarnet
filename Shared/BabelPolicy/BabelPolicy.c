@@ -15,6 +15,12 @@ int32_t bp_news_gloss(int32_t level, int32_t available, int32_t different) {
     /* News offers support, not an extra challenge for partially learned words. */
     return available && different && bp_anchor(level, 1, 0, 0, 0, 0);
 }
+int32_t bp_news_popup_due(int32_t enabled, int32_t background, int32_t opted_in,
+    int32_t blocked, int32_t hour, double elapsed, int32_t interval, int32_t shown, int32_t fresh) {
+    return enabled && background && opted_in && !blocked && hour >= 9 && hour < 21 &&
+        interval >= 60 && interval <= 240 && elapsed >= interval * 60.0 &&
+        shown >= 0 && shown < 3 && fresh > 0;
+}
 int32_t bp_retry_delay(int32_t failures) {
     if (failures <= 0) return 0;
     int32_t delay = 60;

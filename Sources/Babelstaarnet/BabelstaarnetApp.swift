@@ -27,13 +27,16 @@ struct BabelstaarnetApp: App {
                     TranslationHostView(model: model)
                 }
         }
-        .menuBarExtraStyle(.window)
+        .menuBarExtraStyle(.menu)
 
         Window("Word Book", id: WordBookView.windowID) {
             WordBookView(model: model)
         }
         .defaultSize(width: 640, height: 680)
         .commands { WordBookCommands() }
+
+        Window("Scheduled news cards", id: NewsPopupSettingsView.windowID) { NewsPopupSettingsView(model: model) }
+            .defaultSize(width: 520, height: 620)
 
         Settings {
             SettingsView(model: model)

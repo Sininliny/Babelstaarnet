@@ -52,6 +52,14 @@ language model can simplify an RSS excerpt on request, with the original kept
 visible. Full articles open in your browser. Press **4** in a lookup bubble for
 a full sentence meaning; **Supported reading** keeps extra help available.
 
+The tower icon opens a native menu with **Word Book** and **Scheduled news
+cards…** at the first level. You can opt into small adapted Danish news cards
+every 1, 2 or 4 hours while the app runs. This requires explicit news/background
+internet consent and an installed local AI model. Cards appear from 09:00 to
+21:00, at most three per day; they keep keyboard focus in your current app and
+offer **Pause today** and **Turn off**. **Try a card now** previews the feature
+without enabling its schedule. Turning news or background refresh off disables cards.
+
 ## Install
 
 ### Windows

@@ -18,8 +18,23 @@ namespace Babelstaarnet.Windows;
 internal sealed record NewsArticle(string Id, string Title, string Summary, string Url, double Published, int Topic);
 internal sealed record NewsCard(NewsArticle Article, string[] Matches, double Score);
 internal sealed record NewsShortVersion(string Text, string Model, double Created);
+internal sealed class NewsPopupPreferences
+{
+    public bool Enabled { get; set; }
+    public int IntervalMinutes { get; set; } = 120;
+    public double? LastShown { get; set; }
+    public string? Day { get; set; }
+    public int Shown { get; set; }
+    public string[] Ids { get; set; } = [];
+    public double? PausedUntil { get; set; }
+}
+internal sealed record NewsPopupItem(NewsArticle Original, string Text, string Model, bool Preview = false)
+{
+    public NewsArticle Adapted => Original with { Title = Text, Summary = "" };
+}
 internal sealed class NewsPreferences
 {
+    public NewsPopupPreferences? Popup { get; set; }
     public bool Enabled { get; set; }
     public bool Background { get; set; }
     public bool Notify { get; set; }
@@ -67,6 +82,15 @@ internal sealed class NewsService : IDisposable
     public string[] MeaningPreservationWords { get; set; } = [];
     public string LanguageInstructions { get; set; } = "";
     public Func<bool> ReadingActive { get; set; } = () => false;
+    public string PopupStatus { get; private set; } = "Scheduled cards are off.";
+    public bool PopupVisible { get; set; }
+    public Func<bool> PopupAllowed { get; set; } = () => true;
+    public Func<NewsPopupItem, bool>? PresentPopup { get; set; }
+    private bool popupPreparing;
+    private Guid popupRevision = Guid.NewGuid();
+    private DateTimeOffset? popupRetry;
+    public NewsPopupPreferences PopupPreferences => Preferences.Popup ?? new();
+    public bool PopupsPaused => (PopupPreferences.PausedUntil ?? 0) > clock().ToUnixTimeSeconds();
     public bool PageVisible { get; set; }
     public bool HasUpdates { get; private set; }
     public NewsPreferences Preferences { get; }
@@ -83,7 +107,14 @@ internal sealed class NewsService : IDisposable
         Preferences = Load<NewsPreferences>(preferencesPath) ?? new(); cache = Load<NewsCache>(cachePath) ?? new();
         Preferences.Topic = Math.Clamp(Preferences.Topic, 0, Topics.Length - 1); Preferences.DigestHour = Math.Clamp(Preferences.DigestHour, 9, 20);
         if (!Preferences.Enabled) Preferences.Background = Preferences.Notify = false;
-        if (!Preferences.Background) Preferences.Notify = false;
+        if (!Preferences.Background) { Preferences.Notify = false; if (Preferences.Popup is { } disabled) disabled.Enabled = false; }
+        if (Preferences.Popup is { } popup)
+        {
+            if (!new[] { 60, 120, 240 }.Contains(popup.IntervalMinutes)) popup.IntervalMinutes = 120;
+            popup.Shown = Math.Clamp(popup.Shown, 0, 3); popup.Ids = (popup.Ids ?? []).Where(s => s is not null && s.Length < 512).TakeLast(100).ToArray();
+            if (popup.LastShown is { } at && (!double.IsFinite(at) || at > this.clock().ToUnixTimeSeconds())) popup.LastShown = this.clock().ToUnixTimeSeconds();
+            if (popup.PausedUntil is { } until && (!double.IsFinite(until) || until > this.clock().ToUnixTimeSeconds() + 86400)) popup.PausedUntil = null;
+        }
         Preferences.LastDigestIds ??= [];
         cache.Articles ??= []; cache.Seen ??= []; cache.SeenTitles ??= [];
         cache.ShortVersions ??= [];
@@ -93,10 +124,11 @@ internal sealed class NewsService : IDisposable
         if (download is null)
         {
             http = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.2");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.3");
             this.download = DownloadAsync;
         }
         else this.download = download;
+        PopupStatus = PopupPreferences.Enabled ? (PopupsPaused ? "News cards are paused for today." : "Scheduled cards are on.") : "Scheduled cards are off.";
         SelectCards();
     }
     private static T? Load<T>(string path) { try { return new FileInfo(path).Length <= 2_000_000 ? JsonSerializer.Deserialize<T>(File.ReadAllText(path), Json) : default; } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return default; } }
@@ -119,6 +151,8 @@ internal sealed class NewsService : IDisposable
         if (!enabled || changedTopic) { fetch?.Cancel(); CancelGeneration(); rotation = 0; }
         if (changedTopic) { nextRetry = null; failedRequests = 0; }
         if (!enabled) { Preferences.Background = Preferences.Notify = false; Status = "News is off. Cached articles remain available offline."; }
+        if ((!enabled || !background || notify) && Preferences.Popup is { } popup) { popup.Enabled = false; popupRevision = Guid.NewGuid(); }
+        if (changedTopic) popupRevision = Guid.NewGuid();
         Save(); SelectCards(); Changed?.Invoke();
     }
     public async Task RefreshAsync(bool manual = false, bool background = false)
@@ -231,6 +265,58 @@ internal sealed class NewsService : IDisposable
         if (rotation >= unique.Count) rotation = 0;
         Cards = unique.Skip(rotation).Take(3).ToArray();
         if (cache.Fetched > 0 && !Busy) Status = "Cached on " + DateTimeOffset.FromUnixTimeSeconds((long)cache.Fetched).ToLocalTime().ToString("g") + (Preferences.Enabled ? " · matching stays on this PC" : " · news is off");
+    }
+    public NewsReadingSupport MakePopupReader() => new(Path.GetDirectoryName(preferencesPath)!)
+    { Translate = Reader.Translate, CachedWordMeaning = Reader.CachedWordMeaning, KnowledgeLevel = Reader.KnowledgeLevel,
+      Speak = Reader.Speak, SaveWord = Reader.SaveWord, BeforeHelp = Reader.BeforeHelp };
+    public void ConfigurePopups(bool enabled, int interval)
+    {
+        var popup = PopupPreferences; bool allowed = enabled && Preferences.Enabled && Preferences.Background;
+        if (allowed && (!popup.Enabled || popup.IntervalMinutes != interval)) popup.LastShown = clock().ToUnixTimeSeconds();
+        popup.Enabled = allowed; popup.IntervalMinutes = new[] { 60, 120, 240 }.Contains(interval) ? interval : 120;
+        if (allowed) Preferences.Notify = false; else CancelGeneration();
+        Preferences.Popup = popup; popupRevision = Guid.NewGuid(); popupRetry = null;
+        PopupStatus = allowed ? "Scheduled cards are on. The first card follows your chosen interval." : "Scheduled cards are off.";
+        Save(); Changed?.Invoke();
+    }
+    public void PausePopupsForToday(bool paused)
+    {
+        var popup = PopupPreferences;
+        popup.PausedUntil = paused ? new DateTimeOffset(clock().Date.AddDays(1), TimeZoneInfo.Local.GetUtcOffset(clock().Date.AddDays(1))).ToUnixTimeSeconds() : null;
+        Preferences.Popup = popup; popupRevision = Guid.NewGuid(); CancelGeneration(); Save();
+        PopupStatus = paused ? "News cards are paused for today." : "News cards resumed."; Changed?.Invoke();
+    }
+    private NewsArticle[] PopupCandidates => Cards.Select(c => c.Article).Where(a => !PopupPreferences.Ids.Contains(a.Id) && clock().ToUnixTimeSeconds() - a.Published is >= 0 and <= 172800).ToArray();
+    public bool PopupDue()
+    {
+        var now = clock(); var popup = PopupPreferences;
+        bool blocked = ReadingActive() || PageVisible || PopupVisible || PopupsPaused || !PopupAllowed() || popupRetry is { } retry && now < retry;
+        return SharedPolicy.bp_news_popup_due(Preferences.Enabled ? 1 : 0, Preferences.Background ? 1 : 0, popup.Enabled ? 1 : 0, blocked ? 1 : 0,
+            now.Hour, now.ToUnixTimeSeconds() - (popup.LastShown ?? now.ToUnixTimeSeconds()), popup.IntervalMinutes,
+            popup.Day == now.ToString("yyyy-MM-dd") ? popup.Shown : 0, PopupCandidates.Length) != 0;
+    }
+    public async Task TickPopupAsync(bool preview = false)
+    {
+        bool Eligible() => preview ? Preferences.Enabled && !ReadingActive() && !PopupVisible && PopupAllowed() : PopupDue();
+        if (disposed || popupPreparing || !Eligible() || (preview ? Cards.Select(c => c.Article) : PopupCandidates).FirstOrDefault() is not { } candidate || PresentPopup is null)
+        { if (preview) { PopupStatus = "Pause screen reading, enable DR news, and refresh news before trying a card."; Changed?.Invoke(); } return; }
+        if (!(ModelAvailable?.Invoke() ?? SimplifyExcerpt is not null)) { PopupStatus = "Install local AI in Settings to receive adapted news cards."; Changed?.Invoke(); return; }
+        popupPreparing = true; var revision = popupRevision;
+        try
+        {
+            await SimplifyAsync(candidate);
+            if (disposed || popupRevision != revision || !Eligible()) return;
+            if (Simplified(candidate) is not { } text || SimplifiedModel(candidate) is not { } model)
+            { PopupStatus = "Adapted card unavailable. Will try again later; the original remains in Word Book."; popupRetry = clock().AddMinutes(10); Changed?.Invoke(); return; }
+            if (PresentPopup(new(candidate, text, model, preview)))
+            {
+                var popup = PopupPreferences; var now = clock(); string day = now.ToString("yyyy-MM-dd");
+                popup.Shown = (popup.Day == day ? popup.Shown : 0) + 1; popup.Day = day; popup.LastShown = now.ToUnixTimeSeconds();
+                popup.Ids = popup.Ids.Append(candidate.Id).TakeLast(100).ToArray(); Preferences.Popup = popup;
+                PopupStatus = "A short Danish news card was shown."; Save(); Changed?.Invoke();
+            }
+        }
+        finally { popupPreparing = false; }
     }
     public bool DigestDue(bool reading, bool permitted)
     {
