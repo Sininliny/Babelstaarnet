@@ -26,6 +26,9 @@ public struct NewsCard: Identifiable {
     public var matches: [String]
     public var score: Double
     public var id: String { article.id }
+    public init(article: NewsArticle, matches: [String], score: Double) {
+        self.article = article; self.matches = matches; self.score = score
+    }
 }
 public struct NewsPopupPreferences: Codable {
     public var enabled = false
@@ -152,6 +155,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         }
         cache.articles = Array(cache.articles.filter(\.valid).prefix(256))
         if !cache.fetched.isFinite || cache.fetched < 0 || cache.fetched > clock().timeIntervalSince1970 + 3600 { cache.fetched = 0 }
+        popupStatus = popupPreferences.enabled ? (popupsPaused ? "News cards are paused for today." : "Scheduled cards are on.") : "Scheduled cards are off."
         selectCards()
         reader.beforeHelp = { [weak self] in self?.cancelGeneration() }
         simplified = Dictionary(uniqueKeysWithValues: (cache.shortVersions ?? [:]).filter {

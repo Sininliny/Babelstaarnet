@@ -19,7 +19,7 @@ internal sealed class NewsPopupPanel : Border
         var top = new StackPanel(); DockPanel.SetDock(top, Dock.Top); body.Children.Add(top);
         var heading = new DockPanel(); var x = Ui.Button("Close", close); DockPanel.SetDock(x, Dock.Right); heading.Children.Add(x); heading.Children.Add(Ui.Text("A little Danish", 18, true)); top.Children.Add(heading);
         var note = Ui.Text("DR news · internet source · adapted locally", 11); note.Foreground = Ui.Muted; note.ToolTip = "Local model: " + item.Model; top.Children.Add(note);
-        var footer = new StackPanel(); DockPanel.SetDock(footer, Dock.Bottom); body.Children.Add(footer);
+        var footer = new StackPanel { Margin = new Thickness(0, 8, 0, 0) }; DockPanel.SetDock(footer, Dock.Bottom); body.Children.Add(footer);
         var actions = new WrapPanel(); actions.Children.Add(Ui.Button("Pause today", () => { news.PausePopupsForToday(true); close(); })); actions.Children.Add(Ui.Button("Turn off", () => { news.ConfigurePopups(false, news.PopupPreferences.IntervalMinutes); close(); })); actions.Children.Add(Ui.Button("Open Word Book", openBook)); footer.Children.Add(actions);
         var content = new StackPanel(); var card = new NewsReadingCard(news, new(item.Adapted, [], 0), compact: true, reader: Reader); content.Children.Add(card);
         var original = new Expander { Header = "Original DR headline", Content = Ui.Text(item.Original.Title, 12), Foreground = Ui.Ink, FontFamily = Ui.Font, FontSize = 11, Margin = new Thickness(0, 10, 0, 5) }; content.Children.Add(original);

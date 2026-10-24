@@ -134,7 +134,7 @@ import LanguageDanish
         precondition(shown == 1 && generations == 1 && displayed?.model == "fixture-local-model" && displayed?.original.title != displayed?.adapted.title)
         await news.tickPopup(); precondition(shown == 1, "No catch-up bursts")
         let restored = NewsService(directory: directory, clock: { now }, download: { _ in preconditionFailure("Restart accessed HTTP") })
-        precondition(restored.popupPreferences.enabled && restored.popupPreferences.ids.count == 1 && !restored.popupDue())
+        precondition(restored.popupPreferences.enabled && restored.popupPreferences.ids.count == 1 && !restored.popupDue() && restored.popupStatus.contains("are on"))
         news.pausePopupsForToday(true); now += 3600; await news.tickPopup(); precondition(shown == 1 && news.popupsPaused)
         news.pausePopupsForToday(false)
         var resume: CheckedContinuation<String, Never>?

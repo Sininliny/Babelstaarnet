@@ -109,7 +109,7 @@ internal static class SharedPolicyChecks
         Check(shown == 1 && generations == 1 && displayed?.Model == "fixture-local-model" && displayed.Adapted.Title == displayed.Text && displayed.Original.Title != displayed.Text, "Scheduled cards must contain the actual local adaptation, preserving the original separately.");
         await news.TickPopupAsync(); Check(shown == 1, "Minute ticks must never catch up with a burst of cards.");
         using (var restored = new NewsService(folder, (_, _) => throw new Exception("Restart must use cache"), () => now))
-            Check(restored.PopupPreferences.Enabled && restored.PopupPreferences.Ids.Length == 1 && !restored.PopupDue(), "Cadence and displayed-story IDs must survive restart.");
+            Check(restored.PopupPreferences.Enabled && restored.PopupPreferences.Ids.Length == 1 && !restored.PopupDue() && restored.PopupStatus.Contains("are on"), "Cadence and displayed-story IDs must survive restart.");
         news.PausePopupsForToday(true); now = now.AddHours(1); await news.TickPopupAsync(); Check(shown == 1 && news.PopupsPaused, "Pause today must suppress cards without turning news off.");
         news.PausePopupsForToday(false);
         var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -128,6 +128,7 @@ internal sealed class NewsService : IDisposable
             this.download = DownloadAsync;
         }
         else this.download = download;
+        PopupStatus = PopupPreferences.Enabled ? (PopupsPaused ? "News cards are paused for today." : "Scheduled cards are on.") : "Scheduled cards are off.";
         SelectCards();
     }
     private static T? Load<T>(string path) { try { return new FileInfo(path).Length <= 2_000_000 ? JsonSerializer.Deserialize<T>(File.ReadAllText(path), Json) : default; } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return default; } }
