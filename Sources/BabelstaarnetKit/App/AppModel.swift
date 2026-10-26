@@ -33,6 +33,10 @@ public final class AppModel: ObservableObject {
     @Published var engineSetupMessage = "Checking local engines"
     @Published var openSourceEnginesReady = false
     @Published var isInstallingEngines = false
+    @Published var engineInstallationProgress: EngineInstallationProgress?
+    @Published var engineInstallationError: String?
+    @Published var contextualInstallationProgress: EngineInstallationProgress?
+    @Published var contextualInstallationError: String?
     @Published var translationConfiguration: TranslationSession.Configuration
     @Published public var learningModeActive = false
     @Published private(set) var learnerTrackedWordCount = 0
@@ -436,18 +440,24 @@ public final class AppModel: ObservableObject {
     }
 
     func installContextualGlosses() async {
-        guard !isInstallingContextualGlosses else {
+        guard !isInstallingContextualGlosses, !isInstallingEngines else {
             return
         }
         isInstallingContextualGlosses = true
+        defer { isInstallingContextualGlosses = false }
+        contextualInstallationError = nil
+        contextualInstallationProgress = EngineInstallationProgress(message: "Preparing the language model")
         contextualGlossStatus = "Downloading the language model"
         do {
-            _ = try await engineInstallerService.installContextualGlosses()
+            _ = try await engineInstallerService.installContextualGlosses { [weak self] progress in
+                self?.contextualInstallationProgress = progress
+            }
             await contextualGlossService.shutdown()
             contextualGlossCoordinator.resetFailure()
             refreshContextualGlossStatus()
             if contextualGlossesInstalled {
                 contextualGlossStatus = "Starting the model"
+                contextualInstallationProgress = EngineInstallationProgress(message: "Checking the language model")
                 let ready = await contextualGlossService.isReady(
                     keepWarm: learningModeActive
                 )
@@ -456,29 +466,47 @@ public final class AppModel: ObservableObject {
                     : "Installed, but the model did not start"
             }
         } catch {
-            contextualGlossStatus =
-                "Installation failed: \(error.localizedDescription)"
+            contextualInstallationError = error.localizedDescription
+            contextualGlossStatus = "Installation failed — see details below."
         }
-        isInstallingContextualGlosses = false
     }
 
     func installOpenSourceEngines() async {
-        guard !isInstallingEngines else {
+        guard !isInstallingEngines, !isInstallingContextualGlosses else {
             return
         }
 
         isInstallingEngines = true
+        defer { isInstallingEngines = false }
+        engineInstallationError = nil
+        engineInstallationProgress = EngineInstallationProgress(message: "Preparing local engines")
         engineSetupMessage = "Installing local engines and language models"
         do {
-            _ = try await engineInstallerService.install()
+            // Updating a Python environment underneath a running worker can
+            // leave it using old libraries or dictionary data.
+            if learningModeActive { deactivateLearningMode() }
+            await argosTranslationService.shutdown()
+            await wordBridgeTranslationService.shutdown()
+            await contextualGlossService.shutdown()
+            _ = try await engineInstallerService.install { [weak self] progress in
+                self?.engineInstallationProgress = progress
+            }
+            engineInstallationProgress = EngineInstallationProgress(
+                message: "Checking installed engines", completedSteps: 8, totalSteps: 9
+            )
             await checkEngineReadiness()
             if !openSourceEnginesReady {
                 engineSetupMessage = "Installation finished, but an engine failed its readiness check."
+                engineInstallationError = "\(ocrEngineName)\n\(translationEngineName)\nAdaptive word bridge: \(wordBridgeEngineReady ? "ready" : "not ready")"
+            } else {
+                engineInstallationProgress = EngineInstallationProgress(
+                    message: "All local engines are ready", completedSteps: 9, totalSteps: 9
+                )
             }
         } catch {
-            engineSetupMessage = "Installation failed: \(error.localizedDescription)"
+            engineSetupMessage = "Engine installation failed. Please retry after checking the details below."
+            engineInstallationError = error.localizedDescription
         }
-        isInstallingEngines = false
     }
 
     /// What stopped the last reading session, if something did.

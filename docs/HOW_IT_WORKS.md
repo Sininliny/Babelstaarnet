@@ -483,7 +483,12 @@ the designated requirement.
 ## Optional open-source local engines
 
 Use **Install engines** in Settings if you prefer the open-source pipeline. The
-packaged installer installs Tesseract with Danish language data through
+installer shows live setup steps and package output in a progress bar, with
+failure details available for copying. Engine and contextual-model installs
+run one at a time. A dictionary rejected by NLTK is downloaded again into a
+private directory and checked before replacing the old copy.
+
+The packaged installer installs Tesseract with Danish language data through
 Homebrew, creates a private Python 3.12 environment under Application Support,
 and downloads Danish → English and English → Danish Argos models plus local
 WordNet data for adaptive word explanations.

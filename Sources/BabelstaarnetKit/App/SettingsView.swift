@@ -220,7 +220,9 @@ public struct SettingsView: View {
                         : "Local resources not installed"
                 )
                 Button(
-                    model.openSourceEnginesReady
+                    model.isInstallingEngines
+                        ? "Installing…"
+                        : model.openSourceEnginesReady
                         ? "Check engines"
                         : "Install engines"
                 ) {
@@ -232,7 +234,26 @@ public struct SettingsView: View {
                         }
                     }
                 }
-                .disabled(model.isInstallingEngines)
+                .disabled(model.isInstallingEngines || model.isInstallingContextualGlosses)
+
+                if model.isInstallingEngines, let progress = model.engineInstallationProgress {
+                    EngineInstallationProgressView(progress: progress)
+                } else {
+                    Text(model.engineSetupMessage)
+                        .font(.caption)
+                        .foregroundStyle(model.engineInstallationError == nil ? Color.secondary : Color.red)
+                }
+                if let error = model.engineInstallationError {
+                    DisclosureGroup("Installation details") {
+                        ScrollView {
+                            Text(error)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 140)
+                    }
+                }
             }
 
             Section("Contextual meanings") {
@@ -243,6 +264,21 @@ public struct SettingsView: View {
                 .disabled(!model.contextualGlossesInstalled)
 
                 LabeledContent("Language model", value: model.contextualGlossStatus)
+
+                if model.isInstallingContextualGlosses, let progress = model.contextualInstallationProgress {
+                    EngineInstallationProgressView(progress: progress)
+                }
+                if let error = model.contextualInstallationError {
+                    DisclosureGroup("Installation details") {
+                        ScrollView {
+                            Text(error)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 140)
+                    }
+                }
 
                 Text(
                     "Word-at-a-time translation cannot tell “får” the verb (gets) from “får” the animal (sheep). A small language model running on this Mac reads the whole sentence and answers with the sense the word has there, plus its dictionary form and a short Danish explanation. The first answer for a new sentence arrives about a second after the bubble and replaces the word-at-a-time one. It uses about 3 GB of memory while reading and makes no network connection."
@@ -258,6 +294,7 @@ public struct SettingsView: View {
                     }
                     .disabled(
                         model.isInstallingContextualGlosses
+                            || model.isInstallingEngines
                             || !model.openSourceEnginesReady
                     )
 
@@ -312,5 +349,43 @@ public struct SettingsView: View {
 
     private func wordCountDescription(_ count: Int) -> String {
         "\(count) \(count == 1 ? "word" : "words")"
+    }
+}
+
+struct EngineInstallationProgressView: View {
+    let progress: EngineInstallationProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(progress.message)
+                    .font(.caption.weight(.medium))
+                Spacer()
+                if progress.totalSteps > 0 {
+                    Text("\(progress.completedSteps) of \(progress.totalSteps) steps")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let fraction = progress.fractionCompleted {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .accessibilityLabel("Engine installation")
+                    .accessibilityValue("\(progress.completedSteps) of \(progress.totalSteps) setup steps complete")
+            } else {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .accessibilityLabel(progress.message)
+            }
+            if let detail = progress.detail {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
