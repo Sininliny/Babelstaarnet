@@ -169,7 +169,7 @@ private struct NewsReadingCache: Codable {
         await perform(key: operation) { [weak self] owner in
             guard let self else { return }
             self.wordStates[key] = "Preparing English support on this device…"
-            func accept(_ word: String, _ value: String?, inContext: Bool) {
+            @MainActor func accept(_ word: String, _ value: String?, inContext: Bool) {
                 guard Self.usable(value), self.glossPlans[key]?[word] != nil, let value else { return }
                 let gloss = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.glossPlans[key]?[word] = gloss; self.wordMeanings[word] = NewsGloss(text: gloss, created: Date().timeIntervalSince1970)
