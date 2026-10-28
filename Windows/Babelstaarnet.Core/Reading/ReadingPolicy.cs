@@ -47,7 +47,7 @@ public static partial class ReadingPolicy
     [GeneratedRegex(@"^[^\p{L}\p{M}]+|[^\p{L}\p{M}]+$")]
     private static partial Regex EdgePunctuation();
 
-    [GeneratedRegex(@"[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*")]
+    [GeneratedRegex(@"(?=[\p{L}\p{M}\p{N}]*\p{L})[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*")]
     public static partial Regex Words();
 
     public static HoveredText? HitTest(IEnumerable<RecognizedLine> lines, PixelPoint point)

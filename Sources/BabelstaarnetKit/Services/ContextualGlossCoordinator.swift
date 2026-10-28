@@ -31,12 +31,7 @@ struct ContextualGlossRequest: Equatable, Sendable {
         }
         var seen = Set<String>()
         var words: [String] = []
-        let source = sentence as NSString
-        for match in Self.wordExpression.matches(
-            in: sentence,
-            range: NSRange(location: 0, length: source.length)
-        ) {
-            let token = source.substring(with: match.range)
+        for token in ReadingText.words(in: sentence) {
             // Numbers have nothing to gloss, and every word asked about costs
             // time the reader spends waiting.
             guard token.contains(where: \.isLetter),
@@ -49,10 +44,6 @@ struct ContextualGlossRequest: Equatable, Sendable {
         self.words = words
         self.focus = focus
     }
-
-    private static let wordExpression = try! NSRegularExpression(
-        pattern: #"[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*"#
-    )
 }
 
 /// What the contextual glosser said about a sentence, once it can be shown.

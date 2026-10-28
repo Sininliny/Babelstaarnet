@@ -127,3 +127,8 @@ examples. Services own opt-in, clocks, deduplication, bounded local adaptation
 and cancellation; native presenters own nonactivating windows and session state.
 Tests advance fixture clocks and inject a fake local model/presenter. Never wait
 for real timers, fetch live news or open a visible popup in an automated check.
+
+`readingUnits` examples protect diacritics, repeated words, alphanumeric names
+and numeric-only text in both clients. Windows quality checks also cover clipped
+focus context, generated small-text OCR, complete-line streaming and the rule
+that a context-free cache cannot override an in-flight contextual meaning.

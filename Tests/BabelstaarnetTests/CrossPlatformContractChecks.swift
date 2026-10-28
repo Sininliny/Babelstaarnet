@@ -12,6 +12,8 @@ enum CrossPlatformContractChecks {
         struct News: Decodable { let title: String; let summary: String; let parts: [String]; let pieces: [String]; let words: [String?] }
         struct Scaffold: Decodable { let title: String; let levels: [String: Int]; let meanings: [String: String]; let hints: [String: String] }
         struct Popup: Decodable { let id: String; let enabled, background, optedIn, blocked: Bool; let hour: Int; let elapsed: Double; let interval, shown, fresh: Int; let due: Bool }
+        struct Units: Decodable { let text: String; let words: [String] }
+        let readingUnits: [Units]
         let newsPopupSchedule: [Popup]
         let newsScaffolding: [Scaffold]
         let newsReading: [News]
@@ -28,6 +30,7 @@ enum CrossPlatformContractChecks {
         precondition(contract.schemaVersion == 1)
         let language = SourceLanguage.danish
         let boundary = SentenceBoundary(rules: language.sentenceRules, locale: language.locale)
+        for item in contract.readingUnits { precondition(ReadingText.words(in: item.text) == item.words) }
         for item in contract.identities {
             precondition(language.normalized(item.text) == item.key, "Shared word identity: \(item.text)")
         }

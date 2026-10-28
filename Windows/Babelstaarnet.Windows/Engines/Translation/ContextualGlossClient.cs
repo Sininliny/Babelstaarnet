@@ -129,6 +129,16 @@ internal sealed class ContextualGlossClient : IDisposable
     }
     public async Task<ContextualAnswer> ExplainAsync(HoveredText hit, CancellationToken cancellationToken, Action<ContextualAnswer>? onFocused = null, bool includeSentence = true, Func<string, bool>? leaveInDanish = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        // Match Mac: drop queued obsolete work, but drain a request already sent
+        // into the bounded sentence cache instead of throwing away its answer.
+        var work = ExplainCoreAsync(hit, cancellationToken, answer => { if (!cancellationToken.IsCancellationRequested) onFocused?.Invoke(answer); }, includeSentence, leaveInDanish);
+        try { return await work.WaitAsync(cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { _ = ObserveAsync(work); throw; }
+    }
+    private static async Task ObserveAsync(Task operation) { try { await operation; } catch { } }
+    private async Task<ContextualAnswer> ExplainCoreAsync(HoveredText hit, CancellationToken cancellationToken, Action<ContextualAnswer>? onFocused = null, bool includeSentence = true, Func<string, bool>? leaveInDanish = null)
+    {
         ObjectDisposedException.ThrowIf(disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
         if (!IsInstalled || HasFailed) throw new InvalidOperationException(LastFailure ?? "The offline contextual model is not installed.");
@@ -143,17 +153,31 @@ internal sealed class ContextualGlossClient : IDisposable
         }
         // Cached answers bypass model warm-up and the inference semaphore.
         if (TryCached(out var cached)) return cached;
-        if (focuses.TryGetValue(key, out var earlier)) onFocused?.Invoke(new(sentences.GetValueOrDefault(sentence) ?? [], earlier));
+        void PublishRemembered()
+        {
+            if (sentences.TryGetValue(sentence, out var remembered))
+                onFocused?.Invoke(new(remembered, focuses.GetValueOrDefault(key) ?? new FocusedGloss(remembered.GetValueOrDefault(ReadingPolicy.Key(hit.Word.Text), ""), "", "")));
+        }
+        PublishRemembered();
         await gate.WaitAsync(cancellationToken);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (TryCached(out cached)) return cached;
+            PublishRemembered();
             focuses.TryGetValue(key, out var focused);
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
             deadline.CancelAfter(TimeSpan.FromSeconds(45)); await EnsureServerAsync(deadline.Token);
             if (!focuses.TryGetValue(key, out focused))
             {
-                string raw = await GenerateAsync(DanishLanguage.Shared.ExplainInstructions, sentence, [hit.Word.Text], deadline.Token);
+                string raw = await GenerateAsync(DanishLanguage.Shared.ExplainInstructions, sentence, [hit.Word.Text], deadline.Token, partial =>
+                {
+                    var value = ParseFocus(partial, hit.Word.Text);
+                    if (value.Meaning.Length == 0) return;
+                    var remembered = new Dictionary<string, string>(sentences.GetValueOrDefault(sentence) ?? []) { [ReadingPolicy.Key(hit.Word.Text)] = value.Meaning };
+                    if (sentences.Count >= 256 && !sentences.ContainsKey(sentence)) sentences.TryRemove(sentences.Keys.First(), out _);
+                    sentences[sentence] = remembered; onFocused?.Invoke(new(remembered, value));
+                });
                 focused = ParseFocus(raw, hit.Word.Text);
                 if (focused.Meaning.Length == 0) throw new IOException("The local model returned no usable focused meaning.");
                 if (focuses.Count >= 1024) focuses.TryRemove(focuses.Keys.First(), out _);
@@ -170,9 +194,16 @@ internal sealed class ContextualGlossClient : IDisposable
             RememberSentence();
             foreach (var batch in words.Where(w => !glosses.ContainsKey(ReadingPolicy.Key(w))).Chunk(8))
             {
-                string raw = await GenerateAsync(DanishLanguage.Shared.GlossInstructions, sentence, batch, deadline.Token);
-                foreach (var pair in ParseGlosses(raw, batch)) glosses[pair.Key] = pair.Value;
-                RememberSentence();
+                if (cancellationToken.IsCancellationRequested) break;
+                void ApplyBatch(string raw)
+                {
+                    bool changed = false;
+                    foreach (var pair in ParseGlosses(raw, batch))
+                        if (glosses.GetValueOrDefault(pair.Key) != pair.Value) { glosses[pair.Key] = pair.Value; changed = true; }
+                    if (changed) { RememberSentence(); onFocused?.Invoke(new(glosses, focused)); }
+                }
+                string raw = await GenerateAsync(DanishLanguage.Shared.GlossInstructions, sentence, batch, deadline.Token, ApplyBatch);
+                ApplyBatch(raw);
             }
             failures = 0; LastFailure = null; return new(glosses, focused);
         }
@@ -183,10 +214,10 @@ internal sealed class ContextualGlossClient : IDisposable
         }
         finally { gate.Release(); }
     }
-    private async Task<string> GenerateAsync(string instructions, string sentence, IReadOnlyList<string> words, CancellationToken cancellationToken)
+    private async Task<string> GenerateAsync(string instructions, string sentence, IReadOnlyList<string> words, CancellationToken cancellationToken, Action<string>? progress = null)
     {
         string prompt = instructions + "\n\nSætning: " + sentence + "\nOrd:\n" + string.Join("\n", words.Select((w, i) => $"{i + 1}. {w}")) + "\nSvar:\n";
-        return await GeneratePromptAsync(prompt, words.Count == 1 ? 150 : words.Count * 30, cancellationToken);
+        return await GeneratePromptAsync(prompt, words.Count == 1 ? 150 : words.Count * 30, cancellationToken, progress);
     }
     public async Task<string> SimplifyPublicExcerptAsync(string excerpt, CancellationToken token)
     {
@@ -201,16 +232,36 @@ internal sealed class ContextualGlossClient : IDisposable
         }
         finally { if (deadline.IsCancellationRequested) StopServer(); gate.Release(); }
     }
-    private async Task<string> GeneratePromptAsync(string prompt, int maximumTokens, CancellationToken cancellationToken)
+    private async Task<string> GeneratePromptAsync(string prompt, int maximumTokens, CancellationToken cancellationToken, Action<string>? progress = null)
     {
-        using var reply = await http.PostAsJsonAsync(new Uri(address!, "api/generate"), new
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(address!, "api/generate"))
         {
-            model = Model, prompt, stream = false, keep_alive = -1,
-            options = new { temperature = 0, num_predict = maximumTokens, num_ctx = 2048 }
-        }, cancellationToken);
-        reply.EnsureSuccessStatusCode(); using var result = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(cancellationToken));
-        if (result.RootElement.TryGetProperty("error", out var error)) throw new IOException(error.GetString());
-        Generations++; return result.RootElement.GetProperty("response").GetString() ?? "";
+            Content = JsonContent.Create(new { model = Model, prompt, stream = true, keep_alive = -1,
+                options = new { temperature = 0, num_predict = maximumTokens, num_ctx = 2048 } })
+        };
+        using var reply = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        reply.EnsureSuccessStatusCode();
+        using var body = new StreamReader(await reply.Content.ReadAsStreamAsync(cancellationToken));
+        string output = await ReadGenerationAsync(body, cancellationToken, progress); Generations++; return output;
+    }
+    internal static async Task<string> ReadGenerationAsync(TextReader body, CancellationToken cancellationToken, Action<string>? progress = null)
+    {
+        var output = new StringBuilder(); string lastComplete = ""; bool done = false;
+        while (await body.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (line.Length > 64000) throw new IOException("The local model returned an oversized stream record.");
+            using var record = JsonDocument.Parse(line); var root = record.RootElement;
+            if (root.TryGetProperty("error", out var error)) throw new IOException(error.GetString());
+            if (root.TryGetProperty("response", out var text)) output.Append(text.GetString());
+            if (output.Length > 16000) throw new IOException("The local model returned too much text.");
+            string value = output.ToString();
+            int newline = value.LastIndexOf('\n');
+            string complete = newline >= 0 ? value[..(newline + 1)] : "";
+            if (complete.Length > 0 && complete != lastComplete) { lastComplete = complete; progress?.Invoke(complete); }
+            if (root.TryGetProperty("done", out var flag) && flag.ValueKind == JsonValueKind.True) { done = true; break; }
+        }
+        if (!done) throw new IOException("The local model stream ended before completion.");
+        return output.ToString();
     }
     internal static Dictionary<string, string> ParseGlosses(string raw, IReadOnlyList<string> words)
     {

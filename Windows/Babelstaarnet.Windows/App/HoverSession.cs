@@ -14,6 +14,7 @@ internal sealed class HoverSession : IDisposable
     private readonly Func<string, string?> cached;
     private readonly Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<string>>> translate;
     private readonly Func<string, bool> known;
+    private bool contextUnavailable;
     private CancellationTokenSource? pending;
     private CancellationTokenSource? sentenceRequest;
     private Dictionary<string, string> glosses = [];
@@ -68,6 +69,7 @@ internal sealed class HoverSession : IDisposable
     public event Action<Exception>? Failed;
     public event Action<Exception>? ContextFailed;
     public event Action<string, string>? LemmaFound;
+    public string MeaningStatus => Current is null ? "" : contextualKeys.Contains(ReadingPolicy.Key(Current.Word.Text)) ? "In context" : (ContextProvider is null || contextUnavailable) ? "Dictionary" : "";
     public bool TranslateMeaning { get; set; } = true;
     public bool TranslateSentence { get; set; } = true;
     public Func<string, int>? KnowledgeLevel { get; set; }
@@ -90,7 +92,7 @@ internal sealed class HoverSession : IDisposable
         var tokens = new[] { word }.Concat(ReadingPolicy.Words().Matches(hit.Line.Text).Select(m => m.Value)).DistinctBy(ReadingPolicy.Key).Take(36).ToArray();
         foreach (string next in tokens)
             if (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, next, out var curated)) glosses[ReadingPolicy.Key(next)] = curated;
-            else if (cached(next) is { } meaning) glosses[ReadingPolicy.Key(next)] = meaning;
+            else if (ContextProvider is null && cached(next) is { } meaning) glosses[ReadingPolicy.Key(next)] = meaning;
         Meaning = glosses.GetValueOrDefault(ReadingPolicy.Key(word), "");
         Explanation = DanishLanguage.Shared.Beginner.GetValueOrDefault(ReadingPolicy.Key(word), "");
         Publish(); ReadAloud?.Invoke(word);
@@ -98,7 +100,15 @@ internal sealed class HoverSession : IDisposable
     }
     private async Task CompleteOwnedAsync(string word, string[] tokens, HoveredText hit, CancellationTokenSource request)
     {
-        try { await Task.WhenAll(CompleteWordsAsync(word, tokens, request.Token), CompleteContextAsync(hit, request.Token)); }
+        try
+        {
+            if (ContextProvider is null) await CompleteWordsAsync(word, tokens, request.Token);
+            else
+            {
+                await CompleteContextAsync(hit, request.Token);
+                if (!request.IsCancellationRequested) await CompleteWordsAsync(word, tokens, request.Token);
+            }
+        }
         finally { if (ReferenceEquals(pending, request)) pending = null; request.Dispose(); }
     }
     private async Task CompleteWordsAsync(string word, string[] tokens, CancellationToken token)
@@ -152,7 +162,7 @@ internal sealed class HoverSession : IDisposable
         }
         try { Apply(await ContextProvider(hit, token, Apply)); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch (Exception error) { if (!token.IsCancellationRequested) ContextFailed?.Invoke(error); }
+        catch (Exception error) { if (!token.IsCancellationRequested) { contextUnavailable = true; ContextFailed?.Invoke(error); } }
     }
     public void InvalidateProjection() { projectedTokens = projectedExplanation = null; }
     private void Publish() { InvalidateProjection(); Changed?.Invoke(); }
@@ -174,7 +184,7 @@ internal sealed class HoverSession : IDisposable
     }
     public void Clear()
     {
-        pending?.Cancel(); pending = null; sentenceRequest?.Cancel(); sentenceRequest = null; Current = null; Meaning = ""; Explanation = ""; SentenceMeaning = ""; SentenceHelp = false; glosses = []; contextualKeys.Clear(); InvalidateProjection();
+        pending?.Cancel(); pending = null; sentenceRequest?.Cancel(); sentenceRequest = null; Current = null; contextUnavailable = false; Meaning = ""; Explanation = ""; SentenceMeaning = ""; SentenceHelp = false; glosses = []; contextualKeys.Clear(); InvalidateProjection();
         visibleAnchors.Clear();
         newSenseKeys.Clear();
     }

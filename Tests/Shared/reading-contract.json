@@ -346,5 +346,40 @@
       "fresh": 2,
       "due": false
     }
+  ],
+  "readingUnits": [
+    {
+      "text": "Får du undervisning om dagen eller om aftenen hos A2B?",
+      "words": [
+        "Får",
+        "du",
+        "undervisning",
+        "om",
+        "dagen",
+        "eller",
+        "om",
+        "aftenen",
+        "hos",
+        "A2B"
+      ]
+    },
+    {
+      "text": "Min far får to får.",
+      "words": [
+        "Min",
+        "far",
+        "får",
+        "to",
+        "får"
+      ]
+    },
+    {
+      "text": "25% A2B og EU-bidrag 2.500",
+      "words": [
+        "A2B",
+        "og",
+        "EU-bidrag"
+      ]
+    }
   ]
 }

@@ -325,7 +325,7 @@ internal sealed class ReaderApp : Application
         if (current is null) return;
         if (!active || !pinned && !Holding && (!NativeMethods.GetCursorPos(out var pointer) || !current.Word.Bounds.Contains(new(pointer.X, pointer.Y), 3))) { ClearBubble(); return; }
         overlay.Present(current, currentMeaning, "", pinned, session.Loading, !session.NewSense && vocabulary.IsKnown(ReadingPolicy.Key(current.Word.Text)), session.Tokens,
-            preferences.WordMeaning, preferences.WholeSentence, preferences.Shortcuts, vocabulary.EffectiveLevel(current.Word.Text), session.ExplanationTokens, session.SentenceMeaning, session.SentenceHelp);
+            preferences.WordMeaning, preferences.WholeSentence, preferences.Shortcuts, vocabulary.EffectiveLevel(current.Word.Text), session.ExplanationTokens, session.SentenceMeaning, session.SentenceHelp, session.MeaningStatus);
         if (saveMeaningWhenReady && !session.Loading) { saveMeaningWhenReady = false; vocabulary.Save(current.Word.Text, currentMeaning, current.Line.Text, DateTimeOffset.Now); }
         if (!cardTimed) { cardTimed = true; timings.Record("pointer_settled_to_card", (DateTimeOffset.UtcNow - focusSettled).TotalMilliseconds); }
         if (!session.Loading && !meaningTimed) { meaningTimed = true; timings.Record("pointer_settled_to_meaning", (DateTimeOffset.UtcNow - focusSettled).TotalMilliseconds); }

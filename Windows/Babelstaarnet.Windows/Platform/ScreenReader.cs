@@ -16,6 +16,8 @@ namespace Babelstaarnet.Windows;
 
 internal sealed class ScreenReader
 {
+    private readonly double preferredScale;
+    internal ScreenReader(double preferredScale = 2) { this.preferredScale = double.IsFinite(preferredScale) ? Math.Clamp(preferredScale, 1, 2) : 2; }
     private readonly SemaphoreSlim recognitionGate = new(1);
     private OcrEngine? engine;
     private PixelRect? captureArea;
@@ -83,7 +85,7 @@ internal sealed class ScreenReader
         using (var bitmap = await CaptureAsync(area, captureWithoutOverlay, cancellationToken))
             lines = await Task.Run(() => RecognizeAsync(bitmap, new(area.X, area.Y), cancellationToken), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested(); fullCaptureAt = DateTimeOffset.UtcNow;
-        if (!captureWholeDisplay && ReadingPolicy.HitTest(lines, pointer) is null && AdaptiveCapture.NeedsExpansion(lines, area))
+        if (!captureWholeDisplay && AdaptiveCapture.NeedsExpansion(lines, area, pointer))
         {
             area = AdaptiveCapture.Plan(pointer, screenRect, textHeight, NativeMethods.MonitorScale(pointer.X, pointer.Y), expansion: 1.6);
             using var expanded = await CaptureAsync(area, captureWithoutOverlay, cancellationToken);
@@ -131,8 +133,11 @@ internal sealed class ScreenReader
         var nextSnapshot = PixelSnapshot.Capture(bitmap, origin); byte[] raw = nextSnapshot.Bytes;
         // Static snapshots can cover a whole 4K/8K monitor. Respect the OCR
         // runtime's image limit while returning physical source coordinates.
-        double ratio = Math.Min(1, (double)OcrEngine.MaxImageDimension / Math.Max(bitmap.Width, bitmap.Height));
-        using var resized = ratio < 1 ? new Bitmap(Math.Max(1, (int)Math.Floor(bitmap.Width * ratio)), Math.Max(1, (int)Math.Floor(bitmap.Height * ratio)), PixelFormat.Format32bppArgb) : null;
+        // Screen-sized snapshots still downsample to the native limit. A small
+        // hover crop is instead supersampled: å's ring and ø's stroke must not
+        // disappear before recognition. Map every result back to source pixels.
+        double ratio = Math.Min(preferredScale, (double)OcrEngine.MaxImageDimension / Math.Max(bitmap.Width, bitmap.Height));
+        using var resized = Math.Abs(ratio - 1) > .01 ? new Bitmap(Math.Max(1, (int)Math.Floor(bitmap.Width * ratio)), Math.Max(1, (int)Math.Floor(bitmap.Height * ratio)), PixelFormat.Format32bppArgb) : null;
         if (resized is not null)
         {
             using var graphics = Graphics.FromImage(resized); graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;

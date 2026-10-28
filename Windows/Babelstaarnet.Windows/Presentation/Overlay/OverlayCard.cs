@@ -128,7 +128,7 @@ internal sealed class OverlayCard : Border
         return button;
     }
 
-    public void SetContent(HoveredText hit, string translation, string bridge, bool pinned, bool loading, bool isKnown, int level = 0, IReadOnlyList<BridgeToken>? explanationTokens = null)
+    public void SetContent(HoveredText hit, string translation, string bridge, bool pinned, bool loading, bool isKnown, int level = 0, IReadOnlyList<BridgeToken>? explanationTokens = null, string meaningStatus = "")
     {
         translation = DanishLanguage.ConciseMeaning(translation, hit.Word.Text);
         bool directMeaning = !loading && translation.Length > 0 && ReadingPolicy.Key(translation) != ReadingPolicy.Key(hit.Word.Text);
@@ -141,7 +141,8 @@ internal sealed class OverlayCard : Border
         danish.FontWeight = directMeaning ? FontWeights.Medium : FontWeights.SemiBold;
         danish.Opacity = DanishLanguage.KnowledgeOpacity(level);
         explanation.SetTokens(explanationTokens ?? []); explanation.Visibility = explanationTokens is { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
-        knownState.Text = isKnown ? "Known" : "";
+        knownState.Text = meaningStatus.Length > 0 ? (isKnown ? "Known · " : "") + meaningStatus : isKnown ? "Known" : "";
+        knownState.ToolTip = meaningStatus == "Dictionary" ? "Word-only meaning. Enable local sentence meanings in Settings for context." : null;
         pin.Background = pinned ? ActiveFill : ControlFill;
     }
     public void SetFeedback(bool? markedKnown, bool animate = false)

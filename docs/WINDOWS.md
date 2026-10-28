@@ -109,10 +109,14 @@ started. Only this owned service is stopped at exit. See
 Requests remain on this PC. Only the explicit Install model action downloads.
 
 A large model can take tens of seconds to load depending on hardware. Loading
-runs in the background; ordinary meanings and Piper speech stay independent.
-Focused meaning arrives before optional sentence enrichment. Bounded caches
-reuse sentences. Stale answers are discarded; three failures disable context
-until retry while ordinary translation continues. **Check model** retries.
+runs in the background; Piper speech stays independent. With sentence meanings
+enabled, a content word waits for context instead of briefly showing a potentially
+wrong dictionary sense. The meaning streams before its explanation and sentence
+enrichment. The card labels contextual answers **In context** and word-only
+fallbacks **Dictionary**. Queued obsolete requests stop; already-sent requests
+finish into bounded caches without updating an abandoned card. Three failures
+disable context until retry while ordinary translation continues. **Check model**
+retries.
 
 ## Data and troubleshooting
 
@@ -204,7 +208,13 @@ Additional compiled `WindowsChecks.exe` modes:
 - `--window-lifecycle`: tray-to-Settings/Word Book regression on invisible,
   nonactivating windows, including deactivation during close and repeated close.
 - `--context-check`: real installed local Gemma, two meanings of `får`, dictionary
-  forms, Danish explanation and cache reuse; downloads nothing.
+  forms, the reported A2B question, streamed meaning, Danish explanation and
+  cache reuse after an abandoned hover; downloads nothing.
+- `--reading-quality <output.json>`: generated small Danish text through the
+  installed Windows OCR engine; no desktop capture or model download.
+- `--ocr-image <input.png> <output.json>`: compare native and enhanced OCR on a
+  supplied image file. The output contains local recognized text and coordinates;
+  keep it in the ignored build folder.
 - `--benchmark <output.json>`: cold/warm translation, cancellation and OCR timing;
   persistent translation memory is disabled for comparable raw timings.
 - `--hover-benchmark <output.json>`: fixture OCR → production hover session →
