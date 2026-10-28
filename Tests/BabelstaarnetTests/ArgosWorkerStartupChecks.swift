@@ -95,6 +95,8 @@ enum ArgosWorkerStartupChecks {
         await cancellable.shutdown()
 
         let marker = directory.appendingPathComponent("first-start").path
+        // Recovery includes starting a second Python interpreter on CI. The
+        // negative fixtures above already enforce the strict 200 ms deadline.
         let recovery = try worker(
             "recovery",
             prelude: """
@@ -103,7 +105,7 @@ enum ArgosWorkerStartupChecks {
                 marker.touch()
                 time.sleep(30)
             """,
-            timeout: 0.2
+            timeout: 2
         )
         let recovered = try await recovery.translate(["hej"])
         precondition(recovered == ["translated:hej"], "The stalled worker was not replaced")
