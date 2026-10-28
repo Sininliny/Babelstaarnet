@@ -37,6 +37,7 @@ internal sealed class NewsReadingSupport : IDisposable
     private readonly Dictionary<string, Dictionary<string, string>> glossPlans = [];
     private readonly Dictionary<string, Dictionary<string, string>> contextual = [];
     private readonly Dictionary<string, HashSet<string>> learningPlans = [];
+    private readonly HashSet<string> helpedCards = [];
     private readonly Dictionary<string, Dictionary<string, int>> levelPlans = [];
     private readonly Dictionary<string, int> readerBands = [];
     private readonly Dictionary<string, string> wordStates = [];
@@ -100,7 +101,7 @@ internal sealed class NewsReadingSupport : IDisposable
     {
         string key = Key(article); if (learningPlans.ContainsKey(key)) return;
         var targets = new HashSet<string>(); var plan = glossPlans[key];
-        int budget = SupportedReading() ? 0 : SharedPolicy.bp_news_target_budget(SourceParts(article).SelectMany(Pieces).Count(p => Word(p) is not null));
+        int budget = SupportedReading() || helpedCards.Contains(key) ? 0 : SharedPolicy.bp_news_target_budget(SourceParts(article).SelectMany(Pieces).Count(p => Word(p) is not null));
         var words = SourceParts(article).SelectMany(Pieces).Select(Word).OfType<string>().Select(Normalized).Distinct().ToArray();
         foreach (string word in words.Where(plan.ContainsKey).OrderByDescending(w => levelPlans[key][w]).ThenBy(w => WordBands.GetValueOrDefault(w, int.MaxValue)))
             if (SharedPolicy.bp_news_word_mode(levelPlans[key][word], WordBands.GetValueOrDefault(word), readerBands[key], Usable(plan[word]) && Normalized(plan[word]) != word ? 1 : 0, targets.Count, budget) == 2) targets.Add(word);
@@ -209,6 +210,7 @@ internal sealed class NewsReadingSupport : IDisposable
     public async Task LookupAsync(string word, NewsArticle article, string? context = null)
     {
         if (disposed) return;
+        helpedCards.Add(Key(article));
         BeforeHelp?.Invoke(); wordRequest?.Cancel(); using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); wordRequest = request;
         string? cached = glossPlans.GetValueOrDefault(Key(article))?.GetValueOrDefault(Normalized(word));
         if (!Usable(cached)) cached = WordMeaning(word);
@@ -231,7 +233,7 @@ internal sealed class NewsReadingSupport : IDisposable
         if (Selected is { } value && value.ArticleKey == Key(article) && value.Meaning.Length > 0 && SaveWord is not null)
         { SaveWord(value.Word, value.Meaning, value.Context); Selected = value with { Saved = true }; Changed?.Invoke(); }
     }
-    public void Cancel() { if (disposed) return; lifetime.Cancel(); lifetime.Dispose(); lifetime = new(); tasks.Clear(); owners.Clear(); states.Clear(); wordStates.Clear(); glossPlans.Clear(); learningPlans.Clear(); levelPlans.Clear(); readerBands.Clear(); revealed.Clear(); wordRequest?.Cancel(); wordRequest = null; Selected = null; }
+    public void Cancel() { if (disposed) return; lifetime.Cancel(); lifetime.Dispose(); lifetime = new(); tasks.Clear(); owners.Clear(); states.Clear(); wordStates.Clear(); glossPlans.Clear(); learningPlans.Clear(); helpedCards.Clear(); levelPlans.Clear(); readerBands.Clear(); revealed.Clear(); wordRequest?.Cancel(); wordRequest = null; Selected = null; }
     public void Dispose() { if (disposed) return; Cancel(); disposed = true; lifetime.Dispose(); }
     private void Persist()
     {

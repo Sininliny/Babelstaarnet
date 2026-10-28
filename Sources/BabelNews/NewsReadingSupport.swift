@@ -39,6 +39,7 @@ private struct NewsReadingCache: Codable {
     @Published private var wordStates: [String: String] = [:]
     private var contextual: [String: [String: String]] = [:]
     @Published private var learningPlans: [String: Set<String>] = [:]
+    private var helpedCards = Set<String>()
     private var levelPlans: [String: [String: Int]] = [:]
     private var readerBands: [String: Int] = [:]
     public var wordBands: [String: Int] = [:]
@@ -116,7 +117,7 @@ private struct NewsReadingCache: Codable {
             let ba = wordBands[a.element] ?? Int.max, bb = wordBands[b.element] ?? Int.max
             return ba == bb ? a.offset < b.offset : ba < bb
         }
-        var targets = Set<String>(); let budget = supportedReading() ? 0 : SharedPolicy.newsTargetBudget(words: words.count)
+        var targets = Set<String>(); let budget = supportedReading() || helpedCards.contains(key) ? 0 : SharedPolicy.newsTargetBudget(words: words.count)
         for item in ordered {
             let word = item.element, meaning = plan[word] ?? ""
             if SharedPolicy.newsWordMode(level: levelPlans[key]?[word] ?? 0, band: wordBands[word] ?? 0, readerBand: readerBands[key] ?? 1,
@@ -230,6 +231,7 @@ private struct NewsReadingCache: Codable {
         // Lookup is explicit help, never evidence that the whole story was understood.
         beforeHelp?(); wordTask?.cancel()
         let key = Self.key(article), identity = UUID()
+        helpedCards.insert(key)
         selectionID = identity
         let stored = glossPlans[key]?[Self.normalized(word)] ?? wordMeaning(word)
         let cached = Self.usable(stored) ? stored : nil
@@ -252,7 +254,7 @@ private struct NewsReadingCache: Codable {
         saveWord(value.word, value.meaning, value.context)
         value.saved = true; selected = value
     }
-    public func cancel() { for task in tasks.values { task.cancel() }; tasks.removeAll(); owners.removeAll(); states.removeAll(); wordStates.removeAll(); glossPlans.removeAll(); learningPlans.removeAll(); levelPlans.removeAll(); readerBands.removeAll(); revealed.removeAll(); wordTask?.cancel(); selectionID = UUID(); selected = nil }
+    public func cancel() { for task in tasks.values { task.cancel() }; tasks.removeAll(); owners.removeAll(); states.removeAll(); wordStates.removeAll(); glossPlans.removeAll(); learningPlans.removeAll(); helpedCards.removeAll(); levelPlans.removeAll(); readerBands.removeAll(); revealed.removeAll(); wordTask?.cancel(); selectionID = UUID(); selected = nil }
     private func persist() {
         do { try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true); try JSONEncoder().encode(NewsReadingCache(english: meanings, words: wordMeanings, contextual: contextual)).write(to: path, options: .atomic) }
         catch { /* Reading still works if a public-text cache cannot be written. */ }

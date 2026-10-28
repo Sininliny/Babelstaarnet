@@ -32,8 +32,9 @@ internal static class AdaptiveNewsChecks
             reader.Translate = (words, _) => ++batches == 1 ? Task.FromResult<IReadOnlyList<string>>(words.Select(w => "English " + w).ToArray()) : later.Task;
             var pending = reader.PrepareAsync(longArticle);
             Check(reader.Presentation("ny", longArticle).Text == "…", "Do not show English for a pending target and later withdraw that help.");
+            await reader.LookupAsync("ny", longArticle);
             later.SetResult(["English familie", "English penge", "English plan"]); await pending;
-            Check(reader.Presentation("ny", longArticle).Mode == 2 && reader.Ready(longArticle), "Publish one complete, stable mixed-reading plan.");
+            Check(reader.Presentation("ny", longArticle).Mode == 1 && reader.Ready(longArticle), "Help requested during preparation must stay visible after the final plan arrives.");
         }
         using (var reader = new NewsReadingSupport(cached))
         {

@@ -124,7 +124,7 @@ internal sealed class ReaderApp : Application
         overlay.SentenceMeaningRequested += () => _ = session.ToggleSentenceMeaningAsync();
         overlay.Listen += () => { if (current is not null) Speak(current.Word.Text); };
         tray = new Forms.NotifyIcon { Text = "Babelstårnet · inactive", Icon = icons.Tray(false), Visible = true };
-        trayMenu = new TrayMenu(model, ShowTray); tray.ContextMenuStrip = trayMenu;
+        trayMenu = new TrayMenu(model, () => Dispatcher.BeginInvoke(new Action(() => Ui.Try(ShowTray)))); tray.ContextMenuStrip = trayMenu;
         tray.MouseClick += (_, mouse) => { if (mouse.Button == Forms.MouseButtons.Left) Ui.Try(ShowTray); };
         news.PopupAllowed = () => !shuttingDown && NotificationsAccepted();
         news.PresentPopup = item =>

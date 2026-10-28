@@ -141,8 +141,9 @@ import LanguageDanish
         let pending = Task { await staged.prepare(stagedArticle) }
         while resume == nil { await Task.yield() }
         precondition(staged.presentation("ny", article: stagedArticle).text == "…", "Do not reveal English and later withdraw it for a new target")
+        await staged.lookup("ny", article: stagedArticle)
         resume?.resume(returning: remaining.map { "English " + $0 }); await pending.value
-        precondition(staged.ready(stagedArticle) && staged.presentation("ny", article: stagedArticle).mode == 2)
+        precondition(staged.ready(stagedArticle) && staged.presentation("ny", article: stagedArticle).mode == 1)
         let contextFolder = directory.appendingPathComponent("context")
         let contextual = NewsReadingSupport(directory: contextFolder)
         contextual.cachedWordMeaning = { $0 == "køer" ? "cows" : "word" }
