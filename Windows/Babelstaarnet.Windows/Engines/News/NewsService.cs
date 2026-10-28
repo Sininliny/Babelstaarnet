@@ -124,7 +124,7 @@ internal sealed class NewsService : IDisposable
         if (download is null)
         {
             http = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.3");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.4");
             this.download = DownloadAsync;
         }
         else this.download = download;

@@ -47,7 +47,7 @@ internal static class ReadingParityChecks
         Check(memory.Recall("æbler", now.AddMinutes(4)) == true && memory.Recall("æbler", now.AddMinutes(5)) is null, "Feedback confirmation must survive revisiting for five minutes.");
         var crop = AdaptiveCapture.Plan(new(700, 500), new(0, 0, 1920, 1080));
         var large = AdaptiveCapture.Plan(new(-800, 0), new(-1920, -400, 1920, 1080), textHeight: 80, scale: 1.5);
-        Check(crop.Width == 620 && crop.Height == 250 && large.X >= -1920 && large.Right <= 0 && large.Y >= -400, "Adaptive captures must use Mac default metrics and remain inside scaled displays.");
+        Check(crop.Contains(new(1160, 510)) && crop.Height == 250 && large.X >= -1920 && large.Right <= 0 && large.Y >= -400, "Windows capture must include a short question after an early focus and remain inside scaled displays.");
         Check(AdaptiveCapture.NeedsExpansion([], crop) && !AdaptiveCapture.NeedsExpansion([a], crop), "Sparse crops must expand once while complete text stays bounded.");
         string path = Path.Combine(directory, "lemma-progress.json"); var store = new VocabularyStore(path);
         store.Mark("læse", true, now); store.RecordLemma("læser", "læse");

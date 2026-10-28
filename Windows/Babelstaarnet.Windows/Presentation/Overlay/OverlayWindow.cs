@@ -76,13 +76,13 @@ internal sealed class OverlayWindow : IDisposable
 
     public void Present(HoveredText text, string translation, string readingBridge, bool pinned, bool loading, bool known,
         IReadOnlyList<BridgeToken>? tokens = null, bool showWord = true, bool showSentence = true, HotKeyConfiguration? shortcuts = null,
-        int knowledgeLevel = 0, IReadOnlyList<BridgeToken>? explanationTokens = null, string sentenceMeaning = "", bool sentenceHelp = false)
+        int knowledgeLevel = 0, IReadOnlyList<BridgeToken>? explanationTokens = null, string sentenceMeaning = "", bool sentenceHelp = false, string meaningStatus = "")
     {
         if (!showWord && !showSentence) { Hide(); return; }
         card.SetShortcuts(shortcuts ?? HotKeyConfiguration.Defaults);
         if (last?.Word != text.Word || last.Line.Text != text.Line.Text) { feedback = feedbackMemory.Recall(text.Word.Text, DateTimeOffset.Now); card.SetFeedback(feedback); }
         last = text;
-        card.SetContent(text, translation, readingBridge, pinned, loading, known, knowledgeLevel, explanationTokens);
+        card.SetContent(text, translation, readingBridge, pinned, loading, known, knowledgeLevel, explanationTokens, meaningStatus);
         sentence.SetContent(tokens ?? BridgePresentation.Tokens(text, ReadingPolicy.Glosses, _ => false));
         sentence.SetMode(!showWord, DanishLanguage.ConciseMeaning(translation, text.Word.Text), knowledgeLevel); sentence.SetFeedback(feedback);
         sentence.SetSentenceMeaning(sentenceMeaning, sentenceHelp, (shortcuts ?? HotKeyConfiguration.Defaults).SentenceMeaning.Display);

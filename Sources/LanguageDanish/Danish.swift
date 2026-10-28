@@ -124,6 +124,8 @@ public extension SourceLanguage {
             2. hjem = home
             3. træt = tired
 
+            Skeln også mellem ens stavede ord efter sætningen: "Hun får en gave" → får = gets (opslagsform få), men "Tre får går på marken" → får = sheep (opslagsform får). "Far" betyder father og må ikke blandes sammen med "får".
+
             Danske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: "Det ved du jo" = jo → you know; "Kom nu!" = nu → come on; "Han kommer nok" = nok → probably; "Det er vel rigtigt" = vel → I suppose.
             """,
         explainInstructions: """
@@ -142,6 +144,8 @@ public extension SourceLanguage {
             1. gik = went
             opslagsform: gå
             forklaring: At bevæge sig til fods fra et sted til et andet.
+
+            Skeln også mellem ens stavede ord efter sætningen: "Hun får en gave" → får = gets (opslagsform få), men "Tre får går på marken" → får = sheep (opslagsform får). "Far" betyder father og må ikke blandes sammen med "får".
 
             Danske småord som jo, da, nu, vel, nok, skam, altså, lige, bare og godt skifter betydning med sætningen. Glos dem efter den funktion, de har her, ikke efter ordbogens første betydning: "Det ved du jo" = jo → you know; "Kom nu!" = nu → come on; "Han kommer nok" = nok → probably; "Det er vel rigtigt" = vel → I suppose.
             """,

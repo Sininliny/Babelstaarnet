@@ -39,6 +39,8 @@ internal static class NativeExperienceChecks
     private static void SharedContract()
     {
         using var data = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shared", "reading-contract.json")));
+        foreach (var item in data.RootElement.GetProperty("readingUnits").EnumerateArray())
+            Check(ReadingPolicy.Words().Matches(item.GetProperty("text").GetString()!).Select(m => m.Value).SequenceEqual(item.GetProperty("words").EnumerateArray().Select(v => v.GetString())), "Reading units must preserve diacritics and A2B while leaving pure numbers alone.");
         foreach (var item in data.RootElement.GetProperty("identities").EnumerateArray())
             Check(ReadingPolicy.Key(item.GetProperty("text").GetString()!) == item.GetProperty("key").GetString(), "Shared Danish identity must agree on both platforms.");
         foreach (var item in data.RootElement.GetProperty("sentences").EnumerateArray())

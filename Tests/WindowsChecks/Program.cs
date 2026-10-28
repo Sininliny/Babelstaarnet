@@ -30,6 +30,8 @@ internal static class Program
     public static async Task<int> Main(string[] arguments)
     {
         Ui.ErrorRaised = error => throw new InvalidOperationException("A UI action failed.", error);
+        if (arguments.Length == 3 && arguments[0] == "--ocr-image") return await ReadingQualityChecks.ImageAsync(arguments[1], arguments[2]);
+        if (arguments.Length == 2 && arguments[0] == "--reading-quality") return await ReadingQualityChecks.RunAsync(arguments[1]);
         if (arguments.Contains("--context-check")) return await ContextualEngineChecks.RunAsync();
         if (arguments.Length == 2 && arguments[0] == "--hover-benchmark")
             return HoverPipelineBenchmark.Run(arguments[1]);
@@ -60,6 +62,7 @@ internal static class Program
             checks += await ReadingParityChecks.SessionAsync();
             await WorkerChecks(temporary);
             await RealEngineChecks();
+            checks += await ReadingQualityChecks.UnitsAsync();
             await OcrChecks();
             await SpeechChecks();
             await NeuralSpeechChecks();
@@ -408,6 +411,15 @@ internal static class Program
         {
             Console.WriteLine("Danish OCR fixture skipped: the Windows Danish OCR language pack is not installed.");
             return;
+        }
+        foreach (var background in new[] { Color.White, Color.FromArgb(252, 244, 244), Color.FromArgb(27, 29, 35) })
+        {
+            using var small = new Bitmap(900, 100);
+            using (var g = Graphics.FromImage(small)) using (var font = new Font("Segoe UI", 14, GraphicsUnit.Pixel))
+            { g.Clear(background); g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit; g.DrawString(ReadingQualityChecks.Question, font, background.R < 50 ? Brushes.White : Brushes.Black, 14, 32); }
+            var question = await new ScreenReader().RecognizeAsync(small, new(-1000, 200), CancellationToken.None);
+            string text = string.Join(" ", question.Select(l => l.Text));
+            Check(text.Contains("Får", StringComparison.Ordinal) && text.Contains("A2B", StringComparison.Ordinal) && text.Contains("aftenen"), "Small Danish question fixtures must retain å, the complete clause and A2B on light/dark pages.");
         }
         using var bitmap = new Bitmap(800, 110);
         using (var graphics = Graphics.FromImage(bitmap))

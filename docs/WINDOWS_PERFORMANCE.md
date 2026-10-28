@@ -48,3 +48,31 @@ model readiness and the surrounding desktop.
 Run the commands in [the development guide](DEVELOPMENT.md) to reproduce the
 measurements. Keep audio muted, avoid concurrent builds/inference, and compare
 the same fixture and configuration before drawing a conclusion.
+
+## Reading quality, 0.6.4
+
+Windows now starts with a wider hover crop and expands a clipped focused line
+even when the pointed word was recognized. A successful hit is not evidence
+that the rest of the sentence was captured. Small images are supersampled up
+to 2× within the Windows OCR dimension limit; returned boxes and pixel-cache
+comparisons continue to use physical source coordinates. Large monitor images
+retain their existing downsampling limit. Alphanumeric names such as `A2B`
+remain a single reading unit on both platforms.
+
+With local contextual meanings enabled, an isolated cached noun cannot appear
+before the sentence model has answered. The focused meaning and subsequent
+word rows are streamed only after a complete, validated line arrives. A queued
+obsolete request is canceled; an already-sent focused request drains into the
+bounded cache. Remaining sentence batches stop when its owner is gone, and
+partial sentence answers are reusable on the next focus. Ordinary dictionary
+translation remains the fallback when context is unavailable, labelled
+`Dictionary`; contextual answers are labelled `In context`.
+
+The reported `Får du undervisning om dagen eller om aftenen hos A2B?` fixture
+returned `receives`; a sheep sentence retained `sheep`. On the development PC,
+one warm-model sample produced the meaning in 286 ms and the complete explanation
+in 787 ms. Cold loading in that run took 24.4 seconds. These are model-only fixture
+measurements, excluding OCR, capture, pointer scheduling and actual desktop use.
+The 14-pixel OCR fixture previously returned `A28`; the supersampled path returns
+`A2B`. Neither this fixture nor the screenshots establish overall OCR parity with
+Apple Vision across all fonts, colours and displays.

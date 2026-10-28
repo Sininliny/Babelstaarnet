@@ -107,7 +107,7 @@ internal static class UiRendering
         var glosses = new Dictionary<string, string> { ["ansoegningen"] = "The application", ["indgives"] = "be submitted", ["refleksionsperioden"] = "the period of reflection", ["udloeber"] = "expires" };
         var tokens = BridgePresentation.Tokens(hit, loading ? new Dictionary<string, string>() : glosses,
             key => known && key == "refleksionsperioden");
-        var word = new OverlayCard(); word.SetContent(hit, "the period of reflection", "", true, loading, known);
+        var word = new OverlayCard(); word.SetContent(hit, "the period of reflection", "", true, loading, known, meaningStatus: loading ? "" : "In context");
         if (known) word.SetFeedback(true);
         var sentence = new SentenceCard(); sentence.SetContent(tokens);
         word.Measure(new Size(280, double.PositiveInfinity)); sentence.Measure(new Size(420, double.PositiveInfinity));

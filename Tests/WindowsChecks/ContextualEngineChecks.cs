@@ -1,6 +1,7 @@
 using Babelstaarnet.Core;
 using Babelstaarnet.Windows;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -30,6 +31,25 @@ internal static class ContextualEngineChecks
         if (verb.Focus.Explanation.Length == 0 || noun.Focus.Lemma.Length == 0) throw new Exception("Contextual explanations and dictionary forms must be populated.");
         int before = engine.Generations; await engine.ExplainAsync(Hit("Han får en gave."), deadline.Token, includeSentence: false);
         if (engine.Generations != before) throw new Exception("Repeated focus in one sentence must reuse contextual caches.");
+        var question = Hit(ReadingQualityChecks.Question);
+        var elapsed = Stopwatch.StartNew(); long firstMeaning = -1;
+        var questionAnswer = await engine.ExplainAsync(question, deadline.Token, answer => { if (firstMeaning < 0 && answer.Focus.Meaning.Length > 0) firstMeaning = elapsed.ElapsedMilliseconds; }, includeSentence: false);
+        if (!(questionAnswer.Focus.Meaning.Contains("get", StringComparison.OrdinalIgnoreCase) || questionAnswer.Focus.Meaning.Contains("receiv", StringComparison.OrdinalIgnoreCase))) throw new Exception("The reported A2B question must use the verb sense, not sheep.");
+        Console.WriteLine($"A2B fixture: {questionAnswer.Focus.Meaning}; first meaning {firstMeaning} ms, complete explanation {elapsed.ElapsedMilliseconds} ms (model-only fixture, no desktop latency).");
+        var questionLine = await engine.ExplainAsync(question, deadline.Token);
+        Console.WriteLine("A2B contextual line: " + System.Text.Json.JsonSerializer.Serialize(questionLine.Glosses));
+        string Gloss(string word) => questionLine.Glosses.GetValueOrDefault(word, "").ToLowerInvariant();
+        if (!Gloss("dagen").Contains("day") || !Gloss("aftenen").Contains("evening") ||
+            !new[] { "class", "lesson", "teach", "educat", "instruction", "tuition" }.Any(Gloss("undervisning").Contains))
+            throw new Exception("The reported question must retain contextual teaching, daytime and evening meanings in the reading line.");
+        using var abandoned = new CancellationTokenSource();
+        var moved = Hit("Hun får en besked fra skolen.");
+        try { await engine.ExplainAsync(moved, abandoned.Token, partial => { if (partial.Focus.Meaning.Length > 0) abandoned.Cancel(); }, includeSentence: false); }
+        catch (OperationCanceledException) { }
+        await engine.WarmAsync(deadline.Token); // Wait for the owned, already-sent request to drain.
+        int afterDrain = engine.Generations;
+        var recovered = await engine.ExplainAsync(moved, deadline.Token, includeSentence: false);
+        if (engine.Generations != afterDrain || recovered.Focus.Meaning.Length == 0) throw new Exception("Moving away must preserve the in-flight contextual answer in cache.");
         engine.Dispose();
         using var restarted = new ContextualGlossClient(fixture);
         var remembered = await restarted.ExplainAsync(Hit("Han får en gave."), deadline.Token, includeSentence: false);

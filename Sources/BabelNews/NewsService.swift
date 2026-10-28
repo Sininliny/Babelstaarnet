@@ -196,7 +196,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         else {
             let session = session
             task = Task {
-                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.3", forHTTPHeaderField: "User-Agent")
+                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.4", forHTTPHeaderField: "User-Agent")
                 let (bytes, response) = try await session.bytes(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.expectedContentLength <= 1_000_000 else { throw URLError(.badServerResponse) }
                 var data = Data()
