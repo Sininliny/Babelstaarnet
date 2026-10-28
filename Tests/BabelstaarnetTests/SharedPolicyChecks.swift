@@ -18,6 +18,9 @@ import LanguageDanish
             let result: Double
             switch item["operation"] as! String {
             case "news-gloss": result = Double(bp_news_gloss(i(0),i(1),i(2)))
+            case "news-reader-band": result = Double(bp_news_reader_band(i(0),i(1),i(2),i(3)))
+            case "news-target-budget": result = Double(bp_news_target_budget(i(0)))
+            case "news-word-mode": result = Double(bp_news_word_mode(i(0),i(1),i(2),i(3),i(4),i(5)))
             case "reading-help": result = Double(bp_reading_help(i(0),i(1),i(2),i(3)))
             case "retry": result = Double(bp_retry_delay(i(0)))
             case "source": result = Double(bp_source_capability(i(0)))
@@ -114,7 +117,48 @@ import LanguageDanish
         await reader.lookup("ny", article: headlineOnly, context: "En ny park.")
         precondition(reader.selected?.context == "En ny park.")
         try await popupChecks(directory: directory.appendingPathComponent("scheduled-news"), xml: xml)
+        try await adaptiveChecks(directory: directory.appendingPathComponent("adaptive-news"), xml: xml)
         print("Passed \(count) shared native policy vectors and offline news adapter checks.")
+    }
+    @MainActor private static func adaptiveChecks(directory: URL, xml: String) async throws {
+        var article = try NewsService.parseFeed(xml, topic: 0)[0]
+        article.title = "Ukendt lufthavn med lange køer."; article.summary = ""
+        let reader = NewsReadingSupport(directory: directory)
+        reader.wordBands = ["lange": 1, "køer": 2]; reader.knowledgeLevel = { $0 == "med" ? 4 : 0 }
+        reader.translate = { words in words.map { ["lufthavn": "airport", "lange": "long", "køer": "queues"][$0] ?? "" } }
+        await reader.prepare(article)
+        precondition(reader.presentation("lufthavn", article: article).text == "airport" && reader.presentation("køer.", article: article).text == "queues.")
+        precondition(!reader.ready(article) && reader.presentation("Ukendt", article: article).mode == 3 && reader.presentation("lange", article: article).mode == 2)
+        await reader.lookup("lange", article: article)
+        precondition(reader.presentation("lange", article: article).text == "long" && reader.selected?.meaning == "long")
+        var stagedArticle = article; stagedArticle.title = "ny dag mad vand hus skole arbejde barn familie penge plan"
+        let staged = NewsReadingSupport(directory: directory.appendingPathComponent("staged")); staged.wordBands = ["ny": 1]
+        var batches = 0, remaining: [String] = []; var resume: CheckedContinuation<[String], Never>?
+        staged.translate = { words in
+            batches += 1; if batches == 1 { return words.map { "English " + $0 } }
+            remaining = words; return await withCheckedContinuation { resume = $0 }
+        }
+        let pending = Task { await staged.prepare(stagedArticle) }
+        while resume == nil { await Task.yield() }
+        precondition(staged.presentation("ny", article: stagedArticle).text == "…", "Do not reveal English and later withdraw it for a new target")
+        resume?.resume(returning: remaining.map { "English " + $0 }); await pending.value
+        precondition(staged.ready(stagedArticle) && staged.presentation("ny", article: stagedArticle).mode == 2)
+        let contextFolder = directory.appendingPathComponent("context")
+        let contextual = NewsReadingSupport(directory: contextFolder)
+        contextual.cachedWordMeaning = { $0 == "køer" ? "cows" : "word" }
+        contextual.contextualWords = { _, words in Dictionary(uniqueKeysWithValues: words.map { ($0, $0 == "køer" ? "queues" : "contextual " + $0) }) }
+        await contextual.prepare(article)
+        precondition(contextual.presentation("køer.", article: article).text == "queues.")
+        let restored = NewsReadingSupport(directory: contextFolder)
+        restored.contextualWords = { _, _ in preconditionFailure("A cached context must not warm the model again") }
+        await restored.prepare(article)
+        precondition(restored.presentation("køer.", article: article).text == "queues." && restored.ready(article))
+        let now = ISO8601DateFormatter().date(from: "2026-10-22T12:00:00Z")!
+        let news = NewsService(directory: directory.appendingPathComponent("gate"), clock: { now }, download: { _ in xml })
+        news.configure(enabled: true, background: true, notify: false, topic: 0, hour: 18); await news.refresh()
+        news.modelAvailable = { true }; news.modelIdentity = { "fixture" }; news.simplifyExcerpt = { $0.replacingOccurrences(of: " & ", with: " og ") }
+        var shown = 0; news.presentPopup = { _ in shown += 1; return true }; await news.tickPopup(preview: true)
+        precondition(shown == 0 && news.popupStatus.contains("English support"), "Never push raw difficult Danish without English support")
     }
     @MainActor private static func popupChecks(directory: URL, xml: String) async throws {
         var now = ISO8601DateFormatter().date(from: "2026-10-22T12:00:00Z")!
@@ -122,6 +166,7 @@ import LanguageDanish
         let news = NewsService(directory: directory, clock: { now }, download: { _ in xml })
         news.configure(enabled: true, background: true, notify: false, topic: 0, hour: 18); await news.refresh()
         news.readingActive = { reading }; news.modelAvailable = { true }; news.modelIdentity = { "fixture-local-model" }
+        news.reader.translate = { $0.map { "English: " + $0 } }
         news.simplifyExcerpt = { text in generations += 1; return text.replacingOccurrences(of: " & ", with: " og ") }
         var displayed: NewsPopupItem?
         news.presentPopup = { item in shown += 1; displayed = item; return true }

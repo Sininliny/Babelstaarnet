@@ -19,7 +19,7 @@ internal static class NativeExperienceChecks
     private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); checks++; }
     internal static int Run(string directory)
     {
-        SharedContract(); PixelComparison(); ContextMemory(directory);
+        SharedContract(directory); PixelComparison(); ContextMemory(directory);
         Exception? failure = null;
         var thread = new Thread(() =>
         {
@@ -36,7 +36,7 @@ internal static class NativeExperienceChecks
         if (failure is not null) throw failure;
         return checks;
     }
-    private static void SharedContract()
+    private static void SharedContract(string directory)
     {
         using var data = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shared", "reading-contract.json")));
         foreach (var item in data.RootElement.GetProperty("readingUnits").EnumerateArray())
@@ -65,7 +65,7 @@ internal static class NativeExperienceChecks
         foreach (var item in data.RootElement.GetProperty("newsScaffolding").EnumerateArray())
         {
             var article = new NewsArticle("fixture", item.GetProperty("title").GetString()!, "", "https://www.dr.dk/nyheder/fixture", 0, 0);
-            using var reader = new NewsReadingSupport(Path.Combine(Path.GetTempPath(), "scaffold-" + Guid.NewGuid()));
+            using var reader = new NewsReadingSupport(Path.Combine(directory, "scaffold-" + Guid.NewGuid()));
             var levels = item.GetProperty("levels"); var meanings = item.GetProperty("meanings"); var hints = item.GetProperty("hints");
             reader.KnowledgeLevel = word => levels.TryGetProperty(word.ToLowerInvariant(), out var level) ? level.GetInt32() : 0;
             reader.CachedWordMeaning = word => meanings.TryGetProperty(word.ToLowerInvariant(), out var meaning) ? meaning.GetString() : null;
@@ -74,6 +74,29 @@ internal static class NativeExperienceChecks
             foreach (string word in NewsReadingSupport.Pieces(article.Title).Select(NewsReadingSupport.Word).OfType<string>())
                 Check(reader.Gloss(word, article) == (hints.TryGetProperty(word.ToLowerInvariant(), out var hint) ? hint.GetString() : null), "Unfamiliar words get hints; known words and names remain Danish.");
             Check(!reader.IsVisible(article) && reader.Meaning(article) is null, "Default hints must not create a full English alternative.");
+        }
+        foreach (var item in data.RootElement.GetProperty("newsAdaptive").EnumerateArray())
+        {
+            var article = new NewsArticle("adaptive", item.GetProperty("title").GetString()!, "", "https://www.dr.dk/nyheder/fixture", 0, 0);
+            using var reader = new NewsReadingSupport(Path.Combine(directory, "adaptive-" + Guid.NewGuid()));
+            var levels = item.GetProperty("levels"); var meanings = item.GetProperty("meanings");
+            reader.WordBands = JsonSerializer.Deserialize<Dictionary<string, int>>(item.GetProperty("bands").GetRawText())!;
+            reader.SupportedReading = () => item.TryGetProperty("supported", out var supported) && supported.GetBoolean();
+            reader.KnowledgeLevel = word => levels.TryGetProperty(word.ToLowerInvariant(), out var level) ? level.GetInt32() : 0;
+            reader.CachedWordMeaning = word => meanings.TryGetProperty(word.ToLowerInvariant(), out var meaning) ? meaning.GetString() : null;
+            reader.PrepareAsync(article).GetAwaiter().GetResult();
+            var pieces = NewsReadingSupport.Pieces(article.Title);
+            string Text() => string.Join(' ', pieces.Select(piece => reader.Presentation(piece, article).Text));
+            Check(Text() == item.GetProperty("display").GetString(), "Adaptive news must replace difficult words inline: " + item.GetProperty("id").GetString());
+            var targets = pieces.Where(piece => reader.Presentation(piece, article).Mode == 2).Select(NewsReadingSupport.Word).Distinct().ToArray();
+            Check(targets.SequenceEqual(item.GetProperty("targets").EnumerateArray().Select(t => t.GetString())) && reader.Ready(article) == item.GetProperty("ready").GetBoolean(), "Only a bounded, reachable common word with ready help may remain as a new target.");
+            reader.KnowledgeLevel = _ => 5;
+            Check(Text() == item.GetProperty("display").GetString(), "Learning elsewhere must not change the reading plan halfway through a card.");
+            if (targets.Length > 0)
+            {
+                reader.LookupAsync(targets[0]!, article).GetAwaiter().GetResult();
+                Check(reader.Selected?.Meaning.Length > 0 && !pieces.Any(piece => NewsReadingSupport.Word(piece) == targets[0] && reader.Presentation(piece, article).Mode == 2), "Requesting help must reveal a target immediately without assigning a replacement target.");
+            }
         }
         foreach (var item in data.RootElement.GetProperty("newsPopupSchedule").EnumerateArray())
         {
@@ -123,16 +146,34 @@ internal static class NativeExperienceChecks
         string preferences = Path.Combine(directory, "appearance.json");
         var model = new ReaderUiModel(new(), new VocabularyStore(Path.Combine(directory, "appearance-words.json")), preferences);
         model.Apply = () => theme.Apply(model.Preferences.Appearance);
-        int bookOpens = 0; model.OpenBook = () => bookOpens++;
+        int bookOpens = 0, newsOpens = 0, scheduleOpens = 0; model.OpenBook = () => bookOpens++; model.OpenNews = () => newsOpens++; model.OpenNewsSettings = () => scheduleOpens++;
         var tray = new TrayPanel(model); Layout(tray, 290, 650);
         var book = Descendants<Button>(tray).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "Open Word Book");
         book.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(bookOpens == 1 && book.IsTabStop && book.Focusable && Descendants<Button>(tray).First() == book, "Word Book must be a primary keyboard-accessible tray action independent of Settings.");
-        using var menu = new TrayMenu(model);
+        Descendants<Button>(tray).Single(b => Equals(b.Content, "Read something new")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Descendants<Button>(tray).Single(b => Equals(b.Content, "Scheduled news cards…")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(newsOpens == 1 && scheduleOpens == 1, "The themed tray must keep news and scheduling beside Word Book at the first level.");
+        using var menu = new TrayMenu(model, () => { });
         Check(menu.Items[0].Name == "word-book" && menu.Items[1].Name == "news" && menu.Items[2].Name == "news-cards", "Native tray first-level menu must expose Word Book, news and scheduling.");
         ((System.Windows.Forms.ToolStripMenuItem)menu.Items[0]).PerformClick();
         Check(bookOpens == 2 && !menu.Visible, "Native menu actions must work without opening Settings or activating a test window.");
         var shell = new SettingsShell(model); Layout(shell, 880, 640);
+        foreach (var setting in new[] { "light", "dark", "contrast" })
+        {
+            theme.Apply(setting == "contrast" ? "system" : setting, setting == "dark", setting == "contrast"); shell.SelectPage("Shortcuts"); Layout(shell, 880, 640);
+            foreach (var recorder in Descendants<ShortcutRecorder>(shell))
+            {
+                var glyph = Descendants<TextBlock>(recorder).First(t => t.Text == recorder.Content.ToString());
+                Check(Contrast(((SolidColorBrush)glyph.Foreground).Color, ((SolidColorBrush)recorder.Background).Color) >= 4.5 && recorder.Focusable && recorder.IsTabStop, "Rendered shortcut glyphs must be legible and keyboard accessible in both themes.");
+            }
+            shell.SelectPage("Appearance"); Layout(shell, 880, 640);
+            var box = Descendants<ComboBox>(shell).Single(c => c.Items.Contains("Use Windows setting"));
+            var arrow = Descendants<System.Windows.Shapes.Path>(box).First();
+            var at = arrow.TranslatePoint(new Point(0, 0), box);
+            Check(at.X > box.ActualWidth - 35 && at.X < box.ActualWidth, "A combo arrow must stay in its trailing slot instead of overlapping its label.");
+        }
+        theme.Apply("light", false, false);
         var navigation = Descendants<ListBox>(shell).Single(); navigation.SelectedItem = navigation.Items.Cast<ListBoxItem>().Single(item => Equals(item.Tag, "Appearance"));
         Check(shell.SelectedPage == "Appearance", "Windows navigation must open its selected settings page.");
         var picker = Descendants<ComboBox>(shell).Single(box => box.Items.Contains("Use Windows setting")); picker.SelectedIndex = 2;

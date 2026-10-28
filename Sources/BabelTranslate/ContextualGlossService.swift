@@ -120,6 +120,19 @@ public actor ContextualGlossService {
             self.cancellableWorker.withLock { worker in if worker?.isRunning == true { worker?.terminate() } }
         }
     }
+    /// News support must yield promptly when screen reading resumes.
+    public func glossPublicExcerpt(sentence: String, words: [String]) async throws -> ContextualGloss {
+        guard isInstalled, sentence.count <= 4000, words.count <= 32 else { throw ContextualGlossError.unavailable }
+        try Task.checkCancellation()
+        return try await withTaskCancellationHandler {
+            do {
+                let reply = try request(sentence: sentence, words: words, focus: nil)
+                try Task.checkCancellation(); return reply
+            } catch { resetServer(); try Task.checkCancellation(); throw error }
+        } onCancel: {
+            self.cancellableWorker.withLock { worker in if worker?.isRunning == true { worker?.terminate() } }
+        }
+    }
 
     /// Whether everything the worker needs is on disk.
     ///

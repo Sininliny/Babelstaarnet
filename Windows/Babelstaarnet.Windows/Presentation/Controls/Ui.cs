@@ -32,6 +32,7 @@ internal static class Ui
     {
         var button = ActionButton(title, action);
         button.Margin = new Thickness(0, 0, 8, 8);
+        button.HorizontalAlignment = HorizontalAlignment.Left;
         return button;
     }
 
@@ -51,6 +52,7 @@ internal static class Ui
         foreach (var property in new[] { Border.BackgroundProperty, Border.BorderBrushProperty, Border.BorderThicknessProperty, Border.PaddingProperty })
             border.SetBinding(property, new Binding(property.Name) { RelativeSource = RelativeSource.TemplatedParent });
         var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetBinding(System.Windows.Documents.TextElement.ForegroundProperty, new Binding("Foreground") { RelativeSource = RelativeSource.TemplatedParent });
         presenter.SetBinding(FrameworkElement.HorizontalAlignmentProperty, new Binding("HorizontalContentAlignment") { RelativeSource = RelativeSource.TemplatedParent });
         presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         border.AppendChild(presenter);

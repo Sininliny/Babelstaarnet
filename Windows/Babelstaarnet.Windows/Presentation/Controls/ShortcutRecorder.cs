@@ -14,10 +14,10 @@ internal sealed class ShortcutRecorder : Button
     public ShortcutRecorder(ReaderUiModel model, ShortcutAction action)
     {
         this.model = model; this.action = action;
-        Width = 145; Height = 27; FontFamily = Ui.Font; FontSize = 12;
+        Width = 160; Height = 34; FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas"); FontSize = 12;
         Template = Ui.ActionButton("", () => { }).Template;
         Content = model.Preferences.Shortcuts.For(action).Display;
-        Background = Ui.Surface; BorderBrush = Ui.Stroke; Padding = new Thickness(6, 2, 6, 2);
+        Background = WindowsTheme.Current.Control; Foreground = Ui.Ink; BorderBrush = Ui.Stroke; BorderThickness = new Thickness(1); Padding = new Thickness(10, 4, 10, 4);
         ToolTip = "Click, then press a replacement shortcut. Esc cancels.";
         Click += (_, _) => { if (recording) return; model.ShortcutCapture(true); recording = true; Content = "Press shortcut…"; Focus(); };
         LostKeyboardFocus += (_, _) => Cancel();

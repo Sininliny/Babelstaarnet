@@ -853,6 +853,215 @@
         0
       ],
       "expected": 0
+    },
+    {
+      "id": "adaptive-news-0",
+      "operation": "news-reader-band",
+      "args": [
+        0,
+        34,
+        0,
+        27
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-1",
+      "operation": "news-reader-band",
+      "args": [
+        21,
+        34,
+        0,
+        27
+      ],
+      "expected": 2
+    },
+    {
+      "id": "adaptive-news-2",
+      "operation": "news-reader-band",
+      "args": [
+        21,
+        34,
+        17,
+        27
+      ],
+      "expected": 3
+    },
+    {
+      "id": "adaptive-news-3",
+      "operation": "news-reader-band",
+      "args": [
+        20,
+        34,
+        27,
+        27
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-4",
+      "operation": "news-target-budget",
+      "args": [
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "id": "adaptive-news-5",
+      "operation": "news-target-budget",
+      "args": [
+        3
+      ],
+      "expected": 0
+    },
+    {
+      "id": "adaptive-news-6",
+      "operation": "news-target-budget",
+      "args": [
+        4
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-7",
+      "operation": "news-target-budget",
+      "args": [
+        23
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-8",
+      "operation": "news-target-budget",
+      "args": [
+        24
+      ],
+      "expected": 2
+    },
+    {
+      "id": "adaptive-news-9",
+      "operation": "news-target-budget",
+      "args": [
+        120
+      ],
+      "expected": 2
+    },
+    {
+      "id": "adaptive-news-10",
+      "operation": "news-word-mode",
+      "args": [
+        4,
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "expected": 0
+    },
+    {
+      "id": "adaptive-news-11",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        0,
+        1,
+        1,
+        0,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-12",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        2,
+        1,
+        1,
+        0,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-13",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "expected": 2
+    },
+    {
+      "id": "adaptive-news-14",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        1,
+        1,
+        0,
+        0,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-15",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "id": "adaptive-news-16",
+      "operation": "news-word-mode",
+      "args": [
+        3,
+        2,
+        2,
+        1,
+        0,
+        1
+      ],
+      "expected": 2
+    },
+    {
+      "id": "adaptive-news-17",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        3,
+        3,
+        1,
+        0,
+        2
+      ],
+      "expected": 2
+    },
+    {
+      "id": "adaptive-news-18",
+      "operation": "news-word-mode",
+      "args": [
+        0,
+        1,
+        1,
+        1,
+        0,
+        3
+      ],
+      "expected": 1
     }
   ]
 }

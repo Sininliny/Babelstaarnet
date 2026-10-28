@@ -381,5 +381,183 @@
         "EU-bidrag"
       ]
     }
+  ],
+  "newsAdaptive": [
+    {
+      "id": "reported-airport-beginner",
+      "title": "Københavns Lufthavn fik påbud om sikkerhed forud for lange køer.",
+      "levels": {
+        "fik": 4,
+        "om": 4,
+        "for": 4
+      },
+      "bands": {
+        "lange": 1,
+        "lufthavn": 2,
+        "køer": 2,
+        "sikkerhed": 2
+      },
+      "meanings": {
+        "københavns": "Copenhagen’s",
+        "lufthavn": "airport",
+        "påbud": "an order",
+        "sikkerhed": "security",
+        "forud": "ahead of",
+        "lange": "long",
+        "køer": "queues"
+      },
+      "display": "Copenhagen’s airport fik an order om security ahead of for lange queues.",
+      "targets": [
+        "lange"
+      ],
+      "ready": true
+    },
+    {
+      "id": "familiar-frame-one-reachable-word",
+      "title": "Byen åbner en ny park.",
+      "levels": {
+        "byen": 4,
+        "en": 4,
+        "park": 5,
+        "ny": 3
+      },
+      "bands": {
+        "ny": 1,
+        "åbner": 2
+      },
+      "meanings": {
+        "åbner": "opens",
+        "ny": "new"
+      },
+      "display": "Byen opens en ny park.",
+      "targets": [
+        "ny"
+      ],
+      "ready": true
+    },
+    {
+      "id": "rare-words-are-never-targets",
+      "title": "Ministeriet fremlægger en redegørelse.",
+      "levels": {
+        "en": 4
+      },
+      "bands": {},
+      "meanings": {
+        "ministeriet": "The ministry",
+        "fremlægger": "presents",
+        "redegørelse": "report"
+      },
+      "display": "The ministry presents en report.",
+      "targets": [],
+      "ready": true
+    },
+    {
+      "id": "no-help-is-not-a-learning-target",
+      "title": "En ny park åbner.",
+      "levels": {
+        "en": 4,
+        "park": 4
+      },
+      "bands": {
+        "ny": 1,
+        "åbner": 2
+      },
+      "meanings": {
+        "ny": "",
+        "åbner": "opens"
+      },
+      "display": "En ny park opens.",
+      "targets": [],
+      "ready": false
+    },
+    {
+      "id": "repeated-target-spends-one-slot",
+      "title": "En ny plan med en ny pris.",
+      "levels": {
+        "en": 4,
+        "med": 4
+      },
+      "bands": {
+        "ny": 1,
+        "plan": 2,
+        "pris": 2
+      },
+      "meanings": {
+        "ny": "new",
+        "plan": "plan",
+        "pris": "price"
+      },
+      "display": "En ny plan med en ny price.",
+      "targets": [
+        "ny"
+      ],
+      "ready": true
+    },
+    {
+      "id": "long-card-budget-two",
+      "title": "En ny dag med meget vand og mange børn i et stort hus ved en skole med en lang vej og en gammel park.",
+      "levels": {
+        "en": 4,
+        "med": 4,
+        "og": 4,
+        "i": 4,
+        "et": 4,
+        "ved": 4
+      },
+      "bands": {
+        "ny": 1,
+        "dag": 1,
+        "meget": 1,
+        "mange": 1,
+        "børn": 1,
+        "hus": 1,
+        "skole": 1,
+        "lang": 1,
+        "vej": 2
+      },
+      "meanings": {
+        "ny": "new",
+        "dag": "day",
+        "meget": "much",
+        "vand": "water",
+        "mange": "many",
+        "børn": "children",
+        "stort": "large",
+        "hus": "house",
+        "skole": "school",
+        "lang": "long",
+        "vej": "road",
+        "gammel": "old",
+        "park": "park"
+      },
+      "display": "En ny dag med much water og many children i et large house ved en school med en long road og en old park.",
+      "targets": [
+        "ny",
+        "dag"
+      ],
+      "ready": true
+    },
+    {
+      "id": "supported-reading-removes-new-targets",
+      "title": "Byen åbner en ny park.",
+      "levels": {
+        "byen": 4,
+        "en": 4,
+        "park": 5,
+        "ny": 3
+      },
+      "bands": {
+        "ny": 1,
+        "åbner": 2
+      },
+      "meanings": {
+        "åbner": "opens",
+        "ny": "new"
+      },
+      "display": "Byen opens en new park.",
+      "targets": [],
+      "ready": true,
+      "supported": true
+    }
   ]
 }

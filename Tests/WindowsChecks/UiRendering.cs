@@ -58,6 +58,7 @@ internal static class UiRendering
         news.Reader.Speak = _ => { }; news.Reader.SaveWord = (_, _, _) => { };
         var newsGlosses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["regeringen"] = "the government", ["fremlægger"] = "presents", ["ny"] = "new", ["plan"] = "plan", ["for"] = "for", ["grøn"] = "green", ["energi"] = "energy", ["en"] = "a", ["kort"] = "short", ["tydelig"] = "clear", ["besked"] = "message", ["æbler"] = "apples", ["og"] = "and", ["får"] = "sheep", ["på"] = "in", ["landet"] = "the countryside" };
         news.Reader.CachedWordMeaning = word => newsGlosses.GetValueOrDefault(word);
+        news.Reader.WordBands = DanishLanguage.Shared.NewsWordBands;
         news.Reader.KnowledgeLevel = word => new[] { "æbler", "og", "en", "for", "plan" }.Contains(word.ToLowerInvariant()) ? 4 : 0;
         foreach (var article in news.Cards.Select(c => c.Article)) news.Reader.PrepareAsync(article).GetAwaiter().GetResult();
         Save(new NewsPanel(news), stem + "-news.png", 860, 950);
@@ -71,6 +72,18 @@ internal static class UiRendering
         var popupItem = new NewsPopupItem(fixtureCard.Article, "Regeringen har en ny plan for grøn energi.", "fixture local AI");
         Save(new NewsPopupPanel(news, popupItem, () => { }, () => { }), stem + "-news-popup.png", 460, 400);
         Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
+        var shell = new SettingsShell(model);
+        foreach (string page in new[] { "Translation", "Reading", "News (internet)", "Shortcuts", "What you have picked up", "Local engines", "Contextual meanings", "Appearance", "Access" })
+        {
+            shell.SelectPage(page); Save(shell, stem + "-settings-" + page.Split(' ')[0].ToLowerInvariant() + ".png", 880, 640);
+        }
+        var airport = new NewsArticle("airport-fixture", "Københavns Lufthavn fik påbud om sikkerhed forud for lange køer.", "", "https://www.dr.dk/nyheder/fixture", now.ToUnixTimeSeconds(), 0);
+        using var airportReader = new NewsReadingSupport(Path.Combine(fixture, "airport")) { WordBands = DanishLanguage.Shared.NewsWordBands, Speak = _ => { } };
+        airportReader.KnowledgeLevel = word => new[] { "fik", "om", "for" }.Contains(word.ToLowerInvariant()) ? 4 : 0;
+        var airportGlosses = new Dictionary<string, string> { ["københavns"] = "Copenhagen’s", ["lufthavn"] = "airport", ["påbud"] = "an order", ["sikkerhed"] = "security", ["forud"] = "ahead", ["lange"] = "long", ["køer"] = "queues" };
+        airportReader.CachedWordMeaning = word => airportGlosses.GetValueOrDefault(word.ToLowerInvariant());
+        airportReader.PrepareAsync(airport).GetAwaiter().GetResult();
+        Save(new NewsPopupPanel(news, new(airport, airport.Title, "fixture local AI", Reader: airportReader), () => { }, () => { }), stem + "-news-popup-adaptive.png", 460, 400);
         var settings = new SettingsPanel(model); settings.Measure(new Size(480, 3000)); settings.Arrange(new Rect(0, 0, 480, 3000)); settings.UpdateLayout();
         // Render the actual grouped form without the viewport cropping its lower sections.
         var form = (FrameworkElement)settings.Content; settings.Content = null; form.Measure(new Size(480, double.PositiveInfinity)); int formHeight = (int)Math.Ceiling(form.DesiredSize.Height);

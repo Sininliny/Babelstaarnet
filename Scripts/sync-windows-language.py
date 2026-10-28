@@ -19,6 +19,8 @@ data = dict(source="Sources/LanguageDanish/Danish.swift", code="da",
     glossInstructions=prompt("glossInstructions"), explainInstructions=prompt("explainInstructions"))
 exact = re.search(r"exactGlosses: \[(.*?)\n        \]", source, re.S).group(1)
 data["glosses"].update(dict(re.findall(r'"([^"]+)": "([^"]*)"', exact)))
+bands = re.search(r"private static let danishNewsWordBands[^=]*= \[(.*?)\n    \]", source, re.S).group(1)
+data["newsWordBands"] = {word: int(band) for word, band in re.findall(r'"([^"]+)": (\d+)', bands)}
 target = root / "Resources/LanguagePacks/da.json"
 expected = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 parser = argparse.ArgumentParser(); parser.add_argument("--check", action="store_true"); args = parser.parse_args()

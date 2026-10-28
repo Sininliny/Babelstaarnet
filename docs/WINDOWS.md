@@ -246,23 +246,27 @@ Source builds require CMake and Visual Studio C++ build tools in addition to .NE
 news rules statically compiled into the Mac client. End users need neither CMake
 nor Visual Studio. See [cross-platform development](DEVELOPMENT.md).
 
-Word Book is a primary action at the top of the tower tray menu, beside the
-reading controls, and does not require opening Settings. News cards keep Danish
-prominent with short hints under unfamiliar words. Familiar words remain Danish;
-partly learned words still receive support. Hints stay stable while reading.
-Select a Danish word to look it up, listen or save it with its source context.
-**Help with this sentence** reveals full English for that card only;
-**Back to Danish** closes it. A previous English-on preference cannot make full
-translations appear automatically. Closing the news page resets that disclosure.
-These actions use local translation and speech, including cached news with
-networking off. They require neither OCR nor the optional language model.
+Either mouse button or keyboard context activation on the tower opens the themed
+reading panel. **Word Book**, **Read something new**, and **Scheduled news cards…**
+remain first-level actions; Settings is not required for daily reading.
 
-The tower icon now opens a native first-level menu: **Word Book**, **Read
-something new**, and **Scheduled news cards…**. Enable DR news and background
+News directly replaces difficult words with English while familiar words stay
+Danish. A short card keeps at most one reachable everyday new word; longer cards
+keep at most two. The editorial word bands are conservative defaults, not CEFR
+ratings. A target always has ready English: selecting it reveals help immediately,
+without a quiz or delay. Help stays stable during the current card. Original
+Danish remains available through word selection, listening and the DR headline.
+**Help with this sentence** reveals full English only on request;
+**Back to reading** closes it. No legacy preference can turn on automatic full
+English. These actions work locally with networking off. Installed local AI can
+choose meanings in context; ordinary offline translation supplies missing words.
+A failed word does not discard other English support.
+
+Enable DR news and background
 refresh, then opt into **Scheduled adapted news cards**. Choose 1, 2 or 4 hours;
 the first automatic card waits that interval. Cards require installed local AI,
 appear 09:00–21:00 at most three times daily, and never repeat a shown story.
-They do not activate a window or play audio automatically. Busy reading and
+Cards wait until mixed-language support is ready. They do not activate a window or play audio automatically. Busy reading and
 Windows notification suppression defer them without a catch-up queue.
 **Try a card now**, **Pause today**, **Resume news cards**, and **Turn off** are
 explicit controls. A preview does not turn scheduling on. Original RSS text is

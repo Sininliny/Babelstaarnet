@@ -17,7 +17,7 @@ struct NewsView: View {
                     Spacer()
                     SettingsLink { Label("News settings", systemImage: "gearshape") }.font(.caption)
                 }
-                Text("Read in Danish. Small word hints fill the gaps; words you know stay Danish. Select any word for more help.").foregroundStyle(.secondary)
+                Text("Read in Danish. English replaces difficult words. Your familiar Danish stays, with just a little new everyday vocabulary. Select any word for help.").foregroundStyle(.secondary)
                 if !news.preferences.enabled {
                     Toggle("DR news (internet)", isOn: Binding(get: { news.preferences.enabled }, set: { value in
                         news.configure(enabled: value, background: false, notify: false, topic: news.preferences.topic, hour: news.preferences.digestHour)
@@ -64,8 +64,8 @@ struct NewsReadingCardView: View {
     private var article: NewsArticle { card.article }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("DR · " + article.publishedDate.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-            Text("DANISH · SMALL HINTS FOR UNFAMILIAR WORDS").font(.caption2).foregroundStyle(.secondary)
+            if !compact { Text("DR · " + article.publishedDate.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
+            Text("YOUR DANISH · ENGLISH WHERE NEEDED").font(.caption2).foregroundStyle(.secondary)
             source(article.title, headline: !compact)
             if !article.summary.isEmpty {
                 source(article.summary, headline: false)
@@ -76,7 +76,7 @@ struct NewsReadingCardView: View {
             if reader.isVisible(article) {
                 english(part: 0)
                 if !article.summary.isEmpty { english(part: 1) }
-                Button("Back to Danish") { reader.hideTranslation(article) }.font(.caption)
+                Button("Back to reading") { reader.hideTranslation(article) }.font(.caption)
             } else {
                 Button("Help with this sentence") { Task { await reader.prepare(article, requested: true) } }.font(.caption)
             }
@@ -137,13 +137,12 @@ struct NewsReadingCardView: View {
             ForEach(Array(NewsReadingSupport.pieces(text).enumerated()), id: \.offset) { _, piece in
                 if let word = NewsReadingSupport.word(piece) {
                     Button { Task { await reader.lookup(word, article: article, context: text) } } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(piece).font(headline ? .title3.weight(.semibold) : .body)
-                                .background(card.matches.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 3))
-                            if let gloss = reader.gloss(word, article: article) {
-                                Text(gloss).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 140, alignment: .leading)
-                            }
-                        }.padding(.horizontal, 1).padding(.vertical, 3)
+                        let display = reader.presentation(piece, article: article)
+                        Text(display.text).font(headline ? .title3.weight(.semibold) : .body)
+                            .foregroundStyle(display.mode == 2 ? Color.accentColor : Color.primary)
+                            .underline(display.mode == 2)
+                            .padding(.horizontal, 3).padding(.vertical, 3)
+                            .background(display.mode == 1 ? Color.secondary.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 3))
                     }.buttonStyle(.plain).help("Meaning of " + word).accessibilityLabel("Look up Danish word " + word)
                 } else { Text(piece).font(headline ? .title3.weight(.semibold) : .body) }
             }
@@ -169,7 +168,7 @@ struct NewsSettings: View {
                 Text("1 hour").tag(60); Text("2 hours").tag(120); Text("4 hours").tag(240)
             }.frame(maxWidth: 250)
             Text("While the app runs · 09:00–21:00 · at most 3 cards a day. No catch-up queue, sound or focus stealing. Reading takes priority. Enable background refresh above to schedule cards.").font(.caption).foregroundStyle(.secondary)
-            Text("Each card uses installed local AI to simplify DR text, with Danish word hints. No local AI means no scheduled cards; the original remains in Word Book.").font(.caption).foregroundStyle(.secondary)
+            Text("Each card uses installed local AI to simplify DR text, with English for difficult words and a little new Danish. No local AI means no scheduled cards; the original remains in Word Book.").font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Try a card now") { Task { await news.refresh(manual: true); await news.tickPopup(preview: true) } }.disabled(!news.preferences.enabled)
                 if news.popupsPaused { Button("Resume news cards") { news.pausePopupsForToday(false) } }

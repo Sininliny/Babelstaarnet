@@ -88,6 +88,10 @@ internal sealed class ReaderApp : Application
         };
         news.Reader.CachedWordMeaning = word => vocabulary.SavedMeaning(word) ?? (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, word, out var gloss) ? gloss : null);
         news.Reader.KnowledgeLevel = vocabulary.EffectiveLevel;
+        news.Reader.WordBands = DanishLanguage.Shared.NewsWordBands;
+        news.Reader.SupportedReading = () => preferences.SupportedReading;
+        news.Reader.ContextualWords = (text, words, token) => !preferences.ContextualMeanings || active && !idle
+            ? throw new InvalidOperationException("Screen reading takes priority.") : contextual.GlossWordsAsync(text, words, token);
         news.Reader.Speak = text => Speak(text);
         news.Reader.SaveWord = (word, meaning, context) => { vocabulary.Save(word, meaning, context, DateTimeOffset.Now); };
 
@@ -120,8 +124,8 @@ internal sealed class ReaderApp : Application
         overlay.SentenceMeaningRequested += () => _ = session.ToggleSentenceMeaningAsync();
         overlay.Listen += () => { if (current is not null) Speak(current.Word.Text); };
         tray = new Forms.NotifyIcon { Text = "Babelstårnet · inactive", Icon = icons.Tray(false), Visible = true };
-        trayMenu = new TrayMenu(model); tray.ContextMenuStrip = trayMenu;
-        tray.MouseClick += (_, mouse) => { if (mouse.Button == Forms.MouseButtons.Left) Ui.Try(() => trayMenu.Show(Forms.Cursor.Position)); };
+        trayMenu = new TrayMenu(model, ShowTray); tray.ContextMenuStrip = trayMenu;
+        tray.MouseClick += (_, mouse) => { if (mouse.Button == Forms.MouseButtons.Left) Ui.Try(ShowTray); };
         news.PopupAllowed = () => !shuttingDown && NotificationsAccepted();
         news.PresentPopup = item =>
         {

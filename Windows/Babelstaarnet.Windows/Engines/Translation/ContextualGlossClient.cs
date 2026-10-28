@@ -219,6 +219,25 @@ internal sealed class ContextualGlossClient : IDisposable
         string prompt = instructions + "\n\nSætning: " + sentence + "\nOrd:\n" + string.Join("\n", words.Select((w, i) => $"{i + 1}. {w}")) + "\nSvar:\n";
         return await GeneratePromptAsync(prompt, words.Count == 1 ? 150 : words.Count * 30, cancellationToken, progress);
     }
+    public async Task<IReadOnlyDictionary<string, string>> GlossWordsAsync(string sentence, IReadOnlyList<string> words, CancellationToken token)
+    {
+        if (!IsInstalled || words.Count > 32 || sentence.Length > 4000) throw new InvalidOperationException("Local sentence meanings are unavailable.");
+        await gate.WaitAsync(token);
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token, lifetime.Token); deadline.CancelAfter(TimeSpan.FromSeconds(60));
+            await EnsureServerAsync(deadline.Token);
+            var result = new Dictionary<string, string>(sentences.GetValueOrDefault(sentence) ?? []);
+            foreach (var batch in words.Where(w => !result.ContainsKey(ReadingPolicy.Key(w))).Chunk(8))
+            {
+                string raw = await GenerateAsync(DanishLanguage.Shared.GlossInstructions, sentence, batch, deadline.Token);
+                foreach (var pair in ParseGlosses(raw, batch)) result[pair.Key] = pair.Value;
+            }
+            if (sentences.Count >= 256 && !sentences.ContainsKey(sentence)) sentences.TryRemove(sentences.Keys.First(), out _);
+            sentences[sentence] = new(result); return result;
+        }
+        finally { gate.Release(); }
+    }
     public async Task<string> SimplifyPublicExcerptAsync(string excerpt, CancellationToken token)
     {
         if (!IsInstalled || excerpt.Length is 0 or > 3000) throw new InvalidOperationException("The local model is unavailable for this excerpt.");

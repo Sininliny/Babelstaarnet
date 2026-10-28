@@ -15,6 +15,17 @@ int32_t bp_news_gloss(int32_t level, int32_t available, int32_t different) {
     /* News offers support, not an extra challenge for partially learned words. */
     return available && different && bp_anchor(level, 1, 0, 0, 0, 0);
 }
+int32_t bp_news_reader_band(int32_t basic, int32_t total, int32_t everyday, int32_t everyday_total) {
+    if (total < 8 || basic < 8 || (double)basic / total < .6) return 1;
+    return everyday_total >= 8 && everyday >= 8 && (double)everyday / everyday_total >= .6 ? 3 : 2;
+}
+int32_t bp_news_target_budget(int32_t words) { return words < 4 ? 0 : words < 24 ? 1 : 2; }
+int32_t bp_news_word_mode(int32_t level, int32_t band, int32_t reader_band,
+    int32_t ready, int32_t used, int32_t budget) {
+    if (level >= 4) return 0;
+    if (ready && band >= 1 && band <= reader_band && used >= 0 && used < budget && budget <= 2) return 2;
+    return 1;
+}
 int32_t bp_news_popup_due(int32_t enabled, int32_t background, int32_t opted_in,
     int32_t blocked, int32_t hour, double elapsed, int32_t interval, int32_t shown, int32_t fresh) {
     return enabled && background && opted_in && !blocked && hour >= 9 && hour < 21 &&

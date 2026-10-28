@@ -19,9 +19,14 @@ public struct NewsWordHelp: Sendable {
     public var status: String
     public var saved = false
 }
+public struct NewsWordPresentation: Sendable {
+    public let text: String
+    public let mode: Int // 0 familiar, 1 English, 2 new Danish, 3 unavailable help
+}
 private struct NewsReadingCache: Codable {
     var english: [String: NewsEnglish] = [:]
     var words: [String: NewsGloss]? = [:]
+    var contextual: [String: [String: String]]? = [:]
 }
 
 /// Reading support for public source text. It has no network or screen-capture API.
@@ -32,9 +37,16 @@ private struct NewsReadingCache: Codable {
     @Published private var wordMeanings: [String: NewsGloss] = [:]
     @Published private var glossPlans: [String: [String: String]] = [:]
     @Published private var wordStates: [String: String] = [:]
+    private var contextual: [String: [String: String]] = [:]
+    @Published private var learningPlans: [String: Set<String>] = [:]
+    private var levelPlans: [String: [String: Int]] = [:]
+    private var readerBands: [String: Int] = [:]
+    public var wordBands: [String: Int] = [:]
+    public var contextualWords: ((String, [String]) async throws -> [String: String])?
     public var translate: (([String]) async throws -> [String])?
     public var cachedWordMeaning: (String) -> String? = { _ in nil }
     public var knowledgeLevel: (String) -> Int = { _ in 0 }
+    public var supportedReading: () -> Bool = { false }
     public var beforeHelp: (() -> Void)?
     public var speak: ((String) -> Void)?
     public var saveWord: ((String, String, String) -> Void)?
@@ -49,6 +61,7 @@ private struct NewsReadingCache: Codable {
            let data = try? Data(contentsOf: path), let cache = try? JSONDecoder().decode(NewsReadingCache.self, from: data) {
             wordMeanings = Dictionary(uniqueKeysWithValues: (cache.words ?? [:]).filter { $0.key.count <= 100 && $0.value.created.isFinite && !$0.value.text.isEmpty && $0.value.text.count <= 160 }.sorted { $0.value.created > $1.value.created }.prefix(1024).map { ($0.key, $0.value) })
             meanings = Dictionary(uniqueKeysWithValues: cache.english.filter { $0.key.count < 1000 && $0.value.created.isFinite && (1...2).contains($0.value.parts.count) && $0.value.parts.allSatisfy { !$0.isEmpty && $0.utf8.count <= 18000 } }.sorted { $0.value.created > $1.value.created }.prefix(32).map { ($0.key, $0.value) })
+            contextual = Dictionary(uniqueKeysWithValues: (cache.contextual ?? [:]).filter { $0.key.count < 1000 && $0.value.count <= 256 }.prefix(32).map { ($0.key, $0.value.filter { $0.key.count <= 100 && Self.usable($0.value) }) })
         }
     }
     public static func sourceParts(_ article: NewsArticle) -> [String] { [article.title] + (article.summary.isEmpty ? [] : [article.summary]) }
@@ -68,9 +81,48 @@ private struct NewsReadingCache: Codable {
         let text: String?
         if let plan = glossPlans[key] { text = plan[unit] }
         else { text = SharedPolicy.newsGloss(level: knowledgeLevel(word)) ? wordMeaning(word) : nil }
-        guard let text, !text.isEmpty, text.count <= 160,
+        guard learningPlans[key]?.contains(unit) != true, let text, !text.isEmpty, text.count <= 160,
               Self.normalized(text) != unit, text.split(whereSeparator: { $0.isWhitespace }).count <= 10 else { return nil }
         return text
+    }
+    private static func usable(_ text: String?) -> Bool {
+        guard let text else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.count <= 160 && pieces(text).count <= 10
+    }
+    public func ready(_ article: NewsArticle) -> Bool {
+        guard let plan = glossPlans[Self.key(article)] else { return false }
+        return plan.values.allSatisfy { Self.usable($0) }
+    }
+    public func presentation(_ piece: String, article: NewsArticle) -> NewsWordPresentation {
+        guard let word = Self.word(piece) else { return NewsWordPresentation(text: piece, mode: 0) }
+        let key = Self.key(article), unit = Self.normalized(word)
+        guard let plan = glossPlans[key] else { return NewsWordPresentation(text: knowledgeLevel(word) >= 4 ? piece : "…", mode: knowledgeLevel(word) >= 4 ? 0 : 3) }
+        guard let meaning = plan[unit] else { return NewsWordPresentation(text: piece, mode: 0) }
+        guard learningPlans[key] != nil else { return NewsWordPresentation(text: "…", mode: 3) }
+        guard Self.usable(meaning) else { return NewsWordPresentation(text: piece, mode: 3) }
+        if learningPlans[key]?.contains(unit) == true { return NewsWordPresentation(text: piece, mode: 2) }
+        if Self.normalized(meaning) == unit { return NewsWordPresentation(text: piece, mode: 0) }
+        let text = piece.replacingOccurrences(of: word, with: meaning, range: piece.range(of: word))
+        return NewsWordPresentation(text: text, mode: 1)
+    }
+    private func finishPlan(_ article: NewsArticle) {
+        let key = Self.key(article)
+        guard learningPlans[key] == nil, let plan = glossPlans[key] else { return }
+        var seen = Set<String>()
+        let words = Self.sourceParts(article).flatMap(Self.pieces).compactMap(Self.word).map(Self.normalized)
+        let ordered = words.filter { seen.insert($0).inserted && plan[$0] != nil }.enumerated().sorted { a, b in
+            let la = levelPlans[key]?[a.element] ?? 0, lb = levelPlans[key]?[b.element] ?? 0
+            if la != lb { return la > lb }
+            let ba = wordBands[a.element] ?? Int.max, bb = wordBands[b.element] ?? Int.max
+            return ba == bb ? a.offset < b.offset : ba < bb
+        }
+        var targets = Set<String>(); let budget = supportedReading() ? 0 : SharedPolicy.newsTargetBudget(words: words.count)
+        for item in ordered {
+            let word = item.element, meaning = plan[word] ?? ""
+            if SharedPolicy.newsWordMode(level: levelPlans[key]?[word] ?? 0, band: wordBands[word] ?? 0, readerBand: readerBands[key] ?? 1,
+                helpReady: Self.usable(meaning) && Self.normalized(meaning) != word, used: targets.count, budget: budget) == 2 { targets.insert(word) }
+        }
+        learningPlans[key] = targets
     }
     public func prepare(_ article: NewsArticle, requested: Bool = false) async {
         if !requested { await prepareWords(article); return }
@@ -94,36 +146,75 @@ private struct NewsReadingCache: Codable {
             catch { if self.owners[key] == owner { self.states[key] = "Sentence help unavailable. Try again or select a word. " + error.localizedDescription } }
         }
     }
+    private static func chunks(_ words: [String], size: Int) -> [[String]] {
+        stride(from: 0, to: words.count, by: size).map { Array(words[$0..<min($0 + size, words.count)]) }
+    }
     private func prepareWords(_ article: NewsArticle) async {
         let key = Self.key(article), operation = "words:" + key
+        var forms: [String: String] = [:]
+        for word in Self.sourceParts(article).flatMap(Self.pieces).compactMap(Self.word) where forms[Self.normalized(word)] == nil { forms[Self.normalized(word)] = word }
         if glossPlans[key] == nil {
-            var plan: [String: String] = [:]
-            for word in Self.sourceParts(article).flatMap({ Self.pieces($0).compactMap(Self.word) }) {
-                if SharedPolicy.newsGloss(level: knowledgeLevel(word)) { plan[Self.normalized(word)] = wordMeaning(word) ?? "" }
+            var plan: [String: String] = [:], levels: [String: Int] = [:]
+            for (unit, word) in forms where knowledgeLevel(word) < 4 {
+                levels[unit] = knowledgeLevel(word); plan[unit] = contextual[key]?[unit] ?? wordMeaning(word) ?? ""
             }
-            glossPlans[key] = plan
+            glossPlans[key] = plan; levelPlans[key] = levels
+            func total(_ band: Int) -> Int { wordBands.filter { $0.value == band }.count }
+            func known(_ band: Int) -> Int { wordBands.filter { $0.value == band && knowledgeLevel($0.key) >= 4 }.count }
+            readerBands[key] = SharedPolicy.newsReaderBand(knownBasic: known(1), basicTotal: total(1), knownEveryday: known(2), everydayTotal: total(2))
         }
-        let missing = (glossPlans[key] ?? [:]).filter { $0.value.isEmpty }.map(\.key).sorted().prefix(64)
-        guard !missing.isEmpty else { wordStates.removeValue(forKey: key); return }
-        guard let translate else { wordStates[key] = "Word help needs local translation in Settings. Select a word for available dictionary help."; return }
+        if ready(article) && (learningPlans[key] != nil || contextualWords == nil || (glossPlans[key] ?? [:]).keys.allSatisfy({ contextual[key]?[$0] != nil })) {
+            finishPlan(article); wordStates.removeValue(forKey: key); return
+        }
         await perform(key: operation) { [weak self] owner in
             guard let self else { return }
-            self.wordStates[key] = "Adding small word hints on this device…"
+            self.wordStates[key] = "Preparing English support on this device…"
+            func accept(_ word: String, _ value: String?, inContext: Bool) {
+                guard Self.usable(value), self.glossPlans[key]?[word] != nil, let value else { return }
+                let gloss = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.glossPlans[key]?[word] = gloss; self.wordMeanings[word] = NewsGloss(text: gloss, created: Date().timeIntervalSince1970)
+                if inContext { self.contextual[key, default: [:]][word] = gloss }
+            }
             do {
-                let words = Array(missing), result = try await translate(words)
-                try Task.checkCancellation()
-                guard result.count == words.count, result.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.utf8.count <= 18000 }) else { throw URLError(.cannotDecodeContentData) }
-                guard self.owners[operation] == owner else { return }
-                for (word, text) in zip(words, result) {
-                    let gloss = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    self.glossPlans[key]?[word] = gloss
-                    // Long output is not a word gloss; allow explicit lookup instead.
-                    if gloss.count <= 160 { self.wordMeanings[word] = NewsGloss(text: gloss, created: Date().timeIntervalSince1970) }
+                if let context = self.contextualWords {
+                    for part in Self.sourceParts(article) {
+                        for pieces in Self.chunks(Self.pieces(part), size: 32) {
+                            var seen = Set<String>()
+                            let words = pieces.compactMap(Self.word).filter { word in
+                                let unit = Self.normalized(word)
+                                return seen.insert(unit).inserted && self.glossPlans[key]?[unit] != nil && self.contextual[key]?[unit] == nil
+                            }
+                            if words.isEmpty { continue }
+                            do {
+                                let result = try await context(pieces.joined(separator: " "), words); try Task.checkCancellation()
+                                guard self.owners[operation] == owner else { return }
+                                for (word, value) in result { accept(Self.normalized(word), value, inContext: true) }
+                            } catch is CancellationError { if Task.isCancelled { throw CancellationError() } }
+                            catch { /* Retain help and try the ordinary offline adapter. */ }
+                        }
+                    }
                 }
+                if let translate = self.translate {
+                    let missing = (self.glossPlans[key] ?? [:]).filter { !Self.usable($0.value) }.map(\.key).sorted().prefix(256)
+                    for batch in Self.chunks(Array(missing), size: 8) {
+                        do {
+                            let result = try await translate(batch.map { forms[$0] ?? $0 }); try Task.checkCancellation()
+                            guard result.count == batch.count else { throw URLError(.cannotDecodeContentData) }
+                            guard self.owners[operation] == owner else { return }
+                            for (word, value) in zip(batch, result) { accept(word, value, inContext: false) }
+                        } catch is CancellationError { if Task.isCancelled { throw CancellationError() } }
+                        catch { /* A failed word/batch never removes other available English. */ }
+                    }
+                }
+                guard self.owners[operation] == owner else { return }
+                self.finishPlan(article)
+                if self.ready(article) { self.wordStates.removeValue(forKey: key) }
+                else { self.wordStates[key] = "Some English support is unavailable. Select a word for help, or retry." }
                 if self.wordMeanings.count > 1024 { self.wordMeanings = Dictionary(uniqueKeysWithValues: self.wordMeanings.sorted { $0.value.created > $1.value.created }.prefix(1024).map { ($0.key, $0.value) }) }
-                self.wordStates.removeValue(forKey: key); self.persist()
+                for old in self.contextual.keys.filter({ $0 != key }).prefix(max(0, self.contextual.count - 32)) { self.contextual.removeValue(forKey: old) }
+                self.persist()
             } catch is CancellationError { if self.owners[operation] == owner { self.wordStates.removeValue(forKey: key) } }
-            catch { if self.owners[operation] == owner { self.wordStates[key] = "Some word hints are unavailable. Select a word or use sentence help." } }
+            catch { if self.owners[operation] == owner { self.wordStates[key] = "English support is unavailable." } }
         }
     }
     private func perform(key: String, work: @escaping (UUID) async -> Void) async {
@@ -140,7 +231,9 @@ private struct NewsReadingCache: Codable {
         beforeHelp?(); wordTask?.cancel()
         let key = Self.key(article), identity = UUID()
         selectionID = identity
-        let cached = wordMeaning(word)
+        let stored = glossPlans[key]?[Self.normalized(word)] ?? wordMeaning(word)
+        let cached = Self.usable(stored) ? stored : nil
+        learningPlans[key]?.remove(Self.normalized(word))
         selected = NewsWordHelp(articleKey: key, word: word, context: context ?? Self.sourceParts(article).joined(separator: " "), meaning: cached ?? "", status: cached == nil ? "Looking up on this device…" : "Word meaning · check against the Danish context")
         guard cached == nil, let translate else { if cached == nil { selected?.status = "Set up local translation in Settings for word meanings." }; return }
         let task = Task(priority: .userInitiated) { [weak self] in
@@ -159,14 +252,14 @@ private struct NewsReadingCache: Codable {
         saveWord(value.word, value.meaning, value.context)
         value.saved = true; selected = value
     }
-    public func cancel() { for task in tasks.values { task.cancel() }; tasks.removeAll(); owners.removeAll(); states.removeAll(); wordStates.removeAll(); glossPlans.removeAll(); revealed.removeAll(); wordTask?.cancel(); selectionID = UUID(); selected = nil }
+    public func cancel() { for task in tasks.values { task.cancel() }; tasks.removeAll(); owners.removeAll(); states.removeAll(); wordStates.removeAll(); glossPlans.removeAll(); learningPlans.removeAll(); levelPlans.removeAll(); readerBands.removeAll(); revealed.removeAll(); wordTask?.cancel(); selectionID = UUID(); selected = nil }
     private func persist() {
-        do { try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true); try JSONEncoder().encode(NewsReadingCache(english: meanings, words: wordMeanings)).write(to: path, options: .atomic) }
+        do { try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true); try JSONEncoder().encode(NewsReadingCache(english: meanings, words: wordMeanings, contextual: contextual)).write(to: path, options: .atomic) }
         catch { /* Reading still works if a public-text cache cannot be written. */ }
     }
     /// Split only on whitespace: numbers and punctuation stay in the displayed source.
     public static func pieces(_ text: String) -> [String] { text.split(whereSeparator: { $0.isWhitespace }).map(String.init) }
-    private static let wordPattern = try! NSRegularExpression(pattern: #"[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*"#)
+    private static let wordPattern = try! NSRegularExpression(pattern: #"(?=[\p{L}\p{M}\p{N}]*\p{L})[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*"#)
     public static func word(_ piece: String) -> String? {
         guard let match = wordPattern.firstMatch(in: piece, range: NSRange(piece.startIndex..., in: piece)), let range = Range(match.range, in: piece) else { return nil }
         return String(piece[range])

@@ -16,7 +16,7 @@ internal sealed class NewsPanel : ScrollViewer
     private readonly List<NewsReadingCard> cards = [];
     public NewsPanel(NewsService news, Action? openSettings = null)
     {
-        this.news = news; this.openSettings = openSettings; Content = body; Background = Ui.Paper; VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        this.news = news; this.openSettings = openSettings; Content = body; Background = Ui.Paper; VerticalScrollBarVisibility = ScrollBarVisibility.Auto; WindowsTheme.Current.AddResources(Resources);
         Loaded += async (_, _) => { news.PageVisible = true; news.Changed += NewsChanged; news.Reader.Changed += ReadingChanged; Render(); await news.RefreshAsync(); await PrepareVisible(); };
         Unloaded += (_, _) => { news.PageVisible = false; news.Changed -= NewsChanged; news.Reader.Changed -= ReadingChanged; news.Reader.Cancel(); }; Render();
     }
@@ -26,7 +26,7 @@ internal sealed class NewsPanel : ScrollViewer
     private void Render()
     {
         body.Children.Clear(); cards.Clear(); body.Children.Add(Ui.Text("Read something new", 24, true));
-        Add("Read in Danish. Small word hints fill the gaps; words you know stay Danish. Select any word for more help.");
+        Add("Read in Danish. English replaces difficult words. Your familiar Danish stays, with just a little new everyday vocabulary. Select any word for help.");
         var options = new WrapPanel { Margin = new Thickness(0, 8, 0, 4) };
         var enabled = new CheckBox { Content = "DR news · internet", IsChecked = news.Preferences.Enabled, Margin = new Thickness(0, 7, 22, 6) }; FormControls.Apply(enabled); options.Children.Add(enabled);
         enabled.Click += async (_, _) => { news.Configure(enabled.IsChecked == true, news.Preferences.Background, news.Preferences.Notify, news.Preferences.Topic, news.Preferences.DigestHour); await news.RefreshAsync(); };
@@ -52,22 +52,25 @@ internal sealed class NewsReadingCard : Border
     private readonly NewsCard card;
     private readonly NewsReadingSupport reader;
     private readonly StackPanel titleEnglish = new(), summaryEnglish = new(), wordHelp = new();
-    private readonly List<(TextBlock Label, string Word)> glosses = [];
+    private readonly List<(TextBlock Label, Button Button, string Piece, string Word)> words = [];
     private readonly TextBlock wordState = Ui.Text("", 11);
     private readonly Button sentenceHelp;
     public NewsReadingCard(NewsService news, NewsCard card, bool compact = false, NewsReadingSupport? reader = null)
     {
         this.news = news; this.card = card; this.reader = reader ?? news.Reader;
-        Background = Ui.Surface; BorderBrush = Ui.Stroke; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(10); Margin = new Thickness(0, 12, 0, 0);
-        var content = new StackPanel { Margin = new Thickness(18) }; Child = content;
-        var date = Ui.Text("DR · " + DateTimeOffset.FromUnixTimeSeconds((long)card.Article.Published).ToLocalTime().ToString("g"), 11); date.Foreground = Ui.Muted; content.Children.Add(date);
-        var hint = Ui.Text("DANISH · SMALL HINTS FOR UNFAMILIAR WORDS", 10); hint.Foreground = Ui.Muted; content.Children.Add(hint);
+        Background = Ui.Surface; BorderBrush = Ui.Stroke; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(10); Margin = new Thickness(0, compact ? 0 : 12, 0, 0);
+        var content = new StackPanel { Margin = new Thickness(compact ? 14 : 18) }; Child = content;
+        if (!compact) { var date = Ui.Text("DR · " + DateTimeOffset.FromUnixTimeSeconds((long)card.Article.Published).ToLocalTime().ToString("g"), 11); date.Foreground = Ui.Muted; content.Children.Add(date); }
+        var hint = Ui.Text("YOUR DANISH · ENGLISH WHERE NEEDED", 10); hint.Foreground = Ui.Muted; content.Children.Add(hint);
         content.Children.Add(Source(card.Article.Title, !compact));
         if (card.Article.Summary.Length > 0) { content.Children.Add(Source(card.Article.Summary, false)); }
         else if (!compact) { var note = Ui.Text("Headline only · DR did not include an excerpt.", 11); note.Foreground = Ui.Muted; content.Children.Add(note); }
         wordState.Foreground = Ui.Muted; content.Children.Add(wordState);
         sentenceHelp = Ui.Button("Help with this sentence", () => { if (this.reader.IsVisible(card.Article)) this.reader.HideTranslation(card.Article); else _ = this.reader.PrepareAsync(card.Article, true); });
-        sentenceHelp.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(sentenceHelp);
+        sentenceHelp.HorizontalAlignment = HorizontalAlignment.Left;
+        var helpActions = new WrapPanel(); helpActions.Children.Add(sentenceHelp);
+        if (compact) { var listen = Ui.Button("Listen", () => this.reader.Speak?.Invoke(card.Article.Title)); listen.IsEnabled = this.reader.Speak is not null; helpActions.Children.Add(listen); }
+        content.Children.Add(helpActions);
         content.Children.Add(titleEnglish); content.Children.Add(summaryEnglish); content.Children.Add(wordHelp);
         if (news.Simplified(card.Article) is { } text) { content.Children.Add(Ui.Text("Simpler Danish · on-device AI · compare with the DR text above", 10)); content.Children.Add(Source(text, false)); }
         if (news.SimplificationState(card.Article) is { } state) content.Children.Add(Ui.Text(state, 11));
@@ -88,11 +91,11 @@ internal sealed class NewsReadingCard : Border
             if (NewsReadingSupport.Word(piece) is { } word)
             {
                 var button = Ui.ActionButton(piece, () => _ = this.reader.LookupAsync(word, card.Article, text));
-                var token = new StackPanel(); var source = Ui.Text(piece, headline ? 18 : 13, headline); source.Margin = new Thickness(0); token.Children.Add(source);
-                var gloss = Ui.Text("", 11); gloss.Foreground = Ui.Muted; gloss.Margin = new Thickness(0, 3, 0, 0); gloss.MaxWidth = 140; token.Children.Add(gloss); glosses.Add((gloss, word)); button.Content = token; button.VerticalAlignment = VerticalAlignment.Top;
+                var source = Ui.Text(piece, headline ? 18 : 13, headline); source.Margin = new Thickness(0);
+                button.Content = source; button.VerticalAlignment = VerticalAlignment.Top; words.Add((source, button, piece, word));
                 button.FontSize = headline ? 18 : 13; button.FontWeight = headline ? FontWeights.SemiBold : FontWeights.Normal;
                 button.Padding = new Thickness(1, 2, 1, 2); button.MinHeight = 24; button.Margin = new Thickness(0, 0, 4, 3); button.BorderThickness = new Thickness(0); button.MaxWidth = 390;
-                button.Background = card.Matches.Contains(word, StringComparer.OrdinalIgnoreCase) ? Ui.AccentSoft : Brushes.Transparent;
+                button.Background = Brushes.Transparent;
                 button.ToolTip = "Meaning of " + word; System.Windows.Automation.AutomationProperties.SetName(button, "Look up Danish word " + word); line.Children.Add(button);
             }
             else { var label = Ui.Text(piece, headline ? 18 : 13, headline); label.Margin = new Thickness(0, 2, 4, 3); line.Children.Add(label); }
@@ -102,9 +105,16 @@ internal sealed class NewsReadingCard : Border
     public void UpdateSupport()
     {
         titleEnglish.Children.Clear(); summaryEnglish.Children.Clear(); wordHelp.Children.Clear(); var reader = this.reader;
-        foreach (var (label, word) in glosses) { label.Text = reader.Gloss(word, card.Article) ?? ""; label.Visibility = label.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed; }
+        foreach (var (label, button, piece, word) in words)
+        {
+            var display = reader.Presentation(piece, card.Article); label.Text = display.Text;
+            label.Foreground = display.Mode == 2 ? Ui.Accent : Ui.Ink;
+            label.TextDecorations = display.Mode == 2 ? TextDecorations.Underline : null;
+            button.Background = display.Mode == 1 ? WindowsTheme.Current.EnglishTint : Brushes.Transparent;
+            button.ToolTip = display.Mode == 2 ? "New everyday word · select for English" : "Danish: " + word;
+        }
         wordState.Text = reader.WordState(card.Article) ?? ""; wordState.Visibility = wordState.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        sentenceHelp.Content = reader.IsVisible(card.Article) ? "Back to Danish" : "Help with this sentence";
+        sentenceHelp.Content = reader.IsVisible(card.Article) ? "Back to reading" : "Help with this sentence";
         if (reader.IsVisible(card.Article))
         {
             if (reader.Meaning(card.Article) is { } english)

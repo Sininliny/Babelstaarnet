@@ -44,8 +44,10 @@ public struct NewsPopupItem {
     public let adapted: NewsArticle
     public let model: String
     public let preview: Bool
-    public init(original: NewsArticle, text: String, model: String, preview: Bool = false) {
+    public let reader: NewsReadingSupport?
+    public init(original: NewsArticle, text: String, model: String, preview: Bool = false, reader: NewsReadingSupport? = nil) {
         self.original = original; self.model = model; self.preview = preview
+        self.reader = reader
         var adapted = original; adapted.title = text; adapted.summary = ""; self.adapted = adapted
     }
 }
@@ -196,7 +198,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         else {
             let session = session
             task = Task {
-                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.4", forHTTPHeaderField: "User-Agent")
+                var request = URLRequest(url: url); request.setValue("Babelstaarnet/0.6.5", forHTTPHeaderField: "User-Agent")
                 let (bytes, response) = try await session.bytes(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.expectedContentLength <= 1_000_000 else { throw URLError(.badServerResponse) }
                 var data = Data()
@@ -256,7 +258,8 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
             cache.shortVersions = simplified; save()
         } catch { simplificationStates[key] = "Short version unavailable; the original excerpt remains available." }
     }
-    public func cancelGeneration() { generationTask?.cancel() }
+    private var popupSupport: NewsReadingSupport?
+    public func cancelGeneration() { generationTask?.cancel(); popupSupport?.cancel() }
     public func markSeen(_ article: NewsArticle) {
         let now = clock().timeIntervalSince1970
         cache.seen[article.id] = now; cache.seenTitles[article.title] = now
@@ -287,6 +290,8 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         let popupReader = NewsReadingSupport(directory: directory)
         popupReader.translate = reader.translate; popupReader.cachedWordMeaning = reader.cachedWordMeaning
         popupReader.knowledgeLevel = reader.knowledgeLevel; popupReader.speak = reader.speak
+        popupReader.wordBands = reader.wordBands; popupReader.contextualWords = reader.contextualWords
+        popupReader.supportedReading = reader.supportedReading
         popupReader.saveWord = reader.saveWord; popupReader.beforeHelp = reader.beforeHelp
         return popupReader
     }
@@ -330,8 +335,19 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
             popupStatus = "Adapted card unavailable. Will try again later; the original remains in Word Book."
             popupRetry = clock().addingTimeInterval(600); return
         }
-        // Recheck after local generation: turning off or pausing must win over a late result.
-        if presentPopup(NewsPopupItem(original: candidate, text: text, model: model, preview: preview)) {
+        popupStatus = "Preparing English support for this card…"
+        let support = makePopupReader(); popupSupport = support; var handedOff = false
+        defer { popupSupport = nil; if !handedOff { support.cancel() } }
+        let item = NewsPopupItem(original: candidate, text: text, model: model, preview: preview, reader: support)
+        await support.prepare(item.adapted)
+        guard popupRevision == revision, eligible() else { return }
+        guard support.ready(item.adapted) else {
+            popupStatus = "English support is not ready. The card will wait; the original remains in Word Book."
+            popupRetry = clock().addingTimeInterval(600); return
+        }
+        popupSupport = nil
+        if presentPopup(item) {
+            handedOff = true
             var popup = popupPreferences; let now = clock(); let day = dayFormat.string(from: now)
             popup.shown = (popup.day == day ? popup.shown : 0) + 1; popup.day = day; popup.lastShown = now.timeIntervalSince1970
             popup.ids = Array((popup.ids + [candidate.id]).suffix(100)); preferences.popup = popup

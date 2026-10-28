@@ -7,6 +7,7 @@ public sealed class DanishLanguage
 {
     public string[] Abbreviations { get; set; } = [];
     public string[] StructuralWords { get; set; } = [];
+    public Dictionary<string, int> NewsWordBands { get; set; } = [];
     public string[] MeaningPreservationWords { get; set; } = [];
     public string NewsSimplificationInstructions { get; set; } = "";
     public Dictionary<string, string> Glosses { get; set; } = [];
