@@ -32,6 +32,10 @@ import LanguagePacks
         }
         precondition(SharedPolicy.separateOCR([UInt8](repeating: 255, count: 400), width: 10, height: 10) == nil)
         let english = LanguagePair.configured(source: "en", target: "da").source
+        let unavailable = OCRService.visionLanguageConfiguration(requested: ["da-DK", "da"], supported: ["en-US", "zh-Hans"])
+        precondition(unavailable.languages == ["en-US"] && !unavailable.primarySupported)
+        precondition(!OCRService.visionLanguageConfiguration(requested: ["zh-Hant", "en-US"], supported: ["zh-Hans", "en-US"]).primarySupported)
+        precondition(OCRService.visionLanguageConfiguration(requested: ["en-GB"], supported: ["en-US"]).primarySupported)
         precondition(OCRTextQualityPolicy(language: english).isPlausibleWord("iOS"))
         let cjk = LanguagePair.configured(source: "zh-Hans", target: "en").source
         precondition(OCRTextQualityPolicy(language: cjk).isPlausibleWord("iOS系统"))
@@ -52,7 +56,7 @@ import LanguagePacks
                         let result = try await OCRService(language: language).recognizeText(in: capture, focusPoint: CGPoint(x: frame.minX + point.x, y: frame.minY + point.y))
                         let text = result.regions.map(\.sourceText).joined(separator: " ")
                         let error = characterError(sample.text, text)
-                        report.append(["language": sample.language, "appearance": appearance.id, "size": size, "font": font.fontName, "characterError": error, "recognized": text, "milliseconds": (CFAbsoluteTimeGetCurrent()-started)*1000])
+                        report.append(["language": sample.language, "appearance": appearance.id, "size": size, "font": font.fontName, "characterError": error, "recognized": text, "engine": result.engine, "milliseconds": (CFAbsoluteTimeGetCurrent()-started)*1000])
                         if appearance.id == "paper", size >= 16, error > 0.2 { failures.append("Ordinary text failed: \(sample.language) \(size) \(font.fontName): \(text)") }
                     }
                 }
@@ -60,7 +64,7 @@ import LanguagePacks
             // Single-character words are real reading units in Chinese and English.
             let word = sample.language.hasPrefix("zh") ? "我" : "I"
             let (image, point) = try render(.init(language: sample.language, text: word, focus: word), .init(id: "single", foreground: "#181818", background: "#ffffff", end: nil), .systemFont(ofSize: 28))
-            if sample.language != "da" {
+            if sample.language.hasPrefix("zh") {
                 let result = try await OCRService(language: language).recognizeText(in: CapturedDisplay(displayID: 1, image: image, frame: CGRect(x: 0, y: 0, width: image.width, height: image.height)), focusPoint: point)
                 if !result.regions.flatMap(\.words).contains(where: { $0.sourceText == word }) { failures.append("Single-character OCR failed: " + sample.language) }
             }

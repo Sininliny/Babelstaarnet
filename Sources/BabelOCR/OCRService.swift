@@ -42,7 +42,7 @@ public actor OCRService {
 
     public init(language: SourceLanguage) {
         self.language = language
-        self.languagePolicy = OCRLanguagePolicy(language: language)
+        self.languagePolicy = OCRLanguagePolicy(language: language, permitRelatedLatin: !Self.visionLanguageConfiguration(requested: language.ocr.recognitionLanguages, supported: Self.accurateLanguages).primarySupported)
         self.textQualityPolicy = OCRTextQualityPolicy(language: language)
         self.tesseract = TesseractOCRService(
             languageCode: language.ocr.tesseractCode
@@ -609,6 +609,23 @@ public actor OCRService {
     /// The fast level's floor is its own measured one: it recovered nothing at
     /// all below roughly 13 px, so asking it for less is asking for noise.
     private static let minimumFastTextPixels: CGFloat = 13
+    private static let accurateLanguages: [String] = {
+        let request = VNRecognizeTextRequest(); request.recognitionLevel = .accurate
+        return (try? request.supportedRecognitionLanguages()) ?? []
+    }()
+    static func visionLanguageConfiguration(requested: [String], supported: [String]) -> (languages: [String], primarySupported: Bool) {
+        func key(_ value: String) -> String {
+            let value = value.replacingOccurrences(of: "_", with: "-").lowercased()
+            return value.hasPrefix("zh-") ? value.split(separator: "-").prefix(2).joined(separator: "-") : String(value.split(separator: "-").first ?? "")
+        }
+        var selected: [String] = []
+        for language in requested {
+            if let match = supported.first(where: { key($0) == key(language) }), !selected.contains(match) { selected.append(match) }
+        }
+        let primary = requested.first.map { wanted in supported.contains { key($0) == key(wanted) } } ?? false
+        if selected.isEmpty, let latin = supported.first(where: { $0.lowercased() == "en-us" }) { selected = [latin] }
+        return (selected, primary)
+    }
 
     private nonisolated static func textRequest(
         recognitionLevel: VNRequestTextRecognitionLevel,
@@ -617,11 +634,13 @@ public actor OCRService {
     ) -> VNRecognizeTextRequest {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = recognitionLevel
-        request.recognitionLanguages = recognitionLanguages
-        // Language correction is what keeps æ, ø, and å attached to the word.
-        // It belongs to the accurate level only; on the fast level the same
-        // flag measurably replaced those letters with a, o, and noise.
-        request.usesLanguageCorrection = recognitionLevel == .accurate
+        let supported = recognitionLevel == .accurate ? accurateLanguages : ((try? request.supportedRecognitionLanguages()) ?? [])
+        let configuration = visionLanguageConfiguration(requested: recognitionLanguages, supported: supported)
+        request.recognitionLanguages = configuration.languages.isEmpty ? recognitionLanguages : configuration.languages
+        // An unavailable Danish dictionary must not silently become English
+        // autocorrection, which removes æ/ø/å. Chinese script variants must also
+        // match their own model rather than accepting the other variant.
+        request.usesLanguageCorrection = recognitionLevel == .accurate && configuration.primarySupported
         request.minimumTextHeight = Float(
             minimumTextHeight(
                 recognitionLevel: recognitionLevel,
