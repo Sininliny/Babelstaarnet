@@ -50,6 +50,9 @@ internal static class LanguageSupportChecks
         }
         var invalid = new ReaderPreferences { SourceLanguage = "../../bad", TargetLanguage = "xx" }; invalid.Normalize();
         Check(invalid.LanguagePair.Legacy, "Invalid preferences cannot become package paths.");
+        using var news = new NewsService(Path.Combine(directory, "unsupported-news"), (_, _) => throw new Exception("Unsupported news source must never be fetched.")) { ReadingLanguageSupported = false };
+        news.Configure(true, true, true, 0, 18); await news.RefreshAsync(true);
+        Check(!news.Preferences.Enabled && !news.Preferences.Background, "DR cannot be enabled through Word Book or Settings for an unrelated learning language.");
         return checks;
     }
 }

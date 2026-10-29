@@ -35,6 +35,13 @@ enum CrossPlatformContractChecks {
             .appendingPathComponent("Shared/reading-contract.json")
         let contract = try JSONDecoder().decode(Contract.self, from: Data(contentsOf: path))
         precondition(contract.schemaVersion == 1)
+        let unsupportedFolder = FileManager.default.temporaryDirectory.appendingPathComponent("unsupported-news-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: unsupportedFolder) }
+        let unsupported = NewsService(directory: unsupportedFolder, download: { _ in preconditionFailure("Unsupported news source must never be fetched") })
+        unsupported.readingLanguageSupported = false
+        unsupported.configure(enabled: true, background: true, notify: true, topic: 0, hour: 18)
+        await unsupported.refresh(manual: true)
+        precondition(!unsupported.preferences.enabled && !unsupported.preferences.background)
         for item in contract.languagePairs {
             let pair = LanguagePair.configured(source: item.source, target: item.target)
             precondition(pair.source.code == item.source && pair.target.code == item.target)

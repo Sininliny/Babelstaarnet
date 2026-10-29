@@ -14,7 +14,11 @@ import UserNotifications
 
 @MainActor
 public final class AppModel: ObservableObject {
-    public lazy var news = NewsService(directory: LanguagePackageManager.profileURL(source: languages.source.code, target: languages.target.code))
+    public lazy var news: NewsService = {
+        let service = NewsService(directory: LanguagePackageManager.profileURL(source: languages.source.code, target: languages.target.code))
+        service.readingLanguageSupported = languages.source.code == "da"
+        return service
+    }()
     let languagePackages = LanguagePackageManager()
     lazy var newsTranslator = NewsTranslationQueue(languages: languages)
     private var argosEngineReady = false

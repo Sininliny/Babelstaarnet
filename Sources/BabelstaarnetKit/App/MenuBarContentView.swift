@@ -10,10 +10,10 @@ public struct MenuBarContentView: View {
     public init(model: AppModel) { self.model = model; news = model.news }
     public var body: some View {
         Button("Word Book") { model.openWordBook() }.keyboardShortcut("b", modifiers: [.command, .shift])
-        Button("Read something new") { model.openNewsBook() }
+        Button("Read something new") { model.openNewsBook() }.disabled(!news.readingLanguageSupported)
         Button(news.popupsPaused ? "News cards · paused today…" : "Scheduled news cards…") {
             openWindow(id: NewsPopupSettingsView.windowID); NSApp.activate(ignoringOtherApps: true)
-        }
+        }.disabled(!news.readingLanguageSupported)
         Divider()
         if model.screenPermissionGranted {
             Button(model.learningModeActive ? "Stop translating" : "Start translating") { Task { await model.toggleLearningMode() } }

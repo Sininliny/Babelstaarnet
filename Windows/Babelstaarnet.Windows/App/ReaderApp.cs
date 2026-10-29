@@ -92,7 +92,7 @@ internal sealed class ReaderApp : Application
         WindowsTheme.Current.Apply(preferences.Appearance);
         base.OnStartup(e); ShutdownMode = ShutdownMode.OnExplicitShutdown;
         vocabulary = new VocabularyStore(Path.Combine(languages.ProfileDirectory(AppPaths.DataDirectory), "vocabulary.json"), languages);
-        news = new NewsService(languages.ProfileDirectory(AppPaths.DataDirectory)) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
+        news = new NewsService(languages.ProfileDirectory(AppPaths.DataDirectory)) { ReadingLanguageSupported = languages.Source.Id == "da", LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
         news.ReadingActive = () => active && !idle;
         news.Reader.Translate = async (texts, token) =>
         {
