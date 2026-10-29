@@ -159,6 +159,21 @@ internal static class NativeExperienceChecks
         ((System.Windows.Forms.ToolStripMenuItem)menu.Items[0]).PerformClick();
         Check(bookOpens == 2 && !menu.Visible, "Native menu actions must work without opening Settings or activating a test window.");
         var shell = new SettingsShell(model); Layout(shell, 880, 640);
+        shell.SelectPage("Languages & packs");
+        var languagePickers = Descendants<ComboBox>(shell).Where(c => c.ItemsSource == LanguageCatalog.Languages).ToArray();
+        Check(languagePickers.Length == 2 && languagePickers.All(c => c.IsTabStop), "Source and assistance languages must be keyboard-accessible choices.");
+        string? languageAction = null;
+        model.ManageLanguages = (operation, source, target) => languageAction = operation + ":" + source + "--" + target;
+        model.ApplyLanguages = (source, target) => languageAction = "apply:" + source + "--" + target;
+        languagePickers[0].SelectedItem = LanguageCatalog.Get("zh-Hans");
+        languagePickers[1].SelectedItem = LanguageCatalog.Get("en");
+        Descendants<Button>(shell).Single(b => Equals(b.Content, "Install translation · internet")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(languageAction == "install:zh-Hans--en" && model.ActiveLanguages.Legacy, "Package setup uses the selected direction while the active reader keeps its existing pair.");
+        var applyPair = Descendants<Button>(shell).Single(b => Equals(b.Content, "Apply & restart"));
+        Check(applyPair.IsEnabled, "A changed valid pair can be applied."); applyPair.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(languageAction == "apply:zh-Hans--en", "Apply must pass both language IDs to the restart action.");
+        languagePickers[1].SelectedItem = LanguageCatalog.Get("zh-Hans");
+        Check(!applyPair.IsEnabled, "A language cannot be selected as its own assistance language.");
         foreach (var setting in new[] { "light", "dark", "contrast" })
         {
             theme.Apply(setting == "contrast" ? "system" : setting, setting == "dark", setting == "contrast"); shell.SelectPage("Shortcuts"); Layout(shell, 880, 640);

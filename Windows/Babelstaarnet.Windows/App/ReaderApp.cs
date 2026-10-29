@@ -74,6 +74,7 @@ internal sealed class ReaderApp : Application
                 _ = ScreenReader.DanishAvailable; _ = BrandIcons.AppImage;
                 using var brand = new BrandIcons(); _ = brand.Tray(false); _ = brand.Tray(true);
                 if (!File.Exists(AppPaths.Bridge) || !File.Exists(AppPaths.Installer) || !File.Exists(AppPaths.SpeechBridge) || !File.Exists(AppPaths.SpeechInstaller)) return 2;
+                if (new[] { "language_support.py", "language-catalog.json", "install-language-support.ps1", "install-ocr-language.ps1" }.Any(name => !File.Exists(Path.Combine(AppContext.BaseDirectory, "LocalEngines", name)))) return 2;
                 using var surfaces = new OverlayWindow(); return surfaces.CheckNativeSurfaces() ? 0 : 3;
             }
             catch { return 1; }

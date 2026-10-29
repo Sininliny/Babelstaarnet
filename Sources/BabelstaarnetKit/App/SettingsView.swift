@@ -35,22 +35,22 @@ public struct SettingsView: View {
                 )
 
                 Text(
-                    "Hovering a Danish word shows what it means. Use either panel on its own or both together; turning both off keeps Danish speech on hover."
+                    "Hovering a word shows what it means. Use either panel on its own or both together; turning both off keeps source-language speech on hover."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                Toggle("Speak on hover on hover", isOn: $model.autoSpeak)
+                Toggle("Speak on hover", isOn: $model.autoSpeak)
 
                 LabeledContent(
                     "Voice",
                     value: model.speechVoice.map(voiceDescription)
-                        ?? "No Danish voice installed"
+                        ?? "No matching voice installed"
                 )
 
                 if (model.speechVoice?.quality ?? .basic) == .basic {
                     Text(
-                        "This is the compact voice every Mac ships with. A clearer Danish voice is a free download: System Settings → Accessibility → Spoken Content → System voice → Manage Voices, then pick a Danish voice marked Enhanced or Premium. Babelstårnet switches to it on its own."
+                        "A compact system voice is selected. Clearer voices are available in: System Settings → Accessibility → Spoken Content → System voice → Manage Voices, then pick a matching voice marked Enhanced or Premium. Babelstårnet switches to it on its own."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -85,7 +85,7 @@ public struct SettingsView: View {
             }
 
             Section("Reading") {
-                Toggle("Supported reading · more English anchors", isOn: $model.supportedReading)
+                Toggle("Supported reading · more help", isOn: $model.supportedReading)
                 Toggle("Follow screen changes", isOn: $model.liveMode)
                     .disabled(!model.screenPermissionGranted)
 

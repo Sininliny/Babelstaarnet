@@ -287,7 +287,9 @@ public final class AppModel: ObservableObject {
         guard !isInstallingEngines, !isInstallingContextualGlosses else { return }
         if operation != "status" {
             deactivateLearningMode()
+            news.cancelGeneration()
             await argosTranslationService.shutdown(); await wordBridgeTranslationService.shutdown()
+            await contextualGlossService.shutdown()
         }
         await languagePackages.manage(operation)
         if operation != "status" { await checkEngineReadiness() }
@@ -469,7 +471,7 @@ public final class AppModel: ObservableObject {
     }
 
     func installContextualGlosses() async {
-        guard !isInstallingContextualGlosses, !isInstallingEngines else {
+        guard !isInstallingContextualGlosses, !isInstallingEngines, !languagePackages.busy else {
             return
         }
         isInstallingContextualGlosses = true
@@ -501,7 +503,14 @@ public final class AppModel: ObservableObject {
     }
 
     func installOpenSourceEngines() async {
-        guard !isInstallingEngines, !isInstallingContextualGlosses else {
+        guard !isInstallingEngines, !isInstallingContextualGlosses, !languagePackages.busy else {
+            return
+        }
+        if languages.source.code != "da" || languages.target.code != "en" {
+            deactivateLearningMode(); news.cancelGeneration()
+            await argosTranslationService.shutdown(); await wordBridgeTranslationService.shutdown(); await contextualGlossService.shutdown()
+            await languagePackages.manage("install", sourceID: languages.source.code, targetID: languages.target.code)
+            await checkEngineReadiness()
             return
         }
 
@@ -957,7 +966,10 @@ public final class AppModel: ObservableObject {
     func translatePendingRegions(using session: TranslationSession) async {
         if let pending = pendingSentenceHelp {
             pendingSentenceHelp = nil
-            do { let result = try await session.translate(pending.0); pending.1.resume(returning: result.targetText) }
+            do {
+                guard await LanguageAvailability().status(from: Locale.Language(identifier: languages.source.code), to: Locale.Language(identifier: languages.target.code)) == .installed else { throw ArgosTranslationError.unavailable }
+                let result = try await session.translate(pending.0); pending.1.resume(returning: result.targetText)
+            }
             catch { pending.1.resume(throwing: error) }
             return
         }
@@ -971,7 +983,9 @@ public final class AppModel: ObservableObject {
         }
 
         do {
-            try await session.prepareTranslation()
+            // Reading never asks Apple to download a missing pair. Setup is
+            // explicit in Languages & packs, including script-only pairs.
+            guard await LanguageAvailability().status(from: Locale.Language(identifier: languages.source.code), to: Locale.Language(identifier: languages.target.code)) == .installed else { throw ArgosTranslationError.unavailable }
             let requests = translationRequests(for: snapshot)
             let responses = try await session.translations(from: requests)
             await apply(

@@ -50,12 +50,13 @@ struct LanguagePackageState: Decodable {
         UserDefaults.standard.set(source, forKey: "languages.source")
         UserDefaults.standard.set(target, forKey: "languages.target")
     }
-    func manage(_ operation: String) async {
-        guard !busy, valid else { return }
+    func manage(_ operation: String, sourceID: String? = nil, targetID: String? = nil) async {
+        let source = sourceID ?? self.source, target = targetID ?? self.target
+        guard !busy, source != target else { return }
         if operation == "status", !FileManager.default.isExecutableFile(atPath: InstalledEngineLocations.managedPython) { state = LanguagePackageState(); message = "Translation runtime not installed. Choose Install translation to set it up."; return }
         busy = true; message = operation == "status" ? "Checking installed components…" : "Preparing components…"
         defer { busy = false }
-        let source = source, target = target, active = active
+        let active = active
         let folder = Self.directory, root = Self.root
         do {
             let output = try await Task.detached(priority: .utility) {

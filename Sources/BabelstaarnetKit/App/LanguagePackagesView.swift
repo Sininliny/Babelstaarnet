@@ -32,7 +32,7 @@ struct LanguagePackagesView: View {
             .disabled(packages.busy || !packages.state.installed.contains(packages.pairID))
         Text("Removing a direction preserves models required by other installed directions, existing models and learning data.").font(.caption).foregroundStyle(.secondary)
         LabeledContent("Source OCR", value: "Apple Vision · built in")
-        LabeledContent("Speech", value: model.speechVoice?.name ?? "Install a matching offline voice in macOS")
+        LabeledContent("Active speech · " + model.languages.source.displayName, value: model.speechVoice?.name ?? "Install a matching offline voice in macOS")
         Button("Manage macOS voices") {
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent") { NSWorkspace.shared.open(url) }
         }

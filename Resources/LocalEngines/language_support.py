@@ -111,7 +111,7 @@ def validate_model(path, source, target):
         size = 0
         for item in archive.infolist():
             name = PurePosixPath(item.filename)
-            if name.is_absolute() or ".." in name.parts or "\\" in item.filename or ":" in name.parts[0] or (item.external_attr >> 16) & 0o170000 == 0o120000:
+            if not name.parts or name.is_absolute() or ".." in name.parts or "\\" in item.filename or ":" in name.parts[0] or (item.external_attr >> 16) & 0o170000 == 0o120000:
                 raise ValueError("Unsafe model archive")
             size += item.file_size
         if size > 4_000_000_000:
@@ -119,6 +119,8 @@ def validate_model(path, source, target):
         metadata = [n for n in archive.namelist() if n.endswith("/metadata.json") or n == "metadata.json"]
         if len(metadata) != 1:
             raise ValueError("Model metadata is missing")
+        if archive.getinfo(metadata[0]).file_size > 65536:
+            raise ValueError("Model metadata is too large")
         data = json.loads(archive.read(metadata[0]))
         if data.get("from_code") != source or data.get("to_code") != target or data.get("type", "translate") != "translate":
             raise ValueError("The downloaded model does not match the requested direction")
