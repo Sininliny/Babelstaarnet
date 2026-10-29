@@ -123,3 +123,21 @@ and refuses uniform/oversized input. Image resizing and native OCR remain
 platform adapters. Windows uses the selected source locale's word segmenter.
 Mac keeps source ranges when removing OCR-added Chinese spaces, admits single
 letter/Han words, and applies Danish casing rejection only to Danish.
+
+Vision now negotiates the selected language/script against the languages
+available to the current request. If its requested language dictionary is
+absent, generic Latin recognition does not enable English autocorrection over
+Danish text. Related Scandinavian classification is relaxed only for the
+focused line in that fallback mode. Language-specific Tesseract remains an
+installed, offline fallback. This follows Apple's
+[supported-language discovery](https://developer.apple.com/documentation/vision/vnrecognizetextrequest/supportedrecognitionlanguages())
+and [language-correction controls](https://developer.apple.com/documentation/vision/vnrecognizetextrequest/useslanguagecorrection);
+it does not infer a missing language model from a successful generic request.
+
+The final macOS 15 CI run also completed all 56 generated images per language:
+mean character error was 10.5% Danish, 1.2% English, 0.9% simplified Chinese and
+1.2% traditional Chinese. Ordinary 16/32/62 px paper fixtures pass the native
+regression bound; small 10 px text remains in the reported difficult corpus.
+Those Mac results use different system fonts and hardware from the Windows
+measurements and are not a cross-platform performance comparison or a Mac
+before/after claim. Both native jobs passed for source commit `f2cbfd8`.
