@@ -162,39 +162,25 @@ public actor OCRService {
             }
         }
 
-        // The remaining focused failures are colour failures: a label a few
-        // luminance steps from its panel, or glyphs separated from the
-        // background by hue alone. Rewriting the crop to dark-on-light before
-        // a second Vision pass recovers those for far less than the cost of
-        // starting an external engine.
-        if focusPoint != nil,
-           let prepared = Self.preparedImage(from: capture.image),
-           let vision = try? await Self.recognizeWithVision(
-               image: prepared,
-               in: capture,
-               recognitionLevel: .accurate,
-               language: language
-           ) {
-            try Task.checkCancellation()
-            let regions = Self.candidateRegions(
-                from: vision,
-                focusPoint: focusPoint,
-                languagePolicy: languagePolicy,
-                textQualityPolicy: textQualityPolicy
-            )
-            contrastRegions = regions
-            if OCRRoutingPolicy.canUseAccurateFocusedVision(
-                regions: regions,
-                confidenceByRegionID: vision.confidenceByRegionID,
-                focusPoint: focusPoint
-            ) {
-                return store(
-                    CachedResult(
-                        regions: regions,
-                        engine: "Apple Vision contrast OCR"
-                    ),
-                    at: cacheKey
-                )
+        // A missing focus may be small type, not only poor colour contrast.
+        // Retry the original pointer strip enlarged before its colour-separated
+        // form. Both stay local; never multiply a full display's pixel count.
+        if let focusPoint,
+           let window = Self.window(around: CGRect(x: focusPoint.x - 260, y: focusPoint.y - 16, width: 520, height: 32), in: capture),
+           let crop = capture.image.cropping(to: window.pixelRect) {
+            contrastRegions = []
+            let scale = SharedPolicy.ocrScale(glyphHeight: 9, cjk: language.code.hasPrefix("zh"), width: crop.width, height: crop.height, maximum: 4096)
+            for pass in 0..<2 {
+                try Task.checkCancellation()
+                guard let source = pass == 0 ? crop : Self.preparedImage(from: crop) else { continue }
+                let image = OCRImagePreparation.enlarged(source, scale: scale) ?? source
+                guard let vision = try? await Self.recognizeWithVision(image: image, displayFrame: window.globalFrame, screenFrame: capture.screenFrame, displayID: capture.displayID, recognitionLevel: .accurate, language: language) else { continue }
+                let regions = Self.candidateRegions(from: vision, focusPoint: focusPoint, languagePolicy: languagePolicy, textQualityPolicy: textQualityPolicy)
+                let merged = (rawRegions ?? []).filter { raw in !regions.contains { raw.frame.intersects($0.frame) } } + regions
+                if pass == 1 { contrastRegions = merged }
+                if OCRRoutingPolicy.canUseAccurateFocusedVision(regions: regions, confidenceByRegionID: vision.confidenceByRegionID, focusPoint: focusPoint) {
+                    return store(CachedResult(regions: merged, engine: pass == 0 ? "Apple Vision focused small-text OCR" : "Apple Vision contrast OCR"), at: cacheKey)
+                }
             }
         }
 

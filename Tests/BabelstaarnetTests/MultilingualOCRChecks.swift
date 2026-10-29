@@ -37,6 +37,7 @@ import LanguagePacks
         precondition(OCRTextQualityPolicy(language: cjk).isPlausibleWord("iOS系统"))
         let corpus = try JSONDecoder().decode(Corpus.self, from: Data(contentsOf: shared.appendingPathComponent("ocr-corpus.json")))
         var report: [[String: Any]] = []
+        var failures: [String] = []
         for sample in corpus.samples {
             let language = LanguagePair.configured(source: sample.language, target: sample.language == "en" ? "da" : "en").source
             for appearance in corpus.appearances {
@@ -52,7 +53,7 @@ import LanguagePacks
                         let text = result.regions.map(\.sourceText).joined(separator: " ")
                         let error = characterError(sample.text, text)
                         report.append(["language": sample.language, "appearance": appearance.id, "size": size, "font": font.fontName, "characterError": error, "recognized": text, "milliseconds": (CFAbsoluteTimeGetCurrent()-started)*1000])
-                        if appearance.id == "paper", size >= 16 { precondition(error <= 0.2, "Ordinary text failed: \(sample.language) \(size) \(font.fontName): \(text)") }
+                        if appearance.id == "paper", size >= 16, error > 0.2 { failures.append("Ordinary text failed: \(sample.language) \(size) \(font.fontName): \(text)") }
                     }
                 }
             }
@@ -61,7 +62,7 @@ import LanguagePacks
             let (image, point) = try render(.init(language: sample.language, text: word, focus: word), .init(id: "single", foreground: "#181818", background: "#ffffff", end: nil), .systemFont(ofSize: 28))
             if sample.language != "da" {
                 let result = try await OCRService(language: language).recognizeText(in: CapturedDisplay(displayID: 1, image: image, frame: CGRect(x: 0, y: 0, width: image.width, height: image.height)), focusPoint: point)
-                precondition(result.regions.flatMap(\.words).contains { $0.sourceText == word }, "Single-character OCR must survive routing")
+                if !result.regions.flatMap(\.words).contains(where: { $0.sourceText == word }) { failures.append("Single-character OCR failed: " + sample.language) }
             }
         }
         let root = shared.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("build")
@@ -72,6 +73,7 @@ import LanguagePacks
             let error = rows.reduce(0.0) { $0 + ($1["characterError"] as! Double) } / Double(rows.count)
             print("\(language.id): \(rows.count) generated OCR fixtures, mean character error \(String(format: "%.1f%%", error*100))")
         }
+        precondition(failures.isEmpty, failures.joined(separator: "\n"))
         print("Multilingual OCR pixel/geometry checks passed. Fixture timing excludes desktop capture.")
     }
     @MainActor static func render(_ sample: Corpus.Sample, _ style: Corpus.Appearance, _ font: NSFont) throws -> (CGImage, CGPoint) {

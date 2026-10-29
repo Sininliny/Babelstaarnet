@@ -23,6 +23,7 @@ jobs:
           name: macOS-news-previews
           path: build/mac-news-*.png
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: macOS-OCR-results
           path: build/mac-ocr-appearance.json
