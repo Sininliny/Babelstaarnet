@@ -71,6 +71,6 @@ internal sealed class LanguagePackages : IDisposable
             bool conversion = !pair.NeedsConversion || Directory.Exists(Path.Combine(root, "argos-venv", "Lib", "site-packages", "opencc"));
             return pair.ModelEdges.All(edges.Contains) && conversion;
         }
-        catch (Exception e) when (e is IOException or JsonException or KeyNotFoundException) { return false; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or KeyNotFoundException) { return false; }
     }
 }

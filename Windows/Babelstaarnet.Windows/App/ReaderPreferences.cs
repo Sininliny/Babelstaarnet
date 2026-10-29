@@ -45,6 +45,7 @@ internal sealed class ReaderPreferences
         SpeakAfterSeconds = Math.Clamp(Math.Round(SpeakAfterSeconds / .05) * .05, .2, 1.2);
         if (Appearance is not ("system" or "light" or "dark")) Appearance = "system";
         if (SpeechEngine is not ("piper" or "windows")) SpeechEngine = "piper";
+        if (SourceLanguage != "da") SpeechEngine = "windows";
         if (Shortcuts is null || Shortcuts.ValidationError() is not null) Shortcuts = HotKeyConfiguration.Defaults;
     }
     public void Save(string? path = null)

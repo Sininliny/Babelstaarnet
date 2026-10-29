@@ -29,6 +29,7 @@ internal static class LanguageSupportChecks
             var preferences = new ReaderPreferences { SourceLanguage = pair.Source.Id, TargetLanguage = pair.Target.Id };
             string file = Path.Combine(root, "language-preferences.json"); preferences.Save(file);
             Check(ReaderPreferences.Load(file).LanguagePair == pair, "All 12 directions must survive a restart.");
+            Check(pair.Source.Id == "da" || ReaderPreferences.Load(file).SpeechEngine == "windows", "Other source languages must select a matching system voice, never the Danish neural model.");
             using var session = new HoverSession(_ => null, (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(_ => "fixture meaning").ToArray()), _ => false, pair);
             var word = new RecognizedWord("får", new(0, 0, 20, 20)); await session.FocusAsync(new(word, new("får", [word])));
             Check(pair.Legacy || session.Meaning == "fixture meaning", "The selected engine supplies other directions, without English table shortcuts.");
