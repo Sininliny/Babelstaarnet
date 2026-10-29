@@ -7,7 +7,7 @@ public static class SentenceWindow
     public static HoveredText Around(HoveredText hit, int limit = 36)
     {
         string text = hit.Line.Text;
-        var words = ReadingPolicy.Words().Matches(text);
+        var words = ReadingPolicy.Units(text);
         var focuses = Enumerable.Range(0, words.Count).Where(i => ReadingPolicy.Key(words[i].Value) == ReadingPolicy.Key(hit.Word.Text)).ToArray();
         if (focuses.Length == 0 || words.Count <= limit) return hit;
         int focus = focuses[Math.Clamp(hit.FocusOccurrence, 0, focuses.Length - 1)];

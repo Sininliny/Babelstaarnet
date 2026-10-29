@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "languages": [
+    { "id": "da", "name": "Danish", "nativeName": "Dansk", "engineCode": "da", "locale": "da-DK", "ocrWindows": "da-DK", "ocrVision": ["da-DK", "en-US"], "tesseract": "dan", "voice": "da-DK", "sample": "Jeg læser en bog.", "cjk": false },
+    { "id": "en", "name": "English", "nativeName": "English", "engineCode": "en", "locale": "en-US", "ocrWindows": "en-US", "ocrVision": ["en-US"], "tesseract": "eng", "voice": "en-US", "sample": "I am reading a book.", "cjk": false },
+    { "id": "zh-Hans", "name": "Simplified Chinese", "nativeName": "简体中文", "engineCode": "zh", "locale": "zh-CN", "ocrWindows": "zh-Hans-CN", "ocrVision": ["zh-Hans", "en-US"], "tesseract": "chi_sim", "voice": "zh-CN", "sample": "我正在读一本书。", "cjk": true },
+    { "id": "zh-Hant", "name": "Traditional Chinese", "nativeName": "繁體中文", "engineCode": "zh", "locale": "zh-TW", "ocrWindows": "zh-Hant-TW", "ocrVision": ["zh-Hant", "en-US"], "tesseract": "chi_tra", "voice": "zh-TW", "sample": "我正在讀一本書。", "cjk": true }
+  ],
+  "modelEdges": [ ["da", "en"], ["en", "da"], ["en", "zh"], ["zh", "en"] ]
+}

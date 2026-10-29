@@ -1,6 +1,6 @@
 # Cross-platform development
 
-Both native apps provide Danish reading support. Their reading rules and data
+Both native apps provide Danish, English, simplified Chinese and traditional Chinese reading support. Their reading rules and data
 formats should agree; their window systems and visual conventions can differ.
 The native platform supplies OCR, screen capture, speech playback, shortcuts
 and window integration. There is no web frontend or shared UI runtime.
@@ -18,6 +18,7 @@ See [the shared-policy decision](ADR-001-SHARED-POLICY.md) for the ABI and bound
 | `Sources/BabelCore` | Swift reading primitives and language contracts |
 | `Shared/BabelPolicy` | One C11 implementation of learning and news decisions, compiled by both clients |
 | `Sources/BabelNews` | Mac public-feed/cache adapter and network-free news reading support |
+| `Sources/LanguagePacks` | Native pair composition from the shared catalog |
 | `Sources/LanguageDanish` | Canonical Danish tables, prompts and rules |
 | `Sources/BabelOCR`, `BabelTranslate`, `BabelLexicon`, `BabelSpeech` | Mac capability adapters |
 | `Sources/BabelstaarnetKit`, `Babelstaarnet` | Mac application and SwiftUI presentation |
@@ -64,6 +65,8 @@ also cover geometry, learning/profile merge, review and cancellation.
 Learning profiles use the same schema-1 archive on both systems. Platform
 preferences, model runtimes and local caches stay separate. Moving code must
 never move a user's vocabulary or invalidate their learning profile.
+
+See [the language-pack decision](ADR-002-LANGUAGE-PACKS.md) for language IDs, setup ownership, Chinese segmentation and preservation of existing data.
 
 ## Commands
 

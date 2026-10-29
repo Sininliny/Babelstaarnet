@@ -8,7 +8,7 @@ public static class BridgePresentation
         Func<string, bool>? canTarget = null, Action<string>? targetSelected = null, Func<string, bool>? reliableMeaning = null)
     {
         hit = SentenceWindow.Around(hit);
-        var matches = ReadingPolicy.Words().Matches(hit.Line.Text);
+        var matches = ReadingPolicy.Units(hit.Line.Text);
         var tokens = new List<BridgeToken>();
         int occurrence = 0;
         int challenges = 0;

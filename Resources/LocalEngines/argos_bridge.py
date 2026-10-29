@@ -7,6 +7,11 @@ import argparse
 import json
 import re
 import sys
+from pathlib import Path
+
+# -I excludes cwd and even the script directory. Only add our bundled sibling
+# directory, never a caller-controlled working directory or PYTHONPATH.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 class WordTranslator:
@@ -58,7 +63,8 @@ class WordTranslator:
 
 
 def word_server(source: str, target: str) -> int:
-    translator = WordTranslator(source, target)
+    from language_support import RouteTranslator
+    translator = RouteTranslator(source, target, WordTranslator)
     for line in sys.stdin:
         if line.strip():
             request = json.loads(line)
@@ -155,18 +161,13 @@ def main() -> int:
             return word_server(arguments.source, arguments.target)
 
         if arguments.check_word_model:
-            WordTranslator(arguments.source, arguments.target).translate(["æbler"])
+            from language_support import RouteTranslator, language
+            RouteTranslator(arguments.source, arguments.target, WordTranslator).translate([language(arguments.source)["sample"]])
             print("ready")
             return 0
 
-        translation = translation_for(arguments.source, arguments.target)
-        if translation is None:
-            print(
-                f"Argos language package {arguments.source} → "
-                f"{arguments.target} is not installed",
-                file=sys.stderr,
-            )
-            return 11
+        from language_support import RouteTranslator
+        translation = RouteTranslator(arguments.source, arguments.target, WordTranslator)
 
         if arguments.check:
             print("ready")
@@ -180,7 +181,7 @@ def main() -> int:
         if arguments.batch:
             request = json.load(sys.stdin)
             texts = request.get("texts", [])
-            translations = [translation.translate(text) for text in texts]
+            translations = translation.translate(texts)
             json.dump(
                 {"translations": translations},
                 sys.stdout,
@@ -197,7 +198,7 @@ def main() -> int:
                     texts = english_definitions(request.get("define_words", []))
                 else:
                     texts = request.get("texts", [])
-                translations = [translation.translate(text) for text in texts]
+                translations = translation.translate(texts)
                 print(
                     json.dumps(
                         {"translations": translations},
@@ -208,8 +209,8 @@ def main() -> int:
             return 0
 
         parser.error("Choose --check, --install, --batch, or --server")
-    except ModuleNotFoundError:
-        print("The argostranslate Python package is not installed", file=sys.stderr)
+    except ModuleNotFoundError as error:
+        print("Missing local language component: " + str(error.name) + ". Install this language pair in Settings.", file=sys.stderr)
         return 10
     except Exception as error:
         print(str(error), file=sys.stderr)

@@ -16,8 +16,9 @@ namespace Babelstaarnet.Windows;
 
 internal sealed class ScreenReader
 {
+    private readonly ReadingLanguage language;
     private readonly double preferredScale;
-    internal ScreenReader(double preferredScale = 2) { this.preferredScale = double.IsFinite(preferredScale) ? Math.Clamp(preferredScale, 1, 2) : 2; }
+    internal ScreenReader(double preferredScale = 2, ReadingLanguage? language = null) { this.language = language ?? LanguageCatalog.Get("da"); this.preferredScale = double.IsFinite(preferredScale) ? Math.Clamp(preferredScale, 1, 2) : 2; }
     private readonly SemaphoreSlim recognitionGate = new(1);
     private OcrEngine? engine;
     private PixelRect? captureArea;
@@ -31,6 +32,7 @@ internal sealed class ScreenReader
     private bool previousWholeDisplay;
     internal int Recognitions { get; private set; }
     internal int SnapshotHits { get; private set; }
+    public bool IsAvailable => OcrEngine.IsLanguageSupported(new Language(language.OcrWindows));
     public static bool DanishAvailable => OcrEngine.IsLanguageSupported(new Language("da-DK"));
 
     public async Task WarmAsync()
@@ -40,7 +42,7 @@ internal sealed class ScreenReader
         using (var font = new Font("Segoe UI", 24))
         {
             graphics.Clear(Color.White);
-            graphics.DrawString("Jeg spiser æbler.", font, Brushes.Black, 12, 24);
+            graphics.DrawString(language.Sample, font, Brushes.Black, 12, 24);
         }
         await RecognizeAsync(blank, new(0, 0), CancellationToken.None).ConfigureAwait(false);
     }
@@ -127,8 +129,8 @@ internal sealed class ScreenReader
         PixelPoint origin, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        engine ??= OcrEngine.TryCreateFromLanguage(new Language("da-DK")) ??
-            throw new InvalidOperationException("Install Danish optical character recognition in Windows Settings → Time & language → Language & region → Danish → Language options.");
+        engine ??= OcrEngine.TryCreateFromLanguage(new Language(language.OcrWindows)) ??
+            throw new InvalidOperationException($"Install {language.Name} OCR in Settings → Languages & packs or Windows language options.");
         if (origin == cachedOrigin && bitmap.Size == cachedSize && MatchesSnapshot(bitmap, origin)) return cachedLines;
         var nextSnapshot = PixelSnapshot.Capture(bitmap, origin); byte[] raw = nextSnapshot.Bytes;
         // Static snapshots can cover a whole 4K/8K monitor. Respect the OCR
@@ -155,8 +157,8 @@ internal sealed class ScreenReader
                 (int)Math.Ceiling(word.BoundingRect.Width * scaleX), (int)Math.Ceiling(word.BoundingRect.Height * scaleY))))
             .ToArray())).ToArray();
         snapshot = nextSnapshot;
-        cachedLines = lines;
-        return lines;
+        cachedLines = language.Cjk ? lines.Select(CjkWords.SegmentLine).ToArray() : lines;
+        return cachedLines;
     }
 
 }

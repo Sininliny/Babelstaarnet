@@ -38,6 +38,7 @@ let package = Package(
             targets: ["BabelLexicon"]
         ),
         .library(name: "BabelSpeech", type: .static, targets: ["BabelSpeech"]),
+        .library(name: "LanguagePacks", type: .static, targets: ["LanguagePacks"]),
         .library(
             name: "LanguageDanish",
             type: .static,
@@ -82,6 +83,7 @@ let package = Package(
             dependencies: ["BabelCore"],
             path: "Sources/LanguageDanish"
         ),
+        .target(name: "LanguagePacks", dependencies: ["BabelCore", "LanguageDanish"], path: "Sources/LanguagePacks"),
 
         // The app itself: overlay, learner profile, capture, and the state
         // that composes the capabilities above with a language.
@@ -94,7 +96,8 @@ let package = Package(
                 "BabelTranslate",
                 "BabelLexicon",
                 "BabelSpeech",
-                "LanguageDanish"
+                "LanguageDanish",
+                "LanguagePacks"
             ],
             path: "Sources/BabelstaarnetKit"
         ),

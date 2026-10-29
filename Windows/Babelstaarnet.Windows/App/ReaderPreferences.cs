@@ -8,6 +8,10 @@ namespace Babelstaarnet.Windows;
 
 internal sealed class ReaderPreferences
 {
+    public string SourceLanguage { get; set; } = "da";
+    public string TargetLanguage { get; set; } = "en";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ReadingLanguagePair LanguagePair => LanguageCatalog.Pair(SourceLanguage, TargetLanguage);
     public string Appearance { get; set; } = "system";
     public bool SupportedReading { get; set; }
     public string SpeechEngine { get; set; } = "piper";
@@ -35,6 +39,8 @@ internal sealed class ReaderPreferences
     }
     public void Normalize()
     {
+        if (!LanguageCatalog.Contains(SourceLanguage)) SourceLanguage = "da";
+        if (!LanguageCatalog.Contains(TargetLanguage) || TargetLanguage == SourceLanguage) TargetLanguage = SourceLanguage == "en" ? "da" : "en";
         if (!double.IsFinite(SpeakAfterSeconds)) SpeakAfterSeconds = .45;
         SpeakAfterSeconds = Math.Clamp(Math.Round(SpeakAfterSeconds / .05) * .05, .2, 1.2);
         if (Appearance is not ("system" or "light" or "dark")) Appearance = "system";

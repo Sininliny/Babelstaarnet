@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../Resources/LanguagePacks/catalog.json" LogicalName="Babelstaarnet.Core.LanguageCatalog.json" />
     <EmbeddedResource Include="../../Resources/LanguagePacks/da.json" LogicalName="Babelstaarnet.Core.Danish.json" />
   </ItemGroup>
 </Project>

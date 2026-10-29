@@ -559,5 +559,123 @@
       "ready": true,
       "supported": true
     }
+  ],
+  "languagePairs": [
+    {
+      "source": "da",
+      "target": "en",
+      "models": [
+        "da-en"
+      ],
+      "conversion": false
+    },
+    {
+      "source": "da",
+      "target": "zh-Hans",
+      "models": [
+        "da-en",
+        "en-zh"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "da",
+      "target": "zh-Hant",
+      "models": [
+        "da-en",
+        "en-zh"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "en",
+      "target": "da",
+      "models": [
+        "en-da"
+      ],
+      "conversion": false
+    },
+    {
+      "source": "en",
+      "target": "zh-Hans",
+      "models": [
+        "en-zh"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "en",
+      "target": "zh-Hant",
+      "models": [
+        "en-zh"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "zh-Hans",
+      "target": "da",
+      "models": [
+        "zh-en",
+        "en-da"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "zh-Hans",
+      "target": "en",
+      "models": [
+        "zh-en"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "zh-Hans",
+      "target": "zh-Hant",
+      "models": [],
+      "conversion": true
+    },
+    {
+      "source": "zh-Hant",
+      "target": "da",
+      "models": [
+        "zh-en",
+        "en-da"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "zh-Hant",
+      "target": "en",
+      "models": [
+        "zh-en"
+      ],
+      "conversion": true
+    },
+    {
+      "source": "zh-Hant",
+      "target": "zh-Hans",
+      "models": [],
+      "conversion": true
+    }
+  ],
+  "multilingualSentences": [
+    {
+      "source": "en",
+      "text": "Dr. Smith reads. I read too!",
+      "stops": 2,
+      "ends": true
+    },
+    {
+      "source": "zh-Hans",
+      "text": "我喜欢读书。你呢？",
+      "stops": 2,
+      "ends": true
+    },
+    {
+      "source": "zh-Hant",
+      "text": "「我喜歡讀書。」你呢？",
+      "stops": 2,
+      "ends": true
+    }
   ]
 }

@@ -4,8 +4,8 @@ namespace Babelstaarnet.Core;
 // ordinals, abbreviations, initials, decimals and URLs.
 public static class SentenceBoundary
 {
-    private static readonly HashSet<string> Abbreviations = new(DanishLanguage.Shared.Abbreviations);
-    private const string Stops = ".!?…", Closers = "\"'”’»)]}", Openers = "\"'“‘«([{–—-";
+    private static readonly HashSet<string> Abbreviations = new(DanishLanguage.Shared.Abbreviations.Concat(new[] { "mr", "mrs", "dr", "prof", "etc", "e.g", "i.e" }));
+    private const string Stops = ".!?…。！？", Closers = "\"'”’»)]}」』》）】", Openers = "\"'“‘«([{–—-「『《（【";
     public static IReadOnlyList<int> StopLocations(string text)
     {
         var stops = new List<int>();
@@ -29,6 +29,7 @@ public static class SentenceBoundary
     {
         char stop = text[index]; if (!Stops.Contains(stop)) return null;
         int end = index + 1; while (end < text.Length && (Stops.Contains(text[end]) || Closers.Contains(text[end]))) end++;
+        if ("。！？".Contains(stop)) return end;
         if (end < text.Length)
         {
             if (!char.IsWhiteSpace(text[end])) return null;

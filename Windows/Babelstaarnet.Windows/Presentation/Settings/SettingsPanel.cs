@@ -24,12 +24,47 @@ internal sealed class SettingsPanel : ScrollViewer
     {
         this.model = model; Width = 480; Background = Ui.Paper; VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         Content = form;
+        var languages = Section("Languages & packs");
+        Caption(languages, "Choose the language you read and the language that fills unfamiliar words. Switching restarts the app; your Word Book and learning records stay with each direction.");
+        var source = new ComboBox { Width = 246, ItemsSource = LanguageCatalog.Languages, SelectedItem = model.ActiveLanguages.Source };
+        var target = new ComboBox { Width = 246, ItemsSource = LanguageCatalog.Languages, SelectedItem = model.ActiveLanguages.Target };
+        FormControls.Apply(source); FormControls.Apply(target);
+        Row(languages, "I am learning", source); Row(languages, "Help me in", target);
+        ReadingLanguagePair Chosen() => LanguageCatalog.Pair(((ReadingLanguage)source.SelectedItem).Id, ((ReadingLanguage)target.SelectedItem).Id);
+        bool Different() => source.SelectedItem is ReadingLanguage a && target.SelectedItem is ReadingLanguage b && a.Id != b.Id;
+        var languageActions = new WrapPanel();
+        languageActions.Children.Add(Button("Swap", () => { (source.SelectedItem, target.SelectedItem) = (target.SelectedItem, source.SelectedItem); model.Notify(); }));
+        var applyLanguages = Button("Apply & restart", () => { var pair = Chosen(); model.ApplyLanguages(pair.Source.Id, pair.Target.Id); }); languageActions.Children.Add(applyLanguages); languages.Children.Add(languageActions);
+        var route = Caption(languages, ""); var packStatus = Caption(languages, "");
+        var packActions = new WrapPanel();
+        void Manage(string operation) { var pair = Chosen(); model.ManageLanguages(operation, pair.Source.Id, pair.Target.Id); }
+        var installPack = Button("Install translation · internet", () => Manage("install"));
+        var checkPack = Button("Refresh status", () => Manage("status"));
+        var removePack = Button("Remove direction", () => Manage("remove"));
+        packActions.Children.Add(installPack); packActions.Children.Add(checkPack); packActions.Children.Add(removePack); languages.Children.Add(packActions);
+        var ocrStatus = Caption(languages, "");
+        var nativeActions = new WrapPanel(); var installOcr = Button("Install source OCR · internet / administrator", () => Manage("ocr"));
+        nativeActions.Children.Add(installOcr); nativeActions.Children.Add(Button("Manage Windows OCR & voices", model.OpenLanguageSettings)); languages.Children.Add(nativeActions);
+        Caption(languages, "Translation models can be shared across directions. Removing a direction keeps components used by other installed directions and never removes learning data. Windows manages its shared OCR and speech resources in Language options. Danish neural speech remains available; other languages use an installed matching Windows voice.");
+        var packageMessage = Caption(languages, "");
+        source.SelectionChanged += (_, _) => model.Notify(); target.SelectionChanged += (_, _) => model.Notify();
+        refresh.Add(() => {
+            bool valid = Different(); var pair = valid ? Chosen() : model.ActiveLanguages;
+            applyLanguages.IsEnabled = valid && pair != model.ActiveLanguages && !model.PackagesBusy;
+            installPack.IsEnabled = checkPack.IsEnabled = installOcr.IsEnabled = valid && !model.PackagesBusy && !model.Installing;
+            removePack.IsEnabled = valid && !model.PackagesBusy && model.Packages.Installed.Contains(pair.Id);
+            source.IsEnabled = target.IsEnabled = !model.PackagesBusy;
+            route.Text = valid ? pair.Source.Name + " → " + pair.Target.Name + " · " + pair.RouteDescription : "Choose two different languages.";
+            packStatus.Text = valid ? model.Packages.Description(pair) : "";
+            ocrStatus.Text = "Source OCR: " + pair.Source.Name + (new ScreenReader(language: pair.Source).IsAvailable ? " · installed" : " · missing") + "\nSpeech: " + pair.Source.Name + (SpeechService.Available(pair.Source.Voice) ? " · matching Windows voice installed" : " · Windows voice missing");
+            packageMessage.Text = model.PackageMessage;
+        });
         var translation = Section("Translation");
         Toggle(translation, "Word meaning", () => model.Preferences.WordMeaning, v => model.Preferences.WordMeaning = v);
         Toggle(translation, "Whole sentence", () => model.Preferences.WholeSentence, v => model.Preferences.WholeSentence = v);
-        Caption(translation, "Hovering a Danish word shows what it means. Use either panel on its own or both together; turning both off keeps Danish speech on hover.");
-        Toggle(translation, "Speak Danish on hover", () => model.Preferences.ReadAloud, v => model.Preferences.ReadAloud = v);
-        var voices = new ComboBox { Width = 216, FontSize = 12, ItemsSource = new[] { "Danish neural · offline", "Windows Danish · basic" } };
+        Caption(translation, "Hovering a word shows what it means. Use either panel on its own or both together; turning both off keeps source-language speech on hover.");
+        Toggle(translation, "Speak on hover", () => model.Preferences.ReadAloud, v => model.Preferences.ReadAloud = v);
+        var voices = new ComboBox { Width = 216, FontSize = 12, ItemsSource = new[] { "Danish neural · offline", "Windows source voice · offline" } };
         FormControls.Apply(voices);
         voices.SelectedIndex = model.Preferences.SpeechEngine == "windows" ? 1 : 0;
         voices.SelectionChanged += (_, _) => { if (!refreshing) model.SelectVoice(voices.SelectedIndex == 1 ? "windows" : "piper"); };
@@ -47,14 +82,15 @@ internal sealed class SettingsPanel : ScrollViewer
         Caption(translation, "How long the pointer rests on a word before it is spoken. The bubble itself appears as soon as the word is read.");
 
         var reading = Section("Reading");
-        Toggle(reading, "Supported reading · more English anchors", () => model.Preferences.SupportedReading, v => model.Preferences.SupportedReading = v);
+        Toggle(reading, "Supported reading · more help", () => model.Preferences.SupportedReading, v => model.Preferences.SupportedReading = v);
         Toggle(reading, "Follow screen changes", () => model.Preferences.FollowScreenChanges, v => model.Preferences.FollowScreenChanges = v);
         Toggle(reading, "Pause screen reading when idle", () => model.Preferences.PowerSaving, v => model.Preferences.PowerSaving = v, () => model.Preferences.FollowScreenChanges);
         Caption(reading, "Screen capture and OCR back off while the pointer is still, stop while a bubble is held, and pause after 5 seconds without input.");
 
         var newsSection = Section("News (internet)");
         Caption(newsSection, NewsService.Disclosure);
-        if (model.News is { } news)
+        if (model.ActiveLanguages.Source.Id != "da") Caption(newsSection, "DR news is a Danish reading feature. Choose Danish as the learning language to use it.");
+        if (model.ActiveLanguages.Source.Id == "da" && model.News is { } news)
         {
             void Set(bool enabled, bool background, bool notify) => news.Configure(enabled, background, notify, news.Preferences.Topic, news.Preferences.DigestHour);
             Toggle(newsSection, "News recommendations (internet)", () => news.Preferences.Enabled, v => Set(v, news.Preferences.Background, news.Preferences.Notify));
@@ -87,16 +123,16 @@ internal sealed class SettingsPanel : ScrollViewer
         shortcuts.Children.Add(Button("Restore Default Shortcuts", () => { model.ShortcutMessage = model.ChangeShortcuts(HotKeyConfiguration.Defaults) ?? "Shortcuts restored to defaults."; model.Notify(); }));
 
         var learning = Section("What you have picked up");
-        Value(learning, "Danish words seen", () => Words(model.Vocabulary.TrackedCount)); Value(learning, "Probably understood", () => Words(model.Vocabulary.FamiliarCount));
-        Caption(learning, "Babelstårnet keeps track of which Danish words keep coming back to you and quietly shows less English for those. Reading is enough to move it. Knew and Don’t know correct it when needed. Stored only on this PC; imports merge without double-counting.");
+        Value(learning, "Words seen", () => Words(model.Vocabulary.TrackedCount)); Value(learning, "Probably understood", () => Words(model.Vocabulary.FamiliarCount));
+        Caption(learning, "Babelstårnet keeps track of which words keep coming back to you and quietly shows less help for those. Reading is enough to move it. Knew and Don’t know correct it when needed. Stored only on this PC; imports merge without double-counting.");
         Value(learning, "In your word book", () => Words(model.Vocabulary.Saved.Count()) + (model.DueCount > 0 ? $", {model.DueCount} to review" : ""));
         var dataActions = new WrapPanel(); var export = Button("Export Profile", model.ExportProfile); dataActions.Children.Add(export); dataActions.Children.Add(Button("Import Profile", model.ImportProfile)); learning.Children.Add(dataActions);
         var dataMessage = Caption(learning, ""); refresh.Add(() => { export.IsEnabled = model.Vocabulary.TrackedCount > 0; dataMessage.Text = model.DataMessage ?? ""; dataMessage.Visibility = string.IsNullOrWhiteSpace(model.DataMessage) ? Visibility.Collapsed : Visibility.Visible; });
         var reset = Button("Reset what Babelstårnet has learned", model.ResetProfile); reset.Foreground = Ui.ColorBrush(172, 49, 44); learning.Children.Add(reset); refresh.Add(() => reset.IsEnabled = model.Vocabulary.TrackedCount > 0);
 
         var engines = Section("Local engines");
-        Value(engines, "OCR", () => model.OcrReady ? "Windows Danish OCR · ready" : "Danish OCR not installed");
-        Value(engines, "Translation", () => model.TranslationReady ? "Argos Danish → English · ready" : "Local resources not installed");
+        Value(engines, "OCR", () => model.OcrReady ? "Windows OCR · ready" : "Source OCR not installed");
+        Value(engines, "Translation", () => model.TranslationReady ? "Local translation · ready" : "Local resources not installed");
         Value(engines, "Speech", () => model.VoiceReady ? "Local voice ready" : "Voice not installed");
         var engineActions = new WrapPanel(); var check = Button("Check engines", model.CheckEngines); var install = Button("Install / repair translation", model.InstallTranslation); engineActions.Children.Add(check); engineActions.Children.Add(install); engines.Children.Add(engineActions);
         refresh.Add(() => { check.IsEnabled = !model.Installing && !model.Busy; install.IsEnabled = !model.Installing; });
@@ -105,7 +141,7 @@ internal sealed class SettingsPanel : ScrollViewer
         var contextual = Section("Contextual meanings");
         Toggle(contextual, "Translate words in their sentence", () => model.Preferences.ContextualMeanings, v => model.Preferences.ContextualMeanings = v, () => model.ContextReady);
         Value(contextual, "Model", () => model.ContextReady ? "Gemma 3 4B · local" : "Not installed");
-        Caption(contextual, "Uses the sentence to choose the word’s meaning and dictionary form, with a short Danish explanation. Runs entirely on this PC. The optional model is about 3.3 GB; existing local weights are reused.");
+        Caption(contextual, "Uses the sentence to choose the word’s meaning and dictionary form, with a short source-language explanation. Runs entirely on this PC. The optional model is about 3.3 GB; existing local weights are reused.");
         var contextActions = new WrapPanel(); var contextInstall = Button("Install model", model.InstallContext); var contextCheck = Button("Check model", model.CheckContext);
         contextActions.Children.Add(contextInstall); contextActions.Children.Add(contextCheck); var runtime = Button("Get Ollama for Windows", model.GetContextRuntime); contextActions.Children.Add(runtime); contextual.Children.Add(contextActions);
         var contextStatus = Caption(contextual, "");

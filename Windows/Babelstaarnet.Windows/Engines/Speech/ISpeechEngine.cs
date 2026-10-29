@@ -31,3 +31,19 @@ internal sealed class WindowsDanishEngine : ISpeechEngine
     }
     public void Dispose() { }
 }
+
+internal sealed class WindowsLanguageEngine : ISpeechEngine
+{
+    private readonly Babelstaarnet.Core.ReadingLanguage language;
+    public WindowsLanguageEngine(Babelstaarnet.Core.ReadingLanguage language) { this.language = language; }
+    public string Id => "windows:" + language.Voice;
+    public string DisplayName => "Windows " + language.Name + " · offline";
+    public bool IsAvailable => SpeechService.Available(language.Voice);
+    public async Task<byte[]> SynthesizeAsync(string text, CancellationToken cancellationToken)
+    {
+        using var audio = await SpeechService.SynthesizeAsync(text, language.Voice);
+        using var input = audio.AsStreamForRead(); using var output = new MemoryStream();
+        await input.CopyToAsync(output, cancellationToken); return output.ToArray();
+    }
+    public void Dispose() { }
+}

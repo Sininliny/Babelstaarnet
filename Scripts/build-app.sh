@@ -44,6 +44,11 @@ iconutil \
     "$iconset_dir" \
     -o "$resource_dir/Babelstaarnet.icns"
 mkdir -p "$resource_dir/LocalEngines"
+mkdir -p "$resource_dir/LanguagePacks"
+cp "$project_dir/Resources/LanguagePacks/catalog.json" "$resource_dir/LanguagePacks/catalog.json"
+cp "$project_dir/Resources/LanguagePacks/catalog.json" "$resource_dir/LocalEngines/language-catalog.json"
+cp "$project_dir/Resources/LocalEngines/language_support.py" "$resource_dir/LocalEngines/language_support.py"
+cp "$project_dir/Scripts/install-language-support.sh" "$resource_dir/LocalEngines/install-language-support.sh"
 cp "$project_dir/Resources/LocalEngines/argos_bridge.py" \
     "$resource_dir/LocalEngines/argos_bridge.py"
 cp "$project_dir/Scripts/install-local-engines.sh" \

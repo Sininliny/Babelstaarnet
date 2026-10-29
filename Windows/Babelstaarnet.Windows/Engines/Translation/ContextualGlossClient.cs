@@ -25,6 +25,7 @@ internal sealed record ContextualAnswer(IReadOnlyDictionary<string, string> Glos
 // app, binds only loopback, disables cloud and exits with its child runners.
 internal sealed class ContextualGlossClient : IDisposable
 {
+    private readonly ReadingLanguagePair languages;
     private const string Model = "gemma3:4b";
     private readonly string directory;
     private readonly string? executable;
@@ -48,17 +49,18 @@ internal sealed class ContextualGlossClient : IDisposable
     public event Action? Changed;
     internal int Generations { get; private set; }
     public string ModelIdentity => "Gemma 3 4B · " + memoryStamp[..12];
-    public ContextualGlossClient(string? dataDirectory = null)
+    public ContextualGlossClient(string? dataDirectory = null, ReadingLanguagePair? languages = null)
     {
+        this.languages = languages ?? LanguageCatalog.Pair();
         directory = dataDirectory ?? AppPaths.DataDirectory;
         executable = FindExecutable();
         string ownModels = Path.Combine(directory, "Contextual", "models");
         string userModels = Environment.GetEnvironmentVariable("OLLAMA_MODELS") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ollama", "models");
         models = ValidLocalModel(ownModels) ? ownModels : ValidLocalModel(userModels) ? userModels : ownModels;
         IsInstalled = RuntimeAvailable && ValidLocalModel(models);
-        memoryPath = Path.Combine(directory, "contextual-cache.json");
+        memoryPath = Path.Combine(this.languages.ProfileDirectory(directory), "contextual-cache.json");
         string manifest = Path.Combine(models, "manifests", "registry.ollama.ai", "library", "gemma3", "4b");
-        memoryStamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((IsInstalled ? File.ReadAllText(manifest) : "") + DanishLanguage.Shared.ExplainInstructions + DanishLanguage.Shared.GlossInstructions)));
+        memoryStamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((IsInstalled ? File.ReadAllText(manifest) : "") + this.languages.ExplainInstructions + this.languages.GlossInstructions)));
         if (IsInstalled)
         {
             var memory = ContextualMemory.Load(memoryPath, memoryStamp);
@@ -122,7 +124,7 @@ internal sealed class ContextualGlossClient : IDisposable
             IsInstalled = ValidLocalModel(models);
             if (!IsInstalled) throw new IOException("The local Gemma model did not finish installing.");
             string manifest = Path.Combine(models, "manifests", "registry.ollama.ai", "library", "gemma3", "4b");
-            memoryStamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(File.ReadAllText(manifest) + DanishLanguage.Shared.ExplainInstructions + DanishLanguage.Shared.GlossInstructions)));
+            memoryStamp = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(File.ReadAllText(manifest) + this.languages.ExplainInstructions + this.languages.GlossInstructions)));
             ResetFailure();
         }
         finally { gate.Release(); }
@@ -143,7 +145,7 @@ internal sealed class ContextualGlossClient : IDisposable
         cancellationToken.ThrowIfCancellationRequested();
         if (!IsInstalled || HasFailed) throw new InvalidOperationException(LastFailure ?? "The offline contextual model is not installed.");
         string sentence = hit.Line.Text, key = sentence + "\u001f" + ReadingPolicy.Key(hit.Word.Text);
-        var words = includeSentence ? ReadingPolicy.Words().Matches(sentence).Select(m => m.Value).DistinctBy(ReadingPolicy.Key).Take(32)
+        var words = includeSentence ? ReadingPolicy.Units(sentence).Select(m => m.Value).DistinctBy(ReadingPolicy.Key).Take(32)
             .Where(w => leaveInDanish?.Invoke(ReadingPolicy.Key(w)) != true).ToArray() : [];
         bool TryCached(out ContextualAnswer answer)
         {
@@ -170,7 +172,7 @@ internal sealed class ContextualGlossClient : IDisposable
             deadline.CancelAfter(TimeSpan.FromSeconds(45)); await EnsureServerAsync(deadline.Token);
             if (!focuses.TryGetValue(key, out focused))
             {
-                string raw = await GenerateAsync(DanishLanguage.Shared.ExplainInstructions, sentence, [hit.Word.Text], deadline.Token, partial =>
+                string raw = await GenerateAsync(languages.ExplainInstructions, sentence, [hit.Word.Text], deadline.Token, partial =>
                 {
                     var value = ParseFocus(partial, hit.Word.Text);
                     if (value.Meaning.Length == 0) return;
@@ -202,7 +204,7 @@ internal sealed class ContextualGlossClient : IDisposable
                         if (glosses.GetValueOrDefault(pair.Key) != pair.Value) { glosses[pair.Key] = pair.Value; changed = true; }
                     if (changed) { RememberSentence(); onFocused?.Invoke(new(glosses, focused)); }
                 }
-                string raw = await GenerateAsync(DanishLanguage.Shared.GlossInstructions, sentence, batch, deadline.Token, ApplyBatch);
+                string raw = await GenerateAsync(languages.GlossInstructions, sentence, batch, deadline.Token, ApplyBatch);
                 ApplyBatch(raw);
             }
             failures = 0; LastFailure = null; return new(glosses, focused);
@@ -216,7 +218,7 @@ internal sealed class ContextualGlossClient : IDisposable
     }
     private async Task<string> GenerateAsync(string instructions, string sentence, IReadOnlyList<string> words, CancellationToken cancellationToken, Action<string>? progress = null)
     {
-        string prompt = instructions + "\n\nSætning: " + sentence + "\nOrd:\n" + string.Join("\n", words.Select((w, i) => $"{i + 1}. {w}")) + "\nSvar:\n";
+        string prompt = instructions + (languages.Legacy ? "\n\nSætning: " : "\n\nSentence: ") + sentence + "\nOrd:\n" + string.Join("\n", words.Select((w, i) => $"{i + 1}. {w}")) + "\nSvar:\n";
         return await GeneratePromptAsync(prompt, words.Count == 1 ? 150 : words.Count * 30, cancellationToken, progress);
     }
     public async Task<IReadOnlyDictionary<string, string>> GlossWordsAsync(string sentence, IReadOnlyList<string> words, CancellationToken token)
@@ -230,7 +232,7 @@ internal sealed class ContextualGlossClient : IDisposable
             var result = new Dictionary<string, string>(sentences.GetValueOrDefault(sentence) ?? []);
             foreach (var batch in words.Where(w => !result.ContainsKey(ReadingPolicy.Key(w))).Chunk(8))
             {
-                string raw = await GenerateAsync(DanishLanguage.Shared.GlossInstructions, sentence, batch, deadline.Token);
+                string raw = await GenerateAsync(languages.GlossInstructions, sentence, batch, deadline.Token);
                 foreach (var pair in ParseGlosses(raw, batch)) result[pair.Key] = pair.Value;
             }
             if (sentences.Count >= 256 && !sentences.ContainsKey(sentence)) sentences.TryRemove(sentences.Keys.First(), out _);
@@ -298,12 +300,12 @@ internal sealed class ContextualGlossClient : IDisposable
     {
         string Field(string name)
         {
-            var match = Regex.Match(raw, @"(?im)^\s*" + name + @":\s*(.+)$");
+            var match = Regex.Match(raw, @"(?im)^\s*(?:" + name + @"):\s*(.+)$");
             return match.Success ? DanishLanguage.Compact(match.Groups[1].Value).Trim('"', '*', (char)96) : "";
         }
-        string explanation = string.Join(' ', Field("forklaring").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(24));
+        string explanation = string.Join(' ', Field("forklaring|EXPLANATION").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(24));
         if (explanation.Length > 0 && !".!?".Contains(explanation[^1])) explanation += ".";
-        string lemma = Field("opslagsform"); if (lemma.Length > 40 || lemma.Any(c => !char.IsLetter(c) && c != '-')) lemma = "";
+        string lemma = Field("opslagsform|LEMMA"); if (lemma.Length > 40 || lemma.Any(c => !char.IsLetter(c) && c != '-')) lemma = "";
         return new(ParseGlosses(raw, [word]).GetValueOrDefault(ReadingPolicy.Key(word), ""), lemma, explanation);
     }
     private async Task EnsureServerAsync(CancellationToken cancellationToken)

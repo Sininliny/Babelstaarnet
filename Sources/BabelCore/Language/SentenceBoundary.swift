@@ -124,6 +124,9 @@ public struct SentenceBoundary: Sendable {
             end += 1
         }
 
+        // Full-width Chinese stops do not need a following space or capital.
+        if "。！？".contains(stop) { return end }
+
         if end < source.length {
             guard let next = character(at: end, in: source),
                   next.isWhitespace else {

@@ -18,10 +18,12 @@ internal sealed class ReaderApp : Application
 {
     private Forms.NotifyIcon? tray;
     private readonly BrandIcons icons = new();
-    private readonly ArgosClient translator = new();
-    private readonly SpeechService speech = new();
-    private readonly ScreenReader screen = new();
-    private readonly ContextualGlossClient contextual = new();
+    private readonly ArgosClient translator;
+    private readonly ReadingLanguagePair languages;
+    private readonly LanguagePackages packages = new();
+    private readonly SpeechService speech;
+    private readonly ScreenReader screen;
+    private readonly ContextualGlossClient contextual;
     private VocabularyStore vocabulary = null!;
     private ReaderUiModel model = null!;
     private HotKeyService? hotkeys;
@@ -52,6 +54,15 @@ internal sealed class ReaderApp : Application
     private Process? installer;
     private Task? initialization;
 
+    public ReaderApp()
+    {
+        languages = preferences.LanguagePair;
+        translator = new(languages: languages, verifyPackages: true);
+        screen = new(language: languages.Source);
+        contextual = new(languages: languages);
+        speech = new(engine: languages.Source.Id == "da" && preferences.SpeechEngine == "piper" ? new NeuralSpeechEngine() : new WindowsLanguageEngine(languages.Source), sample: languages.Source.Sample);
+        ReadingPolicy.CjkTokenizer = CjkWords.Segment;
+    }
     [STAThread]
     public static int Main(string[] arguments)
     {
@@ -67,6 +78,8 @@ internal sealed class ReaderApp : Application
             }
             catch { return 1; }
         }
+        if (arguments.Length == 2 && arguments[0] == "--restart-after" && int.TryParse(arguments[1], out int priorPid))
+        { try { using var prior = Process.GetProcessById(priorPid); if (!prior.WaitForExit(15000)) return 5; } catch (ArgumentException) { } }
         using var mutex = new Mutex(true, @"Local\Babelstaarnet.Windows", out bool first);
         if (!first) { Ui.Error("Babelstårnet is already running. Look for its tower icon in the system tray."); return 0; }
         try { return new ReaderApp().Run(); }
@@ -77,16 +90,15 @@ internal sealed class ReaderApp : Application
     {
         WindowsTheme.Current.Apply(preferences.Appearance);
         base.OnStartup(e); ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        if (preferences.SpeechEngine == "windows") speech.SelectEngine(new WindowsDanishEngine());
-        vocabulary = new VocabularyStore(Path.Combine(AppPaths.DataDirectory, "vocabulary.json"));
-        news = new NewsService(AppPaths.DataDirectory) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
+        vocabulary = new VocabularyStore(Path.Combine(languages.ProfileDirectory(AppPaths.DataDirectory), "vocabulary.json"), languages);
+        news = new NewsService(languages.ProfileDirectory(AppPaths.DataDirectory)) { LearningUnits = () => vocabulary.RecentLearningUnits(DateTimeOffset.Now) };
         news.ReadingActive = () => active && !idle;
         news.Reader.Translate = async (texts, token) =>
         {
             if (!translator.IsInstalled) throw new InvalidOperationException("Install local translation in Settings → Local engines first.");
             return await translator.TranslateAsync(texts, token);
         };
-        news.Reader.CachedWordMeaning = word => vocabulary.SavedMeaning(word) ?? (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, word, out var gloss) ? gloss : null);
+        news.Reader.CachedWordMeaning = word => vocabulary.SavedMeaning(word) ?? (ReadingPolicy.TryGloss(languages.Glosses, word, out var gloss) ? gloss : null);
         news.Reader.KnowledgeLevel = vocabulary.EffectiveLevel;
         news.Reader.WordBands = DanishLanguage.Shared.NewsWordBands;
         news.Reader.SupportedReading = () => preferences.SupportedReading;
@@ -98,13 +110,15 @@ internal sealed class ReaderApp : Application
         news.MeaningPreservationWords = DanishLanguage.Shared.MeaningPreservationWords;
         news.LanguageInstructions = DanishLanguage.Shared.NewsSimplificationInstructions;
         news.SimplifyExcerpt = contextual.SimplifyPublicExcerptAsync; news.ModelAvailable = () => contextual.IsInstalled; news.ModelIdentity = () => contextual.ModelIdentity;
+        if (languages.Source.Id != "da") news.Configure(false, false, false, news.Preferences.Topic, news.Preferences.DigestHour);
         model = new ReaderUiModel(preferences, vocabulary)
         {
+            ApplyLanguages = RestartLanguages, ManageLanguages = ManageLanguages,
             Toggle = Toggle, OpenSettings = ShowSettings, OpenBook = () => { ShowBook(); book?.OpenWords(); },
             OpenNews = () => { ShowBook(); book?.OpenNews(); }, OpenNewsSettings = () => { ShowSettings(); if (settings?.Content is SettingsShell shell) shell.SelectPage("News (internet)"); }, OpenReadingControls = ShowTray, Quit = Shutdown, Apply = ApplyPreferences,
-            SelectVoice = SelectVoice, InstallTranslation = () => StartInstall(false), InstallVoice = () => StartInstall(true),
-            CheckEngines = CheckEngines, TryVoice = () => Speak("Jeg spiser æbler. Det er en anspændt situation, men vi finder en løsning."),
-            OpenLanguageSettings = () => Process.Start(new ProcessStartInfo("ms-settings:regionlanguage") { UseShellExecute = true }),
+            SelectVoice = SelectVoice, InstallTranslation = () => ManageLanguages("install", languages.Source.Id, languages.Target.Id), InstallVoice = () => { if (languages.Source.Id == "da") StartInstall(true); else OpenSystemLanguages(); },
+            CheckEngines = CheckEngines, TryVoice = () => Speak(languages.Source.Sample),
+            OpenLanguageSettings = OpenSystemLanguages,
             ExportProfile = ExportProfile, ImportProfile = ImportProfile, ResetProfile = ResetProfile,
             InstallContext = InstallContext, CheckContext = () => _ = WarmContextAsync(),
             GetContextRuntime = () => Process.Start(new ProcessStartInfo("https://ollama.com/download/windows") { UseShellExecute = true }),
@@ -112,7 +126,7 @@ internal sealed class ReaderApp : Application
         };
         model.News = news;
         vocabulary.Changed += () => { session?.InvalidateProjection(); if (popup?.IsVisible == true || settings?.IsVisible == true) UpdateTray(); };
-        session = new HoverSession(word => translator.TryGetCached(word, out var meaning) ? meaning : null, translator.TranslateAsync, vocabulary.IsKnown);
+        session = new HoverSession(word => translator.TryGetCached(word, out var meaning) ? meaning : null, translator.TranslateAsync, vocabulary.IsKnown, languages);
         session.LearnedBefore = vocabulary.LearningCandidate;
         session.PreviousMeaning = vocabulary.SavedMeaning;
         session.KnowledgeLevel = vocabulary.EffectiveLevel;
@@ -165,8 +179,9 @@ internal sealed class ReaderApp : Application
         lastFollow = preferences.FollowScreenChanges; lastWord = preferences.WordMeaning; lastSentence = preferences.WholeSentence;
         lastReadAloud = preferences.ReadAloud; lastSpeechDelay = preferences.SpeakAfterSeconds;
         ApplyPreferences(); UpdateTray(); timer.Tick += async (_, _) => await ScanAsync();
-        if (!translator.IsInstalled || !ScreenReader.DanishAvailable || preferences.ReadAloud && !speech.IsAvailable) ShowSettings();
+        if (!translator.IsInstalled || !screen.IsAvailable || preferences.ReadAloud && !speech.IsAvailable) ShowSettings();
         else PrepareEngines();
+        ManageLanguages("status", languages.Source.Id, languages.Target.Id);
     }
     private void ThemeChanged(object sender, UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(new Action(() => { if (!shuttingDown) { RefreshTheme(); UpdateTray(); } }));
     private void RefreshTheme()
@@ -185,7 +200,7 @@ internal sealed class ReaderApp : Application
     private void Toggle()
     {
         if (model.Installing) return;
-        if (!active && (!translator.IsInstalled || !ScreenReader.DanishAvailable)) { ShowSettings(); return; }
+        if (!active && (!translator.IsInstalled || !screen.IsAvailable)) { ShowSettings(); return; }
         active = !active; model.Failure = null; CancelPending(); ClearBubble(); previous = lastScanPoint = null; frozenPages.Clear(); idle = false; captureFailures = 0;
         session.ResetLearningSession();
         if (active) news.CancelGeneration();
@@ -196,8 +211,8 @@ internal sealed class ReaderApp : Application
     private void UpdateTray()
     {
         if (shuttingDown) return;
-        model.Active = active; model.Busy = warming; model.Idle = idle; model.Installing = installer is not null;
-        model.OcrReady = ScreenReader.DanishAvailable; model.TranslationReady = translator.IsInstalled; model.VoiceReady = speech.IsAvailable; model.VoiceName = speech.EngineName;
+        model.Active = active; model.Busy = warming; model.Idle = idle; model.Installing = installer is not null || model.PackagesBusy;
+        model.OcrReady = screen.IsAvailable; model.TranslationReady = translator.IsInstalled; model.VoiceReady = speech.IsAvailable; model.VoiceName = speech.EngineName;
         model.ContextReady = contextual.IsInstalled; model.ContextRuntimeReady = contextual.RuntimeAvailable;
         if (tray is not null) { tray.Text = "Babelstårnet · " + (warming ? "preparing local engines" : idle ? "idle" : active ? "active" : "inactive"); tray.Icon = icons.Tray(active); }
         model.Notify();
@@ -261,7 +276,7 @@ internal sealed class ReaderApp : Application
         warming = true; UpdateTray();
         try
         {
-            if (!ScreenReader.DanishAvailable) throw new InvalidOperationException("Install Danish optical character recognition in Windows language settings.");
+            if (!screen.IsAvailable) throw new InvalidOperationException("Install OCR for the selected source language in Settings → Languages & packs.");
             await translator.WarmAsync(CancellationToken.None); await speech.WarmAsync(); enginesReady = true; model.Failure = null;
         }
         catch (Exception error) { model.Failure = error.Message; }
@@ -366,7 +381,7 @@ internal sealed class ReaderApp : Application
         {
             if (shuttingDown) return;
             if (!automatic) Ui.Error(error.Message);
-            else if (!speechWarningShown) { speechWarningShown = true; tray?.ShowBalloonTip(5000, "Babelstårnet · Danish voice", error.Message, Forms.ToolTipIcon.Info); }
+            else if (!speechWarningShown) { speechWarningShown = true; tray?.ShowBalloonTip(5000, "Babelstårnet · voice", error.Message, Forms.ToolTipIcon.Info); }
         }
     }
     private void TogglePin()
@@ -406,10 +421,44 @@ internal sealed class ReaderApp : Application
         }
         catch (Exception error) { model.DataMessage = "Some saved meanings could not be filled: " + error.Message; model.Notify(); }
     }
+    private static void OpenSystemLanguages() => Process.Start(new ProcessStartInfo("ms-settings:regionlanguage") { UseShellExecute = true });
+    private void RestartLanguages(string source, string target)
+    {
+        if (source == target || model.PackagesBusy || installer is not null) return;
+        preferences.SourceLanguage = source; preferences.TargetLanguage = target; preferences.Save(); vocabulary.Flush();
+        var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
+        start.ArgumentList.Add("--restart-after"); start.ArgumentList.Add(Environment.ProcessId.ToString());
+        Process.Start(start); Shutdown();
+    }
+    private async void ManageLanguages(string operation, string source, string target)
+    {
+        if (model.PackagesBusy || installer is not null || source == target) return;
+        var pair = LanguageCatalog.Pair(source, target);
+        model.PackagesBusy = true; model.PackageMessage = operation == "status" ? "Checking installed components…" : "Preparing local components…"; UpdateTray();
+        try
+        {
+            if (operation == "ocr")
+            {
+                var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe")) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
+                foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(AppContext.BaseDirectory, "LocalEngines", "install-ocr-language.ps1"), "-Locale", pair.Source.Locale }) start.ArgumentList.Add(arg);
+                using var setup = Process.Start(start) ?? throw new IOException("Windows OCR setup could not start.");
+                await setup.WaitForExitAsync(); if (setup.ExitCode != 0) throw new IOException("Windows did not install OCR. Check language options in Windows Settings.");
+                model.PackageMessage = "OCR installed. Restart Babelstårnet to load the new Windows resource.";
+            }
+            else
+            {
+                if (operation != "status") { active = false; timer.Stop(); CancelPending(); ClearBubble(); translator.ReleaseModels(); enginesReady = false; }
+                model.Packages = await packages.RunAsync(operation, pair, languages, message => { model.PackageMessage = message; model.Notify(); });
+                model.PackageMessage = operation == "remove" ? "Direction removed. Shared components and existing models required elsewhere were kept. Learning records were kept." : model.Packages.Ready(pair) ? "Translation components are ready. Reading stays offline." : "Install missing components for this direction. Installation uses the internet.";
+            }
+        }
+        catch (Exception error) { if (!shuttingDown) model.PackageMessage = error.Message; }
+        finally { model.PackagesBusy = false; if (!shuttingDown) UpdateTray(); }
+    }
     private void SelectVoice(string choice)
     {
-        ISpeechEngine next = choice == "windows" ? new WindowsDanishEngine() : new NeuralSpeechEngine();
-        if (!next.IsAvailable) { next.Dispose(); model.Failure = choice == "piper" ? "Install the offline Danish neural voice first." : "Install a Danish Windows speech voice in Language settings first."; UpdateTray(); return; }
+        ISpeechEngine next = choice == "windows" || languages.Source.Id != "da" ? new WindowsLanguageEngine(languages.Source) : new NeuralSpeechEngine();
+        if (!next.IsAvailable) { next.Dispose(); model.Failure = choice == "piper" ? "Install the offline Danish neural voice first." : "Install the selected language’s Windows speech voice in Language settings first."; UpdateTray(); return; }
         CancelSpeech(); speech.SelectEngine(next); speechWarningShown = false; preferences.SpeechEngine = choice; preferences.Save(); _ = WarmSpeechAsync(); UpdateTray();
     }
     private void ExportProfile()
@@ -455,7 +504,7 @@ internal sealed class ReaderApp : Application
     }
     protected override void OnExit(ExitEventArgs e)
     {
-        shuttingDown = true; timer.Stop(); newsTimer.Stop(); newsPopup?.Close(); trayMenu?.Dispose(); news.Dispose(); CancelPending(); CancelSpeech(); SystemEvents.UserPreferenceChanged -= ThemeChanged;
+        shuttingDown = true; packages.Dispose(); timer.Stop(); newsTimer.Stop(); newsPopup?.Close(); trayMenu?.Dispose(); news.Dispose(); CancelPending(); CancelSpeech(); SystemEvents.UserPreferenceChanged -= ThemeChanged;
         hotkeys?.Dispose(); session.Dispose(); overlay.Dispose(); translator.Dispose(); speech.Dispose(); contextual.Dispose(); vocabulary.Flush();
         if (tray is not null) { tray.Visible = false; tray.Dispose(); } icons.Dispose(); base.OnExit(e);
     }

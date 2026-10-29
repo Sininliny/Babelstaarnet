@@ -46,7 +46,7 @@ internal sealed class HoverSession : IDisposable
                 key => cooledUnits.Contains(key) || cooledUnits.Count >= 256 ? 2 : helpHistory.GetValueOrDefault(key, []).Count(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)), key => visibleAnchors.Contains(key) || newSenseKeys.Contains(key),
                 key => !newSenseKeys.Contains(key) && SharedPolicy.bp_target_allowed(learningTargets.Count, learningTargets.Contains(key) ? 1 : 0) != 0, key => learningTargets.Add(key),
                 key => PreviousMeaning?.Invoke(key) is { Length: > 0 } prior && ReadingPolicy.TryGloss(glosses, key, out var answer) && ReadingPolicy.Key(prior) == ReadingPolicy.Key(answer) && ReadingPolicy.Key(answer) != key);
-            var words = ReadingPolicy.Words().Matches(Current.Line.Text);
+            var words = ReadingPolicy.Units(Current.Line.Text);
             for (int i = 0; i < Math.Min(words.Count, projectedTokens.Count); i++) if (projectedTokens[i].English) visibleAnchors.Add(ReadingPolicy.Key(words[i].Value));
             return projectedTokens;
         }
@@ -58,8 +58,8 @@ internal sealed class HoverSession : IDisposable
             if (projectedExplanation is not null) return projectedExplanation;
             if (Explanation.Length == 0) return projectedExplanation = [];
             var answers = new Dictionary<string, string>();
-            foreach (System.Text.RegularExpressions.Match match in ReadingPolicy.Words().Matches(Explanation))
-                if (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, match.Value, out var local)) answers[ReadingPolicy.Key(match.Value)] = local;
+            foreach (var match in ReadingPolicy.Units(Explanation))
+                if (ReadingPolicy.TryGloss(languages.Glosses, match.Value, out var local)) answers[ReadingPolicy.Key(match.Value)] = local;
                 else if (cached(match.Value) is { } value) answers[ReadingPolicy.Key(match.Value)] = value;
             return projectedExplanation = BridgePresentation.Tokens(new(new("", default), new(Explanation, [])), answers, known, KnowledgeLevel);
         }
@@ -75,9 +75,10 @@ internal sealed class HoverSession : IDisposable
     public Func<string, int>? KnowledgeLevel { get; set; }
     public Func<HoveredText, CancellationToken, Action<ContextualAnswer>, Task<ContextualAnswer>>? ContextProvider { get; set; }
 
+    private readonly ReadingLanguagePair languages;
     public HoverSession(Func<string, string?> cached,
-        Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<string>>> translate, Func<string, bool> known)
-    { this.cached = cached; this.translate = translate; this.known = known; }
+        Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<string>>> translate, Func<string, bool> known, ReadingLanguagePair? languages = null)
+    { this.cached = cached; this.translate = translate; this.known = known; this.languages = languages ?? LanguageCatalog.Pair(); }
 
     public Task FocusAsync(HoveredText hit)
     {
@@ -89,12 +90,12 @@ internal sealed class HoverSession : IDisposable
         helpHistory[identity] = helpHistory.GetValueOrDefault(identity, []).Where(at => DateTimeOffset.Now - at < TimeSpan.FromMinutes(10)).Append(DateTimeOffset.Now).TakeLast(2).ToArray();
         if (helpHistory[identity].Length >= 2 && cooledUnits.Count < 256) cooledUnits.Add(identity);
         if (helpHistory.Count > 256) helpHistory.Remove(helpHistory.Keys.First(key => key != identity));
-        var tokens = new[] { word }.Concat(ReadingPolicy.Words().Matches(hit.Line.Text).Select(m => m.Value)).DistinctBy(ReadingPolicy.Key).Take(36).ToArray();
+        var tokens = new[] { word }.Concat(ReadingPolicy.Units(hit.Line.Text).Select(m => m.Value)).DistinctBy(ReadingPolicy.Key).Take(36).ToArray();
         foreach (string next in tokens)
-            if (ReadingPolicy.TryGloss(ReadingPolicy.Glosses, next, out var curated)) glosses[ReadingPolicy.Key(next)] = curated;
+            if (ReadingPolicy.TryGloss(languages.Glosses, next, out var curated)) glosses[ReadingPolicy.Key(next)] = curated;
             else if (ContextProvider is null && cached(next) is { } meaning) glosses[ReadingPolicy.Key(next)] = meaning;
         Meaning = glosses.GetValueOrDefault(ReadingPolicy.Key(word), "");
-        Explanation = DanishLanguage.Shared.Beginner.GetValueOrDefault(ReadingPolicy.Key(word), "");
+        Explanation = languages.Legacy ? DanishLanguage.Shared.Beginner.GetValueOrDefault(ReadingPolicy.Key(word), "") : "";
         Publish(); ReadAloud?.Invoke(word);
         return CompleteOwnedAsync(word, tokens, hit, request);
     }
@@ -130,8 +131,8 @@ internal sealed class HoverSession : IDisposable
                     Publish();
                 }
             if (TranslateMeaning && Explanation.Length > 0)
-                foreach (var batch in ReadingPolicy.Words().Matches(Explanation).Select(m => m.Value).DistinctBy(ReadingPolicy.Key)
-                    .Where(w => !known(ReadingPolicy.Key(w)) && !ReadingPolicy.TryGloss(ReadingPolicy.Glosses, w, out _) && cached(w) is null).Take(12).Chunk(4))
+                foreach (var batch in ReadingPolicy.Units(Explanation).Select(m => m.Value).DistinctBy(ReadingPolicy.Key)
+                    .Where(w => !known(ReadingPolicy.Key(w)) && !ReadingPolicy.TryGloss(languages.Glosses, w, out _) && cached(w) is null).Take(12).Chunk(4))
                 {
                     await translate(batch, token); token.ThrowIfCancellationRequested(); Publish();
                 }
