@@ -101,6 +101,7 @@ not install missing engines. Audio checks are muted.
   pointer scheduling. Report that limit with the numbers.
 - `--render-ui <file.png>` renders production surfaces in both light and dark
   modes, including the Windows settings shell and Word Book.
+- `--ocr-appearance <file.json>` generates the shared multilingual size/font/colour corpus using installed OCR packs; absent packs are reported, never installed.
 - `--context-check` exercises the existing local model, word-only requests,
   familiar-word filtering and contextual cache reuse across restart.
 
@@ -147,3 +148,10 @@ Windows renders every settings page in both themes. Assertions inspect actual
 shortcut glyph colors, combo arrow placement and first-level themed tray actions,
 in addition to palette contrast. Native context activation must bridge into the
 same WPF panel as a primary click; it must not restore an unthemed menu.
+
+OCR colour separation and physical-pixel scale limits live in
+`Shared/BabelPolicy/OcrPixels.c`. Keep channel order and alpha format explicit
+at each adapter boundary. `Tests/Shared/reading-contract.json` contains the
+shared pixel/spacing/scale examples; `Tests/Shared/ocr-corpus.json` supplies
+rendered text and appearance inputs. Native checks render their own fixtures,
+never capture a desktop. Do not use expected text to choose a runtime retry.

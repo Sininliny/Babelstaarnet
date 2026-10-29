@@ -21,6 +21,11 @@ enum OCRRoutingPolicyChecks {
             words: [word]
         )
         let focus = CGPoint(x: 125, y: 112)
+        for letter in ["I", "a", "我", "書"] {
+            let unit = WordRegion(sourceText: letter, frame: word.frame, screenFrame: screen, displayID: 1)
+            let line = TextRegion(sourceText: letter, frame: word.frame, screenFrame: screen, displayID: 1, words: [unit])
+            precondition(OCRRoutingPolicy.canUseAccurateFocusedVision(regions: [line], confidenceByRegionID: [line.id: 0.9], focusPoint: focus))
+        }
 
         precondition(
             OCRRoutingPolicy.canUseAccurateFocusedVision(

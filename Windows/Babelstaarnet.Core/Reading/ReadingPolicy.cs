@@ -43,6 +43,9 @@ public static partial class ReadingPolicy
     // fixtures have a Unicode-scalar fallback and never depend on WinRT.
     public static Func<string, IReadOnlyList<TextUnit>>? CjkTokenizer { get; set; }
     public static bool HasCjk(string text) => text.Any(c => c is >= '\u3400' and <= '\u9fff' or >= '\uf900' and <= '\ufaff');
+    public static string CompactCjkSpacing(string text) => CjkSpacing().Replace(text, "");
+    [GeneratedRegex(@"(?<=[\u3400-\u9fff\uf900-\ufaff])\s+(?=[\u3400-\u9fff\uf900-\ufaff])")]
+    private static partial Regex CjkSpacing();
     public static IReadOnlyList<TextUnit> Units(string text)
     {
         if (HasCjk(text) && CjkTokenizer is { } tokenize) return tokenize(text);

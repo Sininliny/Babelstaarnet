@@ -42,7 +42,7 @@ public actor OCRService {
 
     public init(language: SourceLanguage) {
         self.language = language
-        self.languagePolicy = OCRLanguagePolicy(language: language)
+        self.languagePolicy = OCRLanguagePolicy(language: language, permitRelatedLatin: !Self.visionLanguageConfiguration(requested: language.ocr.recognitionLanguages, supported: Self.accurateLanguages).primarySupported)
         self.textQualityPolicy = OCRTextQualityPolicy(language: language)
         self.tesseract = TesseractOCRService(
             languageCode: language.ocr.tesseractCode
@@ -141,7 +141,8 @@ public actor OCRService {
                 if let refined = try await enlargedRefinement(
                     of: regions,
                     in: capture,
-                    focusPoint: focusPoint
+                    focusPoint: focusPoint,
+                    confidenceByRegionID: vision.confidenceByRegionID
                 ) {
                     return store(
                         CachedResult(
@@ -161,39 +162,25 @@ public actor OCRService {
             }
         }
 
-        // The remaining focused failures are colour failures: a label a few
-        // luminance steps from its panel, or glyphs separated from the
-        // background by hue alone. Rewriting the crop to dark-on-light before
-        // a second Vision pass recovers those for far less than the cost of
-        // starting an external engine.
-        if focusPoint != nil,
-           let prepared = Self.preparedImage(from: capture.image),
-           let vision = try? await Self.recognizeWithVision(
-               image: prepared,
-               in: capture,
-               recognitionLevel: .accurate,
-               language: language
-           ) {
-            try Task.checkCancellation()
-            let regions = Self.candidateRegions(
-                from: vision,
-                focusPoint: focusPoint,
-                languagePolicy: languagePolicy,
-                textQualityPolicy: textQualityPolicy
-            )
-            contrastRegions = regions
-            if OCRRoutingPolicy.canUseAccurateFocusedVision(
-                regions: regions,
-                confidenceByRegionID: vision.confidenceByRegionID,
-                focusPoint: focusPoint
-            ) {
-                return store(
-                    CachedResult(
-                        regions: regions,
-                        engine: "Apple Vision contrast OCR"
-                    ),
-                    at: cacheKey
-                )
+        // A missing focus may be small type, not only poor colour contrast.
+        // Retry the original pointer strip enlarged before its colour-separated
+        // form. Both stay local; never multiply a full display's pixel count.
+        if let focusPoint,
+           let window = Self.window(around: CGRect(x: focusPoint.x - 260, y: focusPoint.y - 16, width: 520, height: 32), in: capture),
+           let crop = capture.image.cropping(to: window.pixelRect) {
+            contrastRegions = []
+            let scale = SharedPolicy.ocrScale(glyphHeight: 9, cjk: language.code.hasPrefix("zh"), width: crop.width, height: crop.height, maximum: 4096)
+            for pass in 0..<2 {
+                try Task.checkCancellation()
+                guard let source = pass == 0 ? crop : Self.preparedImage(from: crop) else { continue }
+                let image = OCRImagePreparation.enlarged(source, scale: scale) ?? source
+                guard let vision = try? await Self.recognizeWithVision(image: image, displayFrame: window.globalFrame, screenFrame: capture.screenFrame, displayID: capture.displayID, recognitionLevel: .accurate, language: language) else { continue }
+                let regions = Self.candidateRegions(from: vision, focusPoint: focusPoint, languagePolicy: languagePolicy, textQualityPolicy: textQualityPolicy)
+                let merged = (rawRegions ?? []).filter { raw in !regions.contains { raw.frame.intersects($0.frame) } } + regions
+                if pass == 1 { contrastRegions = merged }
+                if OCRRoutingPolicy.canUseAccurateFocusedVision(regions: regions, confidenceByRegionID: vision.confidenceByRegionID, focusPoint: focusPoint) {
+                    return store(CachedResult(regions: merged, engine: pass == 0 ? "Apple Vision focused small-text OCR" : "Apple Vision contrast OCR"), at: cacheKey)
+                }
             }
         }
 
@@ -338,7 +325,8 @@ public actor OCRService {
     private func enlargedRefinement(
         of regions: [TextRegion],
         in capture: CapturedDisplay,
-        focusPoint: CGPoint?
+        focusPoint: CGPoint?,
+        confidenceByRegionID: [UUID: Float]
     ) async throws -> [TextRegion]? {
         guard let focusPoint,
               let index = Self.focusedRegionIndex(
@@ -346,7 +334,7 @@ public actor OCRService {
                   at: focusPoint
               ),
               let advance = Self.glyphAdvance(in: regions[index]),
-              advance <= Self.smallTextAdvance,
+              advance <= (language.code.hasPrefix("zh") ? 11 : Self.smallTextAdvance),
               let window = Self.window(
                   around: regions[index].frame,
                   in: capture
@@ -354,7 +342,7 @@ public actor OCRService {
               let cropped = capture.image.cropping(to: window.pixelRect),
               let enlarged = OCRImagePreparation.enlarged(
                   cropped,
-                  scale: Self.refinementScale(forAdvance: advance)
+                  scale: SharedPolicy.ocrScale(glyphHeight: Double(advance * CGFloat(capture.image.width) / capture.frame.width), cjk: language.code.hasPrefix("zh"), width: cropped.width, height: cropped.height, maximum: 4096)
               ),
               let vision = try? await Self.recognizeWithVision(
                   image: enlarged,
@@ -380,27 +368,17 @@ public actor OCRService {
         ), let refinedIndex = Self.focusedRegionIndex(
             in: refined,
             at: focusPoint
-        ), Self.letterCount(in: refined[refinedIndex])
-            > Self.letterCount(in: regions[index]) else {
+        ) else {
             return nil
         }
+        let originalLetters = Self.letterCount(in: regions[index]), refinedLetters = Self.letterCount(in: refined[refinedIndex])
+        let confidentCorrection = language.code.hasPrefix("zh") && refinedLetters == originalLetters
+            && (vision.confidenceByRegionID[refined[refinedIndex].id] ?? 0) >= 0.85
+            && (confidenceByRegionID[regions[index].id] ?? 1) < 0.75
+        guard refinedLetters > originalLetters || confidentCorrection else { return nil }
         var merged = regions
         merged[index] = refined[refinedIndex]
         return merged
-    }
-
-    /// How much the line is enlarged before it is read again.
-    ///
-    /// Vision keeps Danish diacritics attached once a glyph advance is around
-    /// eleven points; below that the mark falls within a pixel or two of the
-    /// stroke it belongs to and gets absorbed into it. Enlarging one line is
-    /// cheap enough to aim for that rather than settling for a fixed doubling,
-    /// so the smallest text — the text that lost the most — is enlarged most.
-    private static func refinementScale(
-        forAdvance advance: CGFloat
-    ) -> CGFloat {
-        let target: CGFloat = 11
-        return min(max((target / max(advance, 0.5)).rounded(), 2), 4)
     }
 
     /// Average glyph width, in points, below which the pointer's line counts as
@@ -631,6 +609,23 @@ public actor OCRService {
     /// The fast level's floor is its own measured one: it recovered nothing at
     /// all below roughly 13 px, so asking it for less is asking for noise.
     private static let minimumFastTextPixels: CGFloat = 13
+    private static let accurateLanguages: [String] = {
+        let request = VNRecognizeTextRequest(); request.recognitionLevel = .accurate
+        return (try? request.supportedRecognitionLanguages()) ?? []
+    }()
+    static func visionLanguageConfiguration(requested: [String], supported: [String]) -> (languages: [String], primarySupported: Bool) {
+        func key(_ value: String) -> String {
+            let value = value.replacingOccurrences(of: "_", with: "-").lowercased()
+            return value.hasPrefix("zh-") ? value.split(separator: "-").prefix(2).joined(separator: "-") : String(value.split(separator: "-").first ?? "")
+        }
+        var selected: [String] = []
+        for language in requested {
+            if let match = supported.first(where: { key($0) == key(language) }), !selected.contains(match) { selected.append(match) }
+        }
+        let primary = requested.first.map { wanted in supported.contains { key($0) == key(wanted) } } ?? false
+        if selected.isEmpty, let latin = supported.first(where: { $0.lowercased() == "en-us" }) { selected = [latin] }
+        return (selected, primary)
+    }
 
     private nonisolated static func textRequest(
         recognitionLevel: VNRequestTextRecognitionLevel,
@@ -639,11 +634,13 @@ public actor OCRService {
     ) -> VNRecognizeTextRequest {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = recognitionLevel
-        request.recognitionLanguages = recognitionLanguages
-        // Language correction is what keeps æ, ø, and å attached to the word.
-        // It belongs to the accurate level only; on the fast level the same
-        // flag measurably replaced those letters with a, o, and noise.
-        request.usesLanguageCorrection = recognitionLevel == .accurate
+        let supported = recognitionLevel == .accurate ? accurateLanguages : ((try? request.supportedRecognitionLanguages()) ?? [])
+        let configuration = visionLanguageConfiguration(requested: recognitionLanguages, supported: supported)
+        request.recognitionLanguages = configuration.languages.isEmpty ? recognitionLanguages : configuration.languages
+        // An unavailable Danish dictionary must not silently become English
+        // autocorrection, which removes æ/ø/å. Chinese script variants must also
+        // match their own model rather than accepting the other variant.
+        request.usesLanguageCorrection = recognitionLevel == .accurate && configuration.primarySupported
         request.minimumTextHeight = Float(
             minimumTextHeight(
                 recognitionLevel: recognitionLevel,
@@ -721,7 +718,7 @@ public actor OCRService {
                     return nil
                 }
                 let source = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard source.count > 1 else {
+                guard !source.isEmpty else {
                     return nil
                 }
 
@@ -737,7 +734,7 @@ public actor OCRService {
                     naturalLanguage: language.naturalLanguage
                 )
                 let region = TextRegion(
-                    sourceText: source,
+                    sourceText: language.code.hasPrefix("zh") ? ReadingText.compactCjkSpacing(source) : source,
                     frame: lineFrame,
                     screenFrame: screenFrame,
                     displayID: displayID,
@@ -807,19 +804,13 @@ public actor OCRService {
         naturalLanguage: NLLanguage
     ) -> [WordRegion] {
         let source = recognizedText.string
-        let tokenizer = NLTokenizer(unit: .word)
-        tokenizer.string = source
-        tokenizer.setLanguage(naturalLanguage)
-
         var regions: [WordRegion] = []
-        tokenizer.enumerateTokens(
-            in: source.startIndex..<source.endIndex
-        ) { range, _ in
-            let word = String(source[range])
+        for range in ReadingText.ocrWordRanges(in: source, language: naturalLanguage) {
+            let word = ReadingText.compactCjkSpacing(String(source[range]))
                 .trimmingCharacters(in: .punctuationCharacters)
             guard !word.isEmpty,
                   let box = try? recognizedText.boundingBox(for: range) else {
-                return true
+                continue
             }
 
             regions.append(
@@ -830,7 +821,6 @@ public actor OCRService {
                     displayID: displayID
                 )
             )
-            return true
         }
         return regions
     }

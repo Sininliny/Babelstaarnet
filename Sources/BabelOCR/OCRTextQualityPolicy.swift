@@ -52,6 +52,9 @@ struct OCRTextQualityPolicy: Sendable {
         guard !letters.isEmpty else {
             return true
         }
+        // These corruption rules describe Danish casing and compounds. Brand
+        // names such as iOS and mixed Chinese/Latin labels are valid elsewhere.
+        guard language.code == "da" else { return true }
 
         let allUppercase = letters.allSatisfy {
             CharacterSet.uppercaseLetters.contains($0)

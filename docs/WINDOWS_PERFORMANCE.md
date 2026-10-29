@@ -76,3 +76,68 @@ measurements, excluding OCR, capture, pointer scheduling and actual desktop use.
 The 14-pixel OCR fixture previously returned `A28`; the supersampled path returns
 `A2B`. Neither this fixture nor the screenshots establish overall OCR parity with
 Apple Vision across all fonts, colours and displays.
+
+## Multilingual OCR appearance recovery (0.7.1)
+
+`WindowsChecks --ocr-appearance <report.json>` renders the shared
+`Tests/Shared/ocr-corpus.json`: 10/16/32/62 physical-pixel type, sans and
+serif/italic faces, paper, dark, faint labels, white-on-red, blue links,
+equiluminant colours and gradients. Missing installed OCR packs are reported
+as skipped; checks never install them. The same corpus runs against Vision
+in `MultilingualOCRChecks`, including traditional Chinese, with a separate
+Mac report. OS/font results must be compared within the same platform.
+
+On the local Windows machine, the unchanged 0.7.0 reader and the 0.7.1 reader
+were measured on the same generated images (56 per installed language):
+
+| Source | Mean character error before → after | Correct word under pointer before → after | Updated median OCR |
+| --- | --- | --- | --- |
+| Danish | 32.1% → 4.7% | 33/56 → 47/56 | 8.8 ms |
+| English | 36.0% → 10.2% | 34/56 → 49/56 | 8.3 ms |
+| Simplified Chinese | 37.7% → 11.8% | 0/56 → 43/56 | 12.6 ms |
+
+Character error is edit distance after case/whitespace/punctuation normalization;
+Danish diacritics remain significant. Chinese focus previously failed because
+Windows inserted spaces between Han characters, preventing dictionary words
+such as 学习 from being hit. The new path compacts only Han-to-Han whitespace
+and maps merged words back to the actual character boxes.
+
+No generated case increased character error in this run. This intentionally
+difficult corpus is not an estimate of normal-document accuracy. Small 10 px
+serifs and dense Han strokes still have errors. Traditional Chinese was not
+installed on this Windows machine and has no local Windows timing/accuracy
+claim. These numbers measure fixture OCR only, excluding desktop capture,
+pointer scheduling, translation and speech.
+
+Normal text keeps one native pass. Missing or small focus regions can use
+colour separation and bounded enlargement, with at most three Windows OCR
+passes per new crop. Complete readable lines remain authoritative. Successful
+and unsuccessful focus windows are cached against original pixels; changed
+pixels or cancellation invalidate the appropriate state. Raw screenshots,
+not prepared images, remain the snapshot reference.
+
+Colour-axis projection, soft contrast stretching, alpha handling and scaling
+budgets now share `Shared/BabelPolicy/OcrPixels.c` between Windows and Mac.
+This preserves antialiased strokes, distinguishes colours of equal luminance
+and refuses uniform/oversized input. Image resizing and native OCR remain
+platform adapters. Windows uses the selected source locale's word segmenter.
+Mac keeps source ranges when removing OCR-added Chinese spaces, admits single
+letter/Han words, and applies Danish casing rejection only to Danish.
+
+Vision now negotiates the selected language/script against the languages
+available to the current request. If its requested language dictionary is
+absent, generic Latin recognition does not enable English autocorrection over
+Danish text. Related Scandinavian classification is relaxed only for the
+focused line in that fallback mode. Language-specific Tesseract remains an
+installed, offline fallback. This follows Apple's
+[supported-language discovery](https://developer.apple.com/documentation/vision/vnrecognizetextrequest/supportedrecognitionlanguages())
+and [language-correction controls](https://developer.apple.com/documentation/vision/vnrecognizetextrequest/useslanguagecorrection);
+it does not infer a missing language model from a successful generic request.
+
+The final macOS 15 CI run also completed all 56 generated images per language:
+mean character error was 10.5% Danish, 1.2% English, 0.9% simplified Chinese and
+1.2% traditional Chinese. Ordinary 16/32/62 px paper fixtures pass the native
+regression bound; small 10 px text remains in the reported difficult corpus.
+Those Mac results use different system fonts and hardware from the Windows
+measurements and are not a cross-platform performance comparison or a Mac
+before/after claim. Both native jobs passed for source commit `f2cbfd8`.

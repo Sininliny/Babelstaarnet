@@ -10,9 +10,11 @@ import NaturalLanguage
 /// line under the pointer; background regions remain strict.
 struct OCRLanguagePolicy: Sendable {
     private let language: SourceLanguage
+    private let permitRelatedLatin: Bool
 
-    init(language: SourceLanguage) {
+    init(language: SourceLanguage, permitRelatedLatin: Bool = false) {
         self.language = language
+        self.permitRelatedLatin = permitRelatedLatin
     }
 
     func candidates(
@@ -55,6 +57,14 @@ struct OCRLanguagePolicy: Sendable {
             if confidence >= hints.minimumFocusedConfidence {
                 candidates.append(region)
                 continue
+            }
+            // With generic Latin recognition, a short Danish line can be
+            // classified as its close Scandinavian neighbour. Only relax the
+            // focused line, and only when Vision lacks the requested dictionary.
+            if permitRelatedLatin, language.code == "da",
+               let detected = recognizer.dominantLanguage,
+               ["no", "nb", "nn", "sv"].contains(detected.rawValue) {
+                candidates.append(region); continue
             }
 
             let strongestLanguageConfidence = probabilities.values.reduce(

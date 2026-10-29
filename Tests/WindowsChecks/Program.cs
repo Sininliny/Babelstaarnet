@@ -30,6 +30,7 @@ internal static class Program
     public static async Task<int> Main(string[] arguments)
     {
         Ui.ErrorRaised = error => throw new InvalidOperationException("A UI action failed.", error);
+        if (arguments.Length == 2 && arguments[0] == "--ocr-appearance") return await OcrAppearanceChecks.RunAsync(arguments[1]);
         if (arguments.Length == 3 && arguments[0] == "--ocr-image") return await ReadingQualityChecks.ImageAsync(arguments[1], arguments[2]);
         if (arguments.Length == 2 && arguments[0] == "--reading-quality") return await ReadingQualityChecks.RunAsync(arguments[1]);
         if (arguments.Contains("--context-check")) return await ContextualEngineChecks.RunAsync();
@@ -66,6 +67,7 @@ internal static class Program
             checks += await ReadingQualityChecks.UnitsAsync();
             checks += await AdaptiveNewsChecks.RunAsync(temporary);
             await OcrChecks();
+            checks += await OcrPolicyChecks.RunAsync();
             await SpeechChecks();
             await NeuralSpeechChecks();
             Console.WriteLine($"Passed {checks} Windows checks.");

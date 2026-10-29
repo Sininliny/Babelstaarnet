@@ -2,6 +2,19 @@ import BabelPolicy
 import Foundation
 
 public enum SharedPolicy {
+    public static func ocrScale(glyphHeight: Double, cjk: Bool, width: Int, height: Int, maximum: Int) -> Double {
+        bp_ocr_scale(glyphHeight, cjk ? 1 : 0, Int32(width), Int32(height), Int32(maximum))
+    }
+    public static func separateOCR(_ rgba: [UInt8], width: Int, height: Int, premultiplied: Bool = false) -> [UInt8]? {
+        guard width > 0, height > 0, width <= 8_000_000 / height, rgba.count == width * height * 4 else { return nil }
+        var result = [UInt8](repeating: 255, count: width * height)
+        let success = rgba.withUnsafeBufferPointer { input in
+            result.withUnsafeMutableBufferPointer { output in
+                bp_ocr_separate(input.baseAddress, Int32(rgba.count), Int32(width), Int32(height), premultiplied ? 2 : 0, output.baseAddress, Int32(output.count))
+            }
+        }
+        return success == 1 ? result : nil
+    }
     public static let version = Int(bp_version())
     public static func newsPopupDue(enabled: Bool, background: Bool, optedIn: Bool, blocked: Bool, hour: Int, elapsed: Double, interval: Int, shown: Int, fresh: Int) -> Bool {
         bp_news_popup_due(enabled ? 1 : 0, background ? 1 : 0, optedIn ? 1 : 0, blocked ? 1 : 0, Int32(hour), elapsed, Int32(interval), Int32(shown), Int32(fresh)) != 0

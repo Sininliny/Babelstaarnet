@@ -61,7 +61,7 @@ internal sealed class ReaderApp : Application
         screen = new(language: languages.Source);
         contextual = new(languages: languages);
         speech = new(engine: languages.Source.Id == "da" && preferences.SpeechEngine == "piper" ? new NeuralSpeechEngine() : new WindowsLanguageEngine(languages.Source), sample: languages.Source.Sample);
-        ReadingPolicy.CjkTokenizer = CjkWords.Segment;
+        ReadingPolicy.CjkTokenizer = text => CjkWords.Segment(text, languages.Source.Cjk ? languages.Source.OcrWindows : "zh");
     }
     [STAThread]
     public static int Main(string[] arguments)
