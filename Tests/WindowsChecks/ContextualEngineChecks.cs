@@ -42,6 +42,22 @@ internal static class ContextualEngineChecks
         if (!Gloss("dagen").Contains("day") || !Gloss("aftenen").Contains("evening") ||
             !new[] { "class", "lesson", "teach", "educat", "instruction", "tuition" }.Any(Gloss("undervisning").Contains))
             throw new Exception("The reported question must retain contextual teaching, daytime and evening meanings in the reading line.");
+        const string airportText = "Københavns Lufthavn fik påbud om sikkerhed forud for lange køer.";
+        var airportWords = await engine.GlossWordsAsync(airportText, ["Københavns", "Lufthavn", "påbud", "sikkerhed", "forud", "lange", "køer"], deadline.Token);
+        string queue = airportWords.GetValueOrDefault("køer", "");
+        if (!(queue.Contains("queue", StringComparison.OrdinalIgnoreCase) || queue.Contains("line", StringComparison.OrdinalIgnoreCase))) throw new Exception("Airport news must explain køer as queues, not cows.");
+        using (var newsReader = new NewsReadingSupport(Path.Combine(fixture, "news")))
+        {
+            newsReader.WordBands = DanishLanguage.Shared.NewsWordBands;
+            newsReader.KnowledgeLevel = word => new[] { "fik", "om", "for" }.Contains(word.ToLowerInvariant()) ? 4 : 0;
+            newsReader.CachedWordMeaning = _ => null; newsReader.ContextualWords = engine.GlossWordsAsync;
+            var article = new NewsArticle("airport-check", airportText, "", "https://www.dr.dk/nyheder/fixture", 0, 0);
+            await newsReader.PrepareAsync(article);
+            var pieces = NewsReadingSupport.Pieces(airportText);
+            if (!newsReader.Ready(article) || pieces.Count(p => newsReader.Presentation(p, article).Mode == 2) != 1 || newsReader.Presentation("lange", article).Mode != 2)
+                throw new Exception("The installed model must supply a readable airport card with just one new basic word.");
+            Console.WriteLine("Real mixed news fixture: " + string.Join(' ', pieces.Select(p => newsReader.Presentation(p, article).Text)));
+        }
         using var abandoned = new CancellationTokenSource();
         var moved = Hit("Hun får en besked fra skolen.");
         try { await engine.ExplainAsync(moved, abandoned.Token, partial => { if (partial.Focus.Meaning.Length > 0) abandoned.Cancel(); }, includeSentence: false); }

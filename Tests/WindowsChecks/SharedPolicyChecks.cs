@@ -22,6 +22,9 @@ internal static class SharedPolicyChecks
             double result = c.GetProperty("operation").GetString() switch
             {
                 "news-gloss" => SharedPolicy.bp_news_gloss(I(0),I(1),I(2)),
+                "news-reader-band" => SharedPolicy.bp_news_reader_band(I(0),I(1),I(2),I(3)),
+                "news-target-budget" => SharedPolicy.bp_news_target_budget(I(0)),
+                "news-word-mode" => SharedPolicy.bp_news_word_mode(I(0),I(1),I(2),I(3),I(4),I(5)),
                 "reading-help" => SharedPolicy.bp_reading_help(I(0),I(1),I(2),I(3)),
                 "retry" => SharedPolicy.bp_retry_delay(I(0)),
                 "source" => SharedPolicy.bp_source_capability(I(0)),
@@ -99,6 +102,7 @@ internal static class SharedPolicyChecks
         using var news = new NewsService(folder, (_, _) => Task.FromResult(xml), () => now);
         news.Configure(true, true, false, 0, 18); await news.RefreshAsync();
         news.ReadingActive = () => reading; news.ModelAvailable = () => true; news.ModelIdentity = () => "fixture-local-model";
+        news.Reader.Translate = (texts, _) => Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(texts.Select(t => "English: " + t).ToArray());
         news.SimplifyExcerpt = (text, _) => { generations++; return Task.FromResult(text.Replace(" & ", " og ")); };
         NewsPopupItem? displayed = null; news.PresentPopup = item => { shown++; displayed = item; return true; };
         await news.TickPopupAsync(); Check(shown == 0 && generations == 0, "Legacy news/background opt-ins must never silently authorize popups.");

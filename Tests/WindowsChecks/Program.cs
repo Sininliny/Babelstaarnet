@@ -63,6 +63,7 @@ internal static class Program
             await WorkerChecks(temporary);
             await RealEngineChecks();
             checks += await ReadingQualityChecks.UnitsAsync();
+            checks += await AdaptiveNewsChecks.RunAsync(temporary);
             await OcrChecks();
             await SpeechChecks();
             await NeuralSpeechChecks();

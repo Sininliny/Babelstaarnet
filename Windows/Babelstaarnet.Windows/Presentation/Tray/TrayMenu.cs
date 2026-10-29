@@ -4,12 +4,12 @@ using Forms = System.Windows.Forms;
 
 namespace Babelstaarnet.Windows;
 
-// Native context menu, shared by either mouse button and keyboard tray activation.
+// Notification-area keyboard/context activation bridge into the themed WPF popup.
 internal sealed class TrayMenu : Forms.ContextMenuStrip
 {
     private readonly ReaderUiModel model;
     private readonly Forms.ToolStripMenuItem book, toggle;
-    internal TrayMenu(ReaderUiModel model)
+    internal TrayMenu(ReaderUiModel model, Action openPanel)
     {
         this.model = model; Renderer = new Forms.ToolStripSystemRenderer();
         book = Add("Word Book", "word-book", model.OpenBook);
@@ -20,7 +20,9 @@ internal sealed class TrayMenu : Forms.ContextMenuStrip
         Add("Reading controls…", "reading-controls", model.OpenReadingControls);
         Items.Add(new Forms.ToolStripSeparator());
         Add("Settings…", "settings", model.OpenSettings); Add("Quit", "quit", model.Quit);
-        Opening += (_, _) => RefreshMenu(); RefreshMenu();
+        // NotifyIcon routes right-click and keyboard context activation here.
+        // The app opens the same themed surface used by a primary click.
+        Opening += (_, e) => { e.Cancel = true; RefreshMenu(); Ui.Try(openPanel); }; RefreshMenu();
     }
     private Forms.ToolStripMenuItem Add(string text, string name, Action action)
     {

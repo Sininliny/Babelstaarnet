@@ -83,6 +83,7 @@ internal sealed class WindowsTheme : INotifyPropertyChanged
             ["Stroke"] = Stroke, ["Accent"] = Accent, ["OnAccent"] = OnAccent,
             ["AccentSoft"] = AccentSoft, ["Hover"] = Hover, ["Control"] = Control
         }) resources["Babel." + pair.Key] = pair.Value;
+        FormControls.AddScrollStyle(resources);
     }
     internal void Attach(Window window)
     {

@@ -13,6 +13,8 @@ enum CrossPlatformContractChecks {
         struct Scaffold: Decodable { let title: String; let levels: [String: Int]; let meanings: [String: String]; let hints: [String: String] }
         struct Popup: Decodable { let id: String; let enabled, background, optedIn, blocked: Bool; let hour: Int; let elapsed: Double; let interval, shown, fresh: Int; let due: Bool }
         struct Units: Decodable { let text: String; let words: [String] }
+        struct Adaptive: Decodable { let id, title, display: String; let levels, bands: [String: Int]; let meanings: [String: String]; let targets: [String]; let ready: Bool; let supported: Bool? }
+        let newsAdaptive: [Adaptive]
         let readingUnits: [Units]
         let newsPopupSchedule: [Popup]
         let newsScaffolding: [Scaffold]
@@ -60,6 +62,27 @@ enum CrossPlatformContractChecks {
                 precondition(reader.gloss(word, article: article) == item.hints[word.lowercased()], "Unfamiliar words get hints; known words and names remain Danish")
             }
             precondition(!reader.isVisible(article) && reader.meaning(article) == nil)
+        }
+        for item in contract.newsAdaptive {
+            let xml = "<rss><channel><item><title>Fixture</title><link>https://www.dr.dk/nyheder/fixture</link><pubDate>Thu, 22 Oct 2026 10:00:00 GMT</pubDate></item></channel></rss>"
+            var article = try NewsService.parseFeed(xml, topic: 0)[0]; article.title = item.title
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("adaptive-\(UUID())")
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let reader = NewsReadingSupport(directory: folder)
+            reader.wordBands = item.bands; reader.cachedWordMeaning = { item.meanings[$0.lowercased()] }
+            reader.supportedReading = { item.supported ?? false }
+            reader.knowledgeLevel = { item.levels[$0.lowercased()] ?? 0 }; await reader.prepare(article)
+            let pieces = NewsReadingSupport.pieces(item.title)
+            func text() -> String { pieces.map { reader.presentation($0, article: article).text }.joined(separator: " ") }
+            precondition(text() == item.display, "Adaptive inline reading: \(item.id)")
+            var seen = Set<String>()
+            let targets = pieces.filter { reader.presentation($0, article: article).mode == 2 }.compactMap(NewsReadingSupport.word).filter { seen.insert($0).inserted }
+            precondition(targets == item.targets && reader.ready(article) == item.ready)
+            reader.knowledgeLevel = { _ in 5 }; precondition(text() == item.display, "Keep a visible reading plan stable")
+            if let first = targets.first {
+                await reader.lookup(first, article: article)
+                precondition(reader.selected?.meaning.isEmpty == false && !pieces.contains { NewsReadingSupport.word($0) == first && reader.presentation($0, article: article).mode == 2 })
+            }
         }
         for item in contract.newsPopupSchedule {
             precondition(SharedPolicy.newsPopupDue(enabled: item.enabled, background: item.background, optedIn: item.optedIn, blocked: item.blocked, hour: item.hour, elapsed: item.elapsed, interval: item.interval, shown: item.shown, fresh: item.fresh) == item.due, "Shared news popup: " + item.id)

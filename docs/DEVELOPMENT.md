@@ -132,3 +132,15 @@ for real timers, fetch live news or open a visible popup in an automated check.
 and numeric-only text in both clients. Windows quality checks also cover clipped
 focus context, generated small-text OCR, complete-line streaming and the rule
 that a context-free cache cannot override an in-flight contextual meaning.
+
+`newsAdaptive` vectors assert the actual mixed-language text, known-word retention,
+reachable common-word targets, budgets, repeated targets and missing-help behavior
+in both native readers. Automatic cards must prepare support before presentation.
+Word batches retain valid neighbors when one result is empty; sentence-context
+caches are scoped to the public article fingerprint. Test with supplied text,
+never live feeds, private vocabulary or a visible scheduled window.
+
+Windows renders every settings page in both themes. Assertions inspect actual
+shortcut glyph colors, combo arrow placement and first-level themed tray actions,
+in addition to palette contrast. Native context activation must bridge into the
+same WPF panel as a primary click; it must not restore an unthemed menu.

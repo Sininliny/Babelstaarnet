@@ -87,6 +87,7 @@ public extension SourceLanguage {
             "om", "på", "sig", "sin", "sit", "skal", "som", "til",
             "var", "ved", "vi", "vil"
         ],
+        newsWordBands: Self.danishNewsWordBands,
         meaningPreservationWords: ["ikke", "ingen", "aldrig", "muligvis", "ifølge", "mistænkt", "sigtet", "anklaget", "kan", "vil", "måske"],
         newsSimplificationInstructions: """
             Skriv kun en kortere og enklere version PÅ DANSK. Oversæt ikke til engelsk.
@@ -98,6 +99,23 @@ public extension SourceLanguage {
         meansPhrase: { meaning in "Betyder “\(meaning)”." }
     )
 
+    // Authored everyday vocabulary, not corpus frequency ranks or CEFR claims.
+    // Explicit learner feedback wins; the bands only choose up to two new words.
+    private static let danishNewsWordBands: [String: Int] = [
+        "ny": 1, "nye": 1, "lang": 1, "lange": 1, "dag": 1, "dagen": 1,
+        "tid": 1, "år": 1, "stor": 1, "store": 1, "lille": 1,
+        "god": 1, "godt": 1, "dårlig": 1, "mange": 1, "meget": 1, "mere": 1,
+        "arbejde": 1, "arbejder": 1, "hus": 1, "hjem": 1, "skole": 1,
+        "barn": 1, "børn": 1, "mad": 1, "vand": 1, "se": 1, "ser": 1,
+        "komme": 1, "kommer": 1, "gå": 1, "går": 1, "få": 1, "får": 1, "fik": 1,
+        "mennesker": 2, "familie": 2, "by": 2, "byen": 2, "vej": 2, "vejen": 2,
+        "åbne": 2, "åbner": 2, "lukke": 2, "lukker": 2, "vente": 2, "venter": 2,
+        "pris": 2, "priser": 2, "penge": 2, "plan": 2, "energi": 2,
+        "rejse": 2, "rejser": 2, "lufthavn": 2, "kø": 2, "køer": 2, "sikkerhed": 2,
+        "vigtig": 2, "vigtigt": 2, "længere": 2, "bedre": 2,
+        "regering": 3, "regeringen": 3, "beslutning": 3, "udvikling": 3,
+        "mulighed": 3, "samfund": 3, "ændre": 3, "ændrer": 3, "aftale": 3
+    ]
     /// One worked example each, on a sentence whose verb is inflected, so the
     /// model sees a gloss in the form the word takes ("went", not "go") and a
     /// dictionary form that is actually the dictionary form ("gå", not "gik").

@@ -16,6 +16,14 @@ BP_API int32_t bp_version(void);
 BP_API int32_t bp_reading_help(int32_t requested, int32_t english_enabled, int32_t cached, int32_t local_available);
 /* Small word glosses: unfamiliar/learning words get help; stable words stay Danish. */
 BP_API int32_t bp_news_gloss(int32_t level, int32_t available, int32_t different);
+/* Conservative editorial vocabulary bands, not CEFR or measured proficiency. */
+BP_API int32_t bp_news_reader_band(int32_t known_basic, int32_t basic_total,
+    int32_t known_everyday, int32_t everyday_total);
+BP_API int32_t bp_news_target_budget(int32_t word_count);
+/* 0 familiar Danish, 1 English replacement, 2 one small Danish learning target.
+   A target requires a usable different meaning so direct help is always ready. */
+BP_API int32_t bp_news_word_mode(int32_t level, int32_t word_band, int32_t reader_band,
+    int32_t help_ready, int32_t targets_used, int32_t target_budget);
 /* Opt-in news cards: local 09–21, >=1h apart, at most three/day, no catch-up queue. */
 BP_API int32_t bp_news_popup_due(int32_t enabled, int32_t background, int32_t opted_in,
     int32_t blocked, int32_t local_hour, double elapsed_seconds, int32_t interval_minutes,

@@ -28,7 +28,7 @@ internal sealed class NewsPopupPreferences
     public string[] Ids { get; set; } = [];
     public double? PausedUntil { get; set; }
 }
-internal sealed record NewsPopupItem(NewsArticle Original, string Text, string Model, bool Preview = false)
+internal sealed record NewsPopupItem(NewsArticle Original, string Text, string Model, bool Preview = false, NewsReadingSupport? Reader = null)
 {
     public NewsArticle Adapted => Original with { Title = Text, Summary = "" };
 }
@@ -124,7 +124,7 @@ internal sealed class NewsService : IDisposable
         if (download is null)
         {
             http = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.4");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Babelstaarnet/0.6.5");
             this.download = DownloadAsync;
         }
         else this.download = download;
@@ -242,7 +242,8 @@ internal sealed class NewsService : IDisposable
         catch (Exception e) { simplificationStates[key] = e.Message; }
         finally { if (ReferenceEquals(generation, request)) generation = null; if (!disposed) Changed?.Invoke(); }
     }
-    public void CancelGeneration() => generation?.Cancel();
+    private NewsReadingSupport? popupSupport;
+    public void CancelGeneration() { generation?.Cancel(); popupSupport?.Cancel(); }
     public void MarkSeen(NewsArticle article)
     {
         cache.Seen[article.Id] = clock().ToUnixTimeSeconds(); cache.SeenTitles[article.Title] = clock().ToUnixTimeSeconds();
@@ -268,6 +269,8 @@ internal sealed class NewsService : IDisposable
     }
     public NewsReadingSupport MakePopupReader() => new(Path.GetDirectoryName(preferencesPath)!)
     { Translate = Reader.Translate, CachedWordMeaning = Reader.CachedWordMeaning, KnowledgeLevel = Reader.KnowledgeLevel,
+      WordBands = Reader.WordBands, ContextualWords = Reader.ContextualWords,
+      SupportedReading = Reader.SupportedReading,
       Speak = Reader.Speak, SaveWord = Reader.SaveWord, BeforeHelp = Reader.BeforeHelp };
     public void ConfigurePopups(bool enabled, int interval)
     {
@@ -301,22 +304,32 @@ internal sealed class NewsService : IDisposable
         if (disposed || popupPreparing || !Eligible() || (preview ? Cards.Select(c => c.Article) : PopupCandidates).FirstOrDefault() is not { } candidate || PresentPopup is null)
         { if (preview) { PopupStatus = "Pause screen reading, enable DR news, and refresh news before trying a card."; Changed?.Invoke(); } return; }
         if (!(ModelAvailable?.Invoke() ?? SimplifyExcerpt is not null)) { PopupStatus = "Install local AI in Settings to receive adapted news cards."; Changed?.Invoke(); return; }
-        popupPreparing = true; var revision = popupRevision;
+        popupPreparing = true; var revision = popupRevision; NewsReadingSupport? support = null; bool handedOff = false;
+        PopupStatus = "Preparing a short news card on this device…"; Changed?.Invoke();
         try
         {
             await SimplifyAsync(candidate);
             if (disposed || popupRevision != revision || !Eligible()) return;
             if (Simplified(candidate) is not { } text || SimplifiedModel(candidate) is not { } model)
             { PopupStatus = "Adapted card unavailable. Will try again later; the original remains in Word Book."; popupRetry = clock().AddMinutes(10); Changed?.Invoke(); return; }
-            if (PresentPopup(new(candidate, text, model, preview)))
+            support = MakePopupReader(); popupSupport = support;
+            PopupStatus = "Preparing English support for this card…"; Changed?.Invoke();
+            var item = new NewsPopupItem(candidate, text, model, preview, support);
+            await support.PrepareAsync(item.Adapted);
+            if (disposed || popupRevision != revision || !Eligible()) return;
+            if (!support.Ready(item.Adapted))
+            { PopupStatus = "English support is not ready. The card will wait; the original remains in Word Book."; popupRetry = clock().AddMinutes(10); Changed?.Invoke(); return; }
+            popupSupport = null;
+            if (PresentPopup(item))
             {
+                handedOff = true;
                 var popup = PopupPreferences; var now = clock(); string day = now.ToString("yyyy-MM-dd");
                 popup.Shown = (popup.Day == day ? popup.Shown : 0) + 1; popup.Day = day; popup.LastShown = now.ToUnixTimeSeconds();
                 popup.Ids = popup.Ids.Append(candidate.Id).TakeLast(100).ToArray(); Preferences.Popup = popup;
                 PopupStatus = "A short Danish news card was shown."; Save(); Changed?.Invoke();
             }
         }
-        finally { popupPreparing = false; }
+        finally { popupSupport = null; if (!handedOff) support?.Dispose(); popupPreparing = false; }
     }
     public bool DigestDue(bool reading, bool permitted)
     {

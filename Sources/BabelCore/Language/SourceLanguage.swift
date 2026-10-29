@@ -140,6 +140,8 @@ public struct SourceLanguage: Sendable {
     /// so the frame of the sentence survives from the first scan. Explicit
     /// learner feedback always overrides this prior.
     public let structuralWords: Set<String>
+    /// Editorial common-word progression for small, optional news reading targets.
+    public let newsWordBands: [String: Int]
     public let meaningPreservationWords: [String]
     public let newsSimplificationInstructions: String
     /// How this language says "means X", used when there is no bridge to show.
@@ -171,6 +173,7 @@ public struct SourceLanguage: Sendable {
         beginnerGlosses: [String: String] = [:],
         vacuousExplanations: Set<String> = [],
         structuralWords: Set<String> = [],
+        newsWordBands: [String: Int] = [:],
         meaningPreservationWords: [String] = [],
         newsSimplificationInstructions: String = "",
         contextualGlossPrompts: ContextualGlossPrompts? = nil,
@@ -190,6 +193,7 @@ public struct SourceLanguage: Sendable {
         self.beginnerGlosses = beginnerGlosses
         self.vacuousExplanations = vacuousExplanations
         self.structuralWords = structuralWords
+        self.newsWordBands = newsWordBands
         self.meaningPreservationWords = meaningPreservationWords
         self.newsSimplificationInstructions = newsSimplificationInstructions
         self.meansPhrase = meansPhrase

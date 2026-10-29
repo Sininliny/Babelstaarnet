@@ -10,7 +10,7 @@ public struct NewsPopupSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("A little Danish, now and then").font(.title2.bold())
-                Text("Optional short news cards bring new information to you. Danish stays in front; small hints help with unfamiliar words.").foregroundStyle(.secondary)
+                Text("Optional short news cards bring new information. Keep your familiar Danish, with English for difficult words and a little new everyday vocabulary.").foregroundStyle(.secondary)
                 NewsSettings(news: model.news)
             }.padding(24)
         }.frame(minWidth: 460, minHeight: 430)
@@ -33,7 +33,7 @@ struct NewsPopupView: View {
                 Button("Turn off") { news.configurePopups(enabled: false, interval: news.popupPreferences.intervalMinutes); close() }.font(.caption)
                 Button(action: close) { Image(systemName: "xmark") }.help("Close this card").accessibilityLabel("Close this card")
             }
-            Text("DR news · internet source · adapted locally").font(.caption).foregroundStyle(.secondary).help("Local model: " + item.model)
+            Text("DR · " + item.original.publishedDate.formatted(date: .abbreviated, time: .shortened) + " · internet · adapted locally").font(.caption).foregroundStyle(.secondary).help("Local model: " + item.model)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     NewsReadingCardView(news: news, card: NewsCard(article: item.adapted, matches: [], score: 0), compact: true, reader: reader)
@@ -80,7 +80,7 @@ struct NewsPopupView: View {
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 390), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
         panel.level = .floating; panel.hasShadow = true; panel.collectionBehavior = [.moveToActiveSpace, .transient]
-        let reader = news.makePopupReader(); popupReader = reader
+        let reader = item.reader ?? news.makePopupReader(); popupReader = reader
         panel.contentView = NSHostingView(rootView: NewsPopupView(news: news, translator: translator, reader: reader, item: item, close: { [weak self] in self?.dismiss() }, openBook: { [weak self] in self?.dismiss(); self?.openBook() }))
         return panel
     }

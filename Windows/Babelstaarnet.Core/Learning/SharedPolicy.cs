@@ -8,6 +8,9 @@ public static class SharedPolicy
 {
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_popup_due(int enabled, int background, int optedIn, int blocked, int hour, double elapsed, int interval, int shown, int fresh);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_gloss(int level, int available, int different);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_reader_band(int knownBasic, int basicTotal, int knownEveryday, int everydayTotal);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_target_budget(int wordCount);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_news_word_mode(int level, int wordBand, int readerBand, int helpReady, int targetsUsed, int targetBudget);
     private const string Library = "babel_policy";
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_version();
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] public static extern int bp_reading_help(int requested, int english, int cached, int available);

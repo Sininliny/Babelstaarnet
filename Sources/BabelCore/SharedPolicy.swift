@@ -9,6 +9,13 @@ public enum SharedPolicy {
     public static func newsGloss(level: Int, available: Bool = true, different: Bool = true) -> Bool {
         bp_news_gloss(Int32(level), available ? 1 : 0, different ? 1 : 0) != 0
     }
+    public static func newsReaderBand(knownBasic: Int, basicTotal: Int, knownEveryday: Int, everydayTotal: Int) -> Int {
+        Int(bp_news_reader_band(Int32(knownBasic), Int32(basicTotal), Int32(knownEveryday), Int32(everydayTotal)))
+    }
+    public static func newsTargetBudget(words: Int) -> Int { Int(bp_news_target_budget(Int32(words))) }
+    public static func newsWordMode(level: Int, band: Int, readerBand: Int, helpReady: Bool, used: Int, budget: Int) -> Int {
+        Int(bp_news_word_mode(Int32(level), Int32(band), Int32(readerBand), helpReady ? 1 : 0, Int32(used), Int32(budget)))
+    }
     public static func readingHelp(requested: Bool, english: Bool, cached: Bool, available: Bool) -> Int {
         Int(bp_reading_help(requested ? 1 : 0, english ? 1 : 0, cached ? 1 : 0, available ? 1 : 0))
     }

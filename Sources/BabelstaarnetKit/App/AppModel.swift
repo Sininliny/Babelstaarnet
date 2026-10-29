@@ -316,6 +316,20 @@ public final class AppModel: ObservableObject {
                 ?? self.languages.source.exactGlosses[key] ?? self.languages.source.closedClassGlosses[folded]
         }
         news.reader.knowledgeLevel = { [weak self] word in self?.learnerProfileStore.progress(for: word).effectiveKnowledgeLevel() ?? 0 }
+        news.reader.wordBands = languages.source.newsWordBands
+        news.reader.supportedReading = { [weak self] in self?.supportedReading ?? false }
+        news.reader.contextualWords = { [weak self] text, words in
+            guard let self, self.contextualGlossesEnabled, self.contextualGlossService.isInstalled,
+                  !self.learningModeActive || self.detectionSuspendedForIdle else { throw URLError(.resourceUnavailable) }
+            var values: [String: String] = [:]
+            for start in stride(from: 0, to: words.count, by: 8) {
+                let batch = Array(words[start..<min(start + 8, words.count)])
+                let reply = try await self.contextualGlossService.glossPublicExcerpt(sentence: text, words: batch)
+                try Task.checkCancellation()
+                for (word, gloss) in zip(batch, reply.glosses) { values[word] = gloss }
+            }
+            return values
+        }
         news.reader.speak = { [weak self] text in
             guard let self else { return }; self.speechService.speak(text, language: self.languages.source.speechVoice)
         }

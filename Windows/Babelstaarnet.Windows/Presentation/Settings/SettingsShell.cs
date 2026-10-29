@@ -26,7 +26,14 @@ internal sealed class SettingsShell : Grid
         brand.Children.Add(new Image { Source = BrandIcons.AppImage, Width = 38, Height = 38, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 12) });
         brand.Children.Add(Ui.Text("Babelstårnet", 17, true)); var sub = Ui.Text("Read Danish, naturally", 11); sub.Foreground = Ui.Muted; brand.Children.Add(sub);
         DockPanel.SetDock(brand, Dock.Top); rail.Children.Add(brand);
-        navigation = new ListBox { Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        navigation = new ListBox { Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        navigation.Template = (ControlTemplate)XamlReader.Parse("""
+            <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="ListBox">
+              <ScrollViewer Focusable="False" CanContentScroll="True" Padding="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsPresenter/>
+              </ScrollViewer>
+            </ControlTemplate>
+            """);
         System.Windows.Automation.AutomationProperties.SetName(navigation, "Settings pages");
         var itemStyle = (Style)XamlReader.Parse("""
             <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="ListBoxItem">

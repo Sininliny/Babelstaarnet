@@ -59,3 +59,16 @@ tray-to-settings opening on invisible windows.
 Fixture rendering does not prove every user's screen scaling, display setup
 or accessibility combination. Native behavior still warrants real-device
 testing when those integrations change.
+
+## Control and tray regressions
+
+Both tray mouse buttons and keyboard context activation open the themed reading
+panel. Keep Word Book, news and scheduling directly reachable there. Shortcut
+recorders explicitly use the palette foreground; borrowing only a button template
+must not leave the inherited light-theme text color on a dark fill. Combo labels,
+trailing arrows, item rows and scroll tracks use the same palette and retain WPF
+keyboard/automation semantics. Preview all settings pages, not only the first one.
+
+News English replaces difficult words inline. Familiar Danish stays untouched;
+up to two reachable new Danish units receive an accent underline and immediate
+help on selection. A second full English text is an explicit help action only.
