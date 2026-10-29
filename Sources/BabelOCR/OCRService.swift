@@ -141,7 +141,8 @@ public actor OCRService {
                 if let refined = try await enlargedRefinement(
                     of: regions,
                     in: capture,
-                    focusPoint: focusPoint
+                    focusPoint: focusPoint,
+                    confidenceByRegionID: vision.confidenceByRegionID
                 ) {
                     return store(
                         CachedResult(
@@ -338,7 +339,8 @@ public actor OCRService {
     private func enlargedRefinement(
         of regions: [TextRegion],
         in capture: CapturedDisplay,
-        focusPoint: CGPoint?
+        focusPoint: CGPoint?,
+        confidenceByRegionID: [UUID: Float]
     ) async throws -> [TextRegion]? {
         guard let focusPoint,
               let index = Self.focusedRegionIndex(
@@ -346,7 +348,7 @@ public actor OCRService {
                   at: focusPoint
               ),
               let advance = Self.glyphAdvance(in: regions[index]),
-              advance <= Self.smallTextAdvance,
+              advance <= (language.code.hasPrefix("zh") ? 11 : Self.smallTextAdvance),
               let window = Self.window(
                   around: regions[index].frame,
                   in: capture
@@ -354,7 +356,7 @@ public actor OCRService {
               let cropped = capture.image.cropping(to: window.pixelRect),
               let enlarged = OCRImagePreparation.enlarged(
                   cropped,
-                  scale: Self.refinementScale(forAdvance: advance)
+                  scale: SharedPolicy.ocrScale(glyphHeight: Double(advance * CGFloat(capture.image.width) / capture.frame.width), cjk: language.code.hasPrefix("zh"), width: cropped.width, height: cropped.height, maximum: 4096)
               ),
               let vision = try? await Self.recognizeWithVision(
                   image: enlarged,
@@ -380,27 +382,17 @@ public actor OCRService {
         ), let refinedIndex = Self.focusedRegionIndex(
             in: refined,
             at: focusPoint
-        ), Self.letterCount(in: refined[refinedIndex])
-            > Self.letterCount(in: regions[index]) else {
+        ) else {
             return nil
         }
+        let originalLetters = Self.letterCount(in: regions[index]), refinedLetters = Self.letterCount(in: refined[refinedIndex])
+        let confidentCorrection = language.code.hasPrefix("zh") && refinedLetters == originalLetters
+            && (vision.confidenceByRegionID[refined[refinedIndex].id] ?? 0) >= 0.85
+            && (confidenceByRegionID[regions[index].id] ?? 1) < 0.75
+        guard refinedLetters > originalLetters || confidentCorrection else { return nil }
         var merged = regions
         merged[index] = refined[refinedIndex]
         return merged
-    }
-
-    /// How much the line is enlarged before it is read again.
-    ///
-    /// Vision keeps Danish diacritics attached once a glyph advance is around
-    /// eleven points; below that the mark falls within a pixel or two of the
-    /// stroke it belongs to and gets absorbed into it. Enlarging one line is
-    /// cheap enough to aim for that rather than settling for a fixed doubling,
-    /// so the smallest text — the text that lost the most — is enlarged most.
-    private static func refinementScale(
-        forAdvance advance: CGFloat
-    ) -> CGFloat {
-        let target: CGFloat = 11
-        return min(max((target / max(advance, 0.5)).rounded(), 2), 4)
     }
 
     /// Average glyph width, in points, below which the pointer's line counts as
@@ -721,7 +713,7 @@ public actor OCRService {
                     return nil
                 }
                 let source = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard source.count > 1 else {
+                guard !source.isEmpty else {
                     return nil
                 }
 
@@ -737,7 +729,7 @@ public actor OCRService {
                     naturalLanguage: language.naturalLanguage
                 )
                 let region = TextRegion(
-                    sourceText: source,
+                    sourceText: language.code.hasPrefix("zh") ? ReadingText.compactCjkSpacing(source) : source,
                     frame: lineFrame,
                     screenFrame: screenFrame,
                     displayID: displayID,
@@ -807,19 +799,13 @@ public actor OCRService {
         naturalLanguage: NLLanguage
     ) -> [WordRegion] {
         let source = recognizedText.string
-        let tokenizer = NLTokenizer(unit: .word)
-        tokenizer.string = source
-        tokenizer.setLanguage(naturalLanguage)
-
         var regions: [WordRegion] = []
-        tokenizer.enumerateTokens(
-            in: source.startIndex..<source.endIndex
-        ) { range, _ in
-            let word = String(source[range])
+        for range in ReadingText.ocrWordRanges(in: source, language: naturalLanguage) {
+            let word = ReadingText.compactCjkSpacing(String(source[range]))
                 .trimmingCharacters(in: .punctuationCharacters)
             guard !word.isEmpty,
                   let box = try? recognizedText.boundingBox(for: range) else {
-                return true
+                continue
             }
 
             regions.append(
@@ -830,7 +816,6 @@ public actor OCRService {
                     displayID: displayID
                 )
             )
-            return true
         }
         return regions
     }

@@ -22,7 +22,7 @@ enum OCRRoutingPolicy {
                 return false
             }
             return region.words.contains { word in
-                word.sourceText.count > 1
+                word.sourceText.contains(where: \.isLetter)
                     && word.frame.height
                         >= minimumAccurateFocusedWordHeight
                     && word.frame

@@ -1,0 +1,18 @@
+{
+  "samples": [
+    { "language": "da", "text": "Jeg læser bøger hver dag.", "focus": "bøger" },
+    { "language": "en", "text": "I read books every day.", "focus": "books" },
+    { "language": "zh-Hans", "text": "我每天在家看书和学习。", "focus": "学习" },
+    { "language": "zh-Hant", "text": "我每天在家看書和學習。", "focus": "學習" }
+  ],
+  "appearances": [
+    { "id": "paper", "foreground": "#181818", "background": "#ffffff" },
+    { "id": "dark", "foreground": "#ededf0", "background": "#202124" },
+    { "id": "dim-label", "foreground": "#dadade", "background": "#ededf0" },
+    { "id": "white-on-red", "foreground": "#ffffff", "background": "#cc0038" },
+    { "id": "same-luminance", "foreground": "#c81e3c", "background": "#2a7b62" },
+    { "id": "blue-link", "foreground": "#0645ad", "background": "#fafafa" },
+    { "id": "gradient", "foreground": "#ffffff", "background": "#101820", "end": "#aab4c2" }
+  ],
+  "sizes": [10, 16, 32, 62]
+}

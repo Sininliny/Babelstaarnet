@@ -11,6 +11,11 @@ extern "C" {
 #endif
 /* Stable C ABI. No UI, filesystem, network, global state or model dependency. */
 BP_API int32_t bp_version(void);
+/* RGBA/BGRA, straight/premultiplied: format 0/1/2/3. Tight rows only.
+   Returns 0 for invalid, oversized or uniform input. Output keeps antialiasing. */
+BP_API int32_t bp_ocr_separate(const uint8_t *pixels, int32_t length, int32_t width, int32_t height,
+    int32_t format, uint8_t *gray, int32_t capacity);
+BP_API double bp_ocr_scale(double glyph_height, int32_t cjk, int32_t width, int32_t height, int32_t maximum);
 /* Full translation: explicit request only. The legacy preference is ignored.
    0 hidden, 1 cached meaning, 2 local translation, 3 setup needed. */
 BP_API int32_t bp_reading_help(int32_t requested, int32_t english_enabled, int32_t cached, int32_t local_available);

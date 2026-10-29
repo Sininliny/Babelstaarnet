@@ -24,6 +24,7 @@ internal sealed class ScreenReader
     private PixelRect? captureArea;
     private PixelRect? captureScreen;
     private PixelSnapshot? snapshot;
+    private readonly Queue<PixelRect> recoveryWindows = new();
     private PixelPoint cachedOrigin => snapshot?.Origin ?? default;
     private Size cachedSize => snapshot?.Size ?? default;
     private IReadOnlyList<RecognizedLine> cachedLines = Array.Empty<RecognizedLine>();
@@ -85,13 +86,13 @@ internal sealed class ScreenReader
         // monitors with negative origins and different scaling factors.
         IReadOnlyList<RecognizedLine> lines;
         using (var bitmap = await CaptureAsync(area, captureWithoutOverlay, cancellationToken))
-            lines = await Task.Run(() => RecognizeAsync(bitmap, new(area.X, area.Y), cancellationToken), cancellationToken);
+            lines = await Task.Run(() => RecognizeAsync(bitmap, new(area.X, area.Y), cancellationToken, pointer), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested(); fullCaptureAt = DateTimeOffset.UtcNow;
         if (!captureWholeDisplay && AdaptiveCapture.NeedsExpansion(lines, area, pointer))
         {
             area = AdaptiveCapture.Plan(pointer, screenRect, textHeight, NativeMethods.MonitorScale(pointer.X, pointer.Y), expansion: 1.6);
             using var expanded = await CaptureAsync(area, captureWithoutOverlay, cancellationToken);
-            lines = await Task.Run(() => RecognizeAsync(expanded, new(area.X, area.Y), cancellationToken), cancellationToken);
+            lines = await Task.Run(() => RecognizeAsync(expanded, new(area.X, area.Y), cancellationToken, pointer), cancellationToken);
             captureArea = area;
         }
         var heights = lines.SelectMany(l => l.Words).Select(w => w.Bounds.Height).Where(h => h is >= 4 and <= 180).Order().ToArray();
@@ -118,47 +119,100 @@ internal sealed class ScreenReader
     internal bool MatchesSnapshot(Bitmap bitmap, PixelPoint origin) => snapshot?.Matches(bitmap, origin) == true;
 
     internal async Task<IReadOnlyList<RecognizedLine>> RecognizeAsync(Bitmap bitmap,
-        PixelPoint origin, CancellationToken cancellationToken)
+        PixelPoint origin, CancellationToken cancellationToken, PixelPoint? focus = null)
     {
         await recognitionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try { return await RecognizeOwnedAsync(bitmap, origin, cancellationToken).ConfigureAwait(false); }
+        try { return await RecognizeOwnedAsync(bitmap, origin, cancellationToken, focus).ConfigureAwait(false); }
+        catch { snapshot = null; cachedLines = Array.Empty<RecognizedLine>(); recoveryWindows.Clear(); throw; }
         finally { recognitionGate.Release(); }
     }
 
     private async Task<IReadOnlyList<RecognizedLine>> RecognizeOwnedAsync(Bitmap bitmap,
-        PixelPoint origin, CancellationToken cancellationToken)
+        PixelPoint origin, CancellationToken cancellationToken, PixelPoint? focus)
     {
         cancellationToken.ThrowIfCancellationRequested();
         engine ??= OcrEngine.TryCreateFromLanguage(new Language(language.OcrWindows)) ??
             throw new InvalidOperationException($"Install {language.Name} OCR in Settings → Languages & packs or Windows language options.");
-        if (origin == cachedOrigin && bitmap.Size == cachedSize && MatchesSnapshot(bitmap, origin)) return cachedLines;
-        var nextSnapshot = PixelSnapshot.Capture(bitmap, origin); byte[] raw = nextSnapshot.Bytes;
-        // Static snapshots can cover a whole 4K/8K monitor. Respect the OCR
-        // runtime's image limit while returning physical source coordinates.
-        // Screen-sized snapshots still downsample to the native limit. A small
-        // hover crop is instead supersampled: å's ring and ø's stroke must not
-        // disappear before recognition. Map every result back to source pixels.
-        double ratio = Math.Min(preferredScale, (double)OcrEngine.MaxImageDimension / Math.Max(bitmap.Width, bitmap.Height));
+        bool same = origin == cachedOrigin && bitmap.Size == cachedSize && MatchesSnapshot(bitmap, origin);
+        IReadOnlyList<RecognizedLine> lines;
+        if (same) lines = cachedLines;
+        else
+        {
+            snapshot = PixelSnapshot.Capture(bitmap, origin); recoveryWindows.Clear();
+            double ratio = Math.Min(preferredScale, SharedPolicy.bp_ocr_scale(0, language.Cjk ? 1 : 0, bitmap.Width, bitmap.Height, (int)OcrEngine.MaxImageDimension));
+            lines = await RecognizePassAsync(bitmap, origin, ratio, cancellationToken).ConfigureAwait(false);
+        }
+        var hit = focus is { } point ? ReadingPolicy.HitTest(lines, point) : null;
+        bool small = hit is not null && hit.Word.Bounds.Height < (language.Cjk ? 18 : 13);
+        bool missing = focus is not null ? hit is null : lines.Count == 0;
+        if ((!missing && !small) || focus is { } tried && recoveryWindows.Any(w => w.Contains(tried))) return cachedLines = lines;
+        // A bounded, pointer-centred strip preserves source pixels on large
+        // monitors. Never enhance or re-recognize a whole 4K capture on retry.
+        var local = focus is { } at ? new PixelPoint(at.X - origin.X, at.Y - origin.Y) : new(bitmap.Width / 2, bitmap.Height / 2);
+        Rectangle window;
+        if (hit is not null)
+        {
+            var frame = hit.Line.Frame; int padding = Math.Max(8, frame.Height / 2);
+            window = Rectangle.Intersect(new Rectangle(0, 0, bitmap.Width, bitmap.Height), new Rectangle(frame.X - origin.X - padding, frame.Y - origin.Y - padding, frame.Width + padding * 2, frame.Height + padding * 2));
+        }
+        else
+        {
+            int width = Math.Min(bitmap.Width, 1000), height = Math.Min(bitmap.Height, 140);
+            window = new(Math.Clamp(local.X - width / 2, 0, bitmap.Width - width), Math.Clamp(local.Y - height / 2, 0, bitmap.Height - height), width, height);
+        }
+        if (window.Width <= 0 || window.Height <= 0) return cachedLines = lines;
+        var retryOrigin = new PixelPoint(origin.X + window.X, origin.Y + window.Y);
+        var retryFrame = new PixelRect(retryOrigin.X, retryOrigin.Y, window.Width, window.Height);
+        recoveryWindows.Enqueue(retryFrame); while (recoveryWindows.Count > 4) recoveryWindows.Dequeue();
+        using var crop = bitmap.Clone(window, PixelFormat.Format32bppArgb);
+        double scale = SharedPolicy.bp_ocr_scale(hit?.Word.Bounds.Height ?? 9, language.Cjk ? 1 : 0, crop.Width, crop.Height, (int)OcrEngine.MaxImageDimension);
+        // Keep a high quality raw result authoritative. Colour preparation is
+        // a rescue pass; its output is never fed back into another transform.
+        using var prepared = OcrImagePreparation.Separate(crop);
+        if (prepared is not null)
+        {
+            var retry = await RecognizePassAsync(prepared, retryOrigin, scale, cancellationToken).ConfigureAwait(false);
+            lines = MergeRecovery(lines, retry, focus, retryFrame);
+        }
+        if (small && scale > preferredScale + .25)
+        {
+            var retry = await RecognizePassAsync(crop, retryOrigin, scale, cancellationToken).ConfigureAwait(false);
+            lines = MergeRecovery(lines, retry, focus, retryFrame);
+        }
+        return cachedLines = lines;
+    }
+    private static IReadOnlyList<RecognizedLine> MergeRecovery(IReadOnlyList<RecognizedLine> original, IReadOnlyList<RecognizedLine> retry, PixelPoint? focus, PixelRect frame)
+    {
+        var before = focus is { } a ? ReadingPolicy.HitTest(original, a) : null;
+        var after = focus is { } b ? ReadingPolicy.HitTest(retry, b) : null;
+        if (focus is not null && after is null || retry.Count == 0) return original;
+        if (before is not null && SentenceBoundary.EndsSentence(before.Line.Text)) return original;
+        // More source letters can rescue truncated small text; a retry cannot
+        // replace an already readable line with a shorter or equal guess.
+        if (before is not null && (after is null || after.Line.Text.Count(char.IsLetter) <= before.Line.Text.Count(char.IsLetter))) return original;
+        var selected = after is null ? retry : new[] { after.Line };
+        return original.Where(line => !selected.Any(next => Overlaps(line.Frame, next.Frame))).Concat(selected).OrderBy(line => line.Frame.Y).ThenBy(line => line.Frame.X).ToArray();
+    }
+    private static bool Overlaps(PixelRect a, PixelRect b) => a.X < b.Right && a.Right > b.X && a.Y < b.Bottom && a.Bottom > b.Y;
+    private async Task<IReadOnlyList<RecognizedLine>> RecognizePassAsync(Bitmap bitmap, PixelPoint origin, double ratio, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         using var resized = Math.Abs(ratio - 1) > .01 ? new Bitmap(Math.Max(1, (int)Math.Floor(bitmap.Width * ratio)), Math.Max(1, (int)Math.Floor(bitmap.Height * ratio)), PixelFormat.Format32bppArgb) : null;
         if (resized is not null)
         {
-            using var graphics = Graphics.FromImage(resized); graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            using var graphics = Graphics.FromImage(resized); graphics.Clear(Color.White);
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            if (language.Cjk) graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
             graphics.DrawImage(bitmap, new Rectangle(Point.Empty, resized.Size));
         }
         var input = resized ?? bitmap; double scaleX = (double)bitmap.Width / input.Width, scaleY = (double)bitmap.Height / input.Height;
-        using var pixels = SoftwareBitmap.CreateCopyFromBuffer((resized is null ? raw : PixelSnapshot.Capture(input, default).Bytes).AsBuffer(), BitmapPixelFormat.Bgra8,
-            input.Width, input.Height, BitmapAlphaMode.Ignore);
-        var result = await engine.RecognizeAsync(pixels).AsTask(cancellationToken).ConfigureAwait(false);
-        Recognitions++;
+        using var pixels = SoftwareBitmap.CreateCopyFromBuffer(PixelSnapshot.Capture(input, default).Bytes.AsBuffer(), BitmapPixelFormat.Bgra8, input.Width, input.Height, BitmapAlphaMode.Ignore);
+        var result = await engine!.RecognizeAsync(pixels).AsTask(cancellationToken).ConfigureAwait(false); Recognitions++;
         cancellationToken.ThrowIfCancellationRequested();
         var lines = result.Lines.Select(line => new RecognizedLine(line.Text,
             line.Words.Select(word => new RecognizedWord(word.Text, new PixelRect(
                 origin.X + (int)Math.Floor(word.BoundingRect.X * scaleX), origin.Y + (int)Math.Floor(word.BoundingRect.Y * scaleY),
-                (int)Math.Ceiling(word.BoundingRect.Width * scaleX), (int)Math.Ceiling(word.BoundingRect.Height * scaleY))))
-            .ToArray())).ToArray();
-        snapshot = nextSnapshot;
-        cachedLines = language.Cjk ? lines.Select(CjkWords.SegmentLine).ToArray() : lines;
-        return cachedLines;
+                (int)Math.Ceiling(word.BoundingRect.Width * scaleX), (int)Math.Ceiling(word.BoundingRect.Height * scaleY)))).ToArray())).ToArray();
+        return language.Cjk ? lines.Select(CjkWords.SegmentLine).ToArray() : lines;
     }
-
 }

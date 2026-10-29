@@ -22,6 +22,10 @@ jobs:
         with:
           name: macOS-news-previews
           path: build/mac-news-*.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-OCR-results
+          path: build/mac-ocr-appearance.json
       - name: Package Mac app
         run: make release
       - uses: actions/upload-artifact@v4

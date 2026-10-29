@@ -677,5 +677,117 @@
       "stops": 2,
       "ends": true
     }
-  ]
+  ],
+  "ocr": {
+    "spacing": [
+      {
+        "text": "我 每 天 学 习 中文。",
+        "compact": "我每天学习中文。"
+      },
+      {
+        "text": "我 每 天 學 習 中文。",
+        "compact": "我每天學習中文。"
+      },
+      {
+        "text": "Windows 11 和 iOS",
+        "compact": "Windows 11 和 iOS"
+      }
+    ],
+    "scales": [
+      {
+        "height": 10,
+        "cjk": false,
+        "width": 600,
+        "imageHeight": 100,
+        "maximum": 2600,
+        "scale": 2.6
+      },
+      {
+        "height": 10,
+        "cjk": true,
+        "width": 600,
+        "imageHeight": 100,
+        "maximum": 2600,
+        "scale": 3.2
+      },
+      {
+        "height": 40,
+        "cjk": true,
+        "width": 600,
+        "imageHeight": 100,
+        "maximum": 2600,
+        "scale": 1
+      },
+      {
+        "height": 0,
+        "cjk": false,
+        "width": 4000,
+        "imageHeight": 2000,
+        "maximum": 2600,
+        "scale": 0.65
+      }
+    ],
+    "colours": [
+      {
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "foreground": [
+          10,
+          10,
+          10
+        ]
+      },
+      {
+        "background": [
+          24,
+          24,
+          28
+        ],
+        "foreground": [
+          236,
+          236,
+          240
+        ]
+      },
+      {
+        "background": [
+          244,
+          244,
+          244
+        ],
+        "foreground": [
+          238,
+          238,
+          238
+        ]
+      },
+      {
+        "background": [
+          0,
+          180,
+          0
+        ],
+        "foreground": [
+          180,
+          0,
+          0
+        ]
+      },
+      {
+        "background": [
+          42,
+          123,
+          98
+        ],
+        "foreground": [
+          200,
+          30,
+          60
+        ]
+      }
+    ]
+  }
 }

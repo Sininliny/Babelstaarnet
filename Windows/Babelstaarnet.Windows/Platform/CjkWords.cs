@@ -18,12 +18,14 @@ internal static class CjkWords
     public static RecognizedLine SegmentLine(RecognizedLine line)
     {
         if (!ReadingPolicy.HasCjk(line.Text)) return line;
+        line = line with { Text = ReadingPolicy.CompactCjkSpacing(line.Text) };
         var boxes = new List<(int Start, int End, PixelRect Box)>(); int search = 0;
         foreach (var word in line.Words)
         {
-            int start = line.Text.IndexOf(word.Text, search, StringComparison.Ordinal);
+            string source = ReadingPolicy.CompactCjkSpacing(word.Text);
+            int start = line.Text.IndexOf(source, search, StringComparison.Ordinal);
             if (start < 0) continue;
-            boxes.Add((start, start + word.Text.Length, word.Bounds)); search = start + word.Text.Length;
+            boxes.Add((start, start + source.Length, word.Bounds)); search = start + source.Length;
         }
         var result = new List<RecognizedWord>();
         foreach (var token in Segment(line.Text))
