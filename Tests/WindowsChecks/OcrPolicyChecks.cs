@@ -31,7 +31,11 @@ internal static class OcrPolicyChecks
         ReadingPolicy.CjkTokenizer = CjkWords.Segment;
         var spaced = new RecognizedLine("我 每 天 学 习", new[] { "我", "每", "天", "学", "习" }.Select((word, i) => new RecognizedWord(word, new(i*20, 10, 16, 18))).ToArray());
         var compact = CjkWords.SegmentLine(spaced);
-        Check(compact.Text == "我每天学习" && compact.Words.Any(w => w.Text == "学习" && w.Bounds.X == 60 && w.Bounds.Right == 96), "Joining Chinese words must retain the union of the actual character boxes.");
+        Check(compact.Text == "我每天学习" && compact.Words.Count > 0, "Artificial Chinese spacing must be removed before dictionary segmentation.");
+        foreach (var token in CjkWords.Segment(compact.Text))
+            Check(compact.Words.Any(w => w.Text == token.Value && w.Bounds.X == token.Index * 20 && w.Bounds.Right == (token.Index + token.Length - 1) * 20 + 16), "Every dictionary or character fallback unit must retain its actual source boxes.");
+        if (new ScreenReader(language: LanguageCatalog.Get("zh-Hans")).IsAvailable)
+            Check(compact.Words.Any(w => w.Text == "学习" && w.Bounds.X == 60 && w.Bounds.Right == 96), "An installed Chinese dictionary must join ordinary learning words.");
         foreach (var language in LanguageCatalog.Languages)
         {
             if (!new ScreenReader(language: language).IsAvailable) continue;

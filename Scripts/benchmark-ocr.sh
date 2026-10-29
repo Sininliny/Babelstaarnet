@@ -19,14 +19,20 @@ mkdir -p "$output_dir"
 cd "$project_dir"
 swift build -c release -Xswiftc -enable-testing
 bin_dir="$(swift build -c release --show-bin-path)"
-module_objects=("$bin_dir"/*.o(N))
+link_inputs=("$bin_dir"/*.o(N))
+for archive in "$bin_dir"/*.a(N); do
+    module="${${archive:t:r}#lib}"
+    [[ -e "$bin_dir/$module.o" ]] || link_inputs+=("$archive")
+done
+include_flags=(-I "$project_dir/Shared/BabelPolicy/include")
+for directory in "$project_dir"/.build/**/BabelstaarnetKit.swiftmodule(N:h); do include_flags+=(-I "$directory"); done
 
 swiftc \
     -O \
     -parse-as-library \
     -module-cache-path "$output_dir/module-cache" \
-    -I "$bin_dir" \
-    "${module_objects[@]}" \
+    "${include_flags[@]}" \
+    "${link_inputs[@]}" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatFixtures.swift" \
     "$project_dir/Tests/RuntimeChecks/OCRColorFormatBenchmark.swift" \
     -o "$output_dir/OCRColorFormatBenchmark"

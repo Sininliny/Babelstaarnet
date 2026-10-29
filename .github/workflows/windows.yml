@@ -49,6 +49,13 @@ jobs:
       - name: Render light and dark Windows surfaces
         shell: pwsh
         run: dotnet run --project Tests/WindowsChecks/WindowsChecks.csproj -c Release --no-build --no-restore -- --render-ui build/windows-ci.png
+      - name: Measure installed OCR packs on generated appearance fixtures
+        shell: pwsh
+        run: dotnet run --project Tests/WindowsChecks/WindowsChecks.csproj -c Release --no-build --no-restore -- --ocr-appearance build/windows-ocr-appearance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-OCR-results
+          path: build/windows-ocr-appearance.json
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-UI-previews

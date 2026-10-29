@@ -26,7 +26,7 @@ import LanguagePacks
         }
         for c in rules.scales { precondition(abs(SharedPolicy.ocrScale(glyphHeight: c.height, cjk: c.cjk, width: c.width, height: c.imageHeight, maximum: c.maximum) - c.scale) < 0.001) }
         for c in rules.colours {
-            let rgba = (0..<100).flatMap { ($0 % 10 == 1 ? c.foreground : c.background) + [255] }
+            let rgba: [UInt8] = (0..<100).flatMap { index -> [UInt8] in (index % 10 == 1 ? c.foreground : c.background) + [UInt8(255)] }
             guard let gray = SharedPolicy.separateOCR(rgba, width: 10, height: 10) else { preconditionFailure("Colour separation failed") }
             precondition(Int(gray[0]) - Int(gray[1]) >= 160)
         }

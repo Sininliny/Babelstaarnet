@@ -8,14 +8,15 @@ namespace Babelstaarnet.Windows;
 
 internal static class CjkWords
 {
-    public static IReadOnlyList<TextUnit> Segment(string text)
+    public static IReadOnlyList<TextUnit> Segment(string text) => Segment(text, "zh");
+    public static IReadOnlyList<TextUnit> Segment(string text, string language)
     {
         // Create per request: the OS segmenter is apartment-bound.
-        var tokenizer = new WordsSegmenter("zh");
+        var tokenizer = new WordsSegmenter(language);
         return tokenizer.GetTokens(text).Where(t => t.Text.Any(char.IsLetter))
             .Select(t => new TextUnit(t.Text, (int)t.SourceTextSegment.StartPosition, (int)t.SourceTextSegment.Length)).ToArray();
     }
-    public static RecognizedLine SegmentLine(RecognizedLine line)
+    public static RecognizedLine SegmentLine(RecognizedLine line, string language = "zh")
     {
         if (!ReadingPolicy.HasCjk(line.Text)) return line;
         line = line with { Text = ReadingPolicy.CompactCjkSpacing(line.Text) };
@@ -28,7 +29,7 @@ internal static class CjkWords
             boxes.Add((start, start + source.Length, word.Bounds)); search = start + source.Length;
         }
         var result = new List<RecognizedWord>();
-        foreach (var token in Segment(line.Text))
+        foreach (var token in Segment(line.Text, language))
         {
             var pieces = boxes.Where(b => b.Start < token.Index + token.Length && b.End > token.Index).Select(b =>
             {

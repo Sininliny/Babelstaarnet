@@ -213,6 +213,6 @@ internal sealed class ScreenReader
             line.Words.Select(word => new RecognizedWord(word.Text, new PixelRect(
                 origin.X + (int)Math.Floor(word.BoundingRect.X * scaleX), origin.Y + (int)Math.Floor(word.BoundingRect.Y * scaleY),
                 (int)Math.Ceiling(word.BoundingRect.Width * scaleX), (int)Math.Ceiling(word.BoundingRect.Height * scaleY)))).ToArray())).ToArray();
-        return language.Cjk ? lines.Select(CjkWords.SegmentLine).ToArray() : lines;
+        return language.Cjk ? lines.Select(line => CjkWords.SegmentLine(line, language.OcrWindows)).ToArray() : lines;
     }
 }
