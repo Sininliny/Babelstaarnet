@@ -9,23 +9,35 @@ run offline. Screen pixels stay in memory.
 
 1. Extract the entire Windows ZIP and run `Babelstaarnet.exe`. Keep its adjacent
    files. Packages include the .NET runtime and are currently unsigned.
-2. In **Windows Settings → Time & language → Language & region**, add Danish.
-   Open its Language options and install **Optical character recognition**.
-   Restart Babelstårnet afterwards. Windows' optional Text-to-speech feature
-   is needed only for the basic Windows voice. Labels vary between OS versions.
-3. Install 64-bit [Python 3.12](https://www.python.org/downloads/windows/).
-   Choose **Settings → Local engines → Install / repair translation**.
-   Setup creates a private environment, downloads Argos and its Danish → English
-   model, then validates translation. It does not change your Python packages.
-4. Choose **Settings → Translation → Install neural voice**. Setup installs
-   Piper 1.8.0 separately and downloads `da_DK-talesyntese-medium` (about 63 MB),
-   checking SHA-256. Speech then runs locally. Windows Danish is an explicit
-   basic alternative; a missing neural voice never silently selects another
-   language. **Voice** selects the engine; **Try voice** plays a sample.
-5. Choose **Start translating** in the tray or press **Ctrl+Alt+Z**, then hover
-   a Danish word. The first result appears independently of voice preparation.
+2. Open **Settings → Languages & packs**. Choose the language you read and
+   the language used for help. Danish, English, 简体中文 and 繁體中文 support all
+   twelve directions. **Swap** reverses the selection.
+3. Install 64-bit [Python 3.12](https://www.python.org/downloads/windows/), then
+   click **Install translation · internet** for the selected direction. Setup
+   reuses the private environment and existing models. Danish↔Chinese is labelled
+   as translation via English; simplified↔traditional uses local script conversion
+   without translation weights. **Refresh status** inspects installed components.
+4. **Install source OCR · internet / administrator** installs Windows OCR for
+   the selected reading language. Alternatively use **Manage Windows OCR & voices**
+   to add the language and its OCR and offline speech features in Windows Settings.
+   These system resources are shared with other apps and are removed there.
+5. For Danish, **Settings → Translation → Install neural voice** installs Piper
+   1.8.0 and `da_DK-talesyntese-medium` (about 63 MB), checking SHA-256. Other
+   reading languages use an installed matching offline Windows voice. **Try voice**
+   plays a sample. A missing voice never selects a different language.
+6. Choose **Apply & restart**, then **Start translating** in the tray or press
+   **Ctrl+Alt+Z** and hover a word. The first meaning appears independently of voice
+   preparation. Interface text remains English.
 
-Setup needs internet access. No runtime or model is embedded in the ZIP.
+Setup needs internet access; reading never downloads language resources. The
+.NET runtime is included in the ZIP; language models and Python environments
+are installed separately. **Remove direction** releases its managed translation
+models while retaining dependencies needed by other installed directions and
+pre-existing models. The small shared runtime/converter remains installed.
+Learning records are never removed by package management. Each direction restores
+its own Word Book and profile; existing Danish→English data stays in place.
+DR news remains available when the selected reading language is Danish.
+
 Click either mouse button on the tower tray logo to open controls, Word Book,
 Settings and Quit. The tower is filled while active and adapts to taskbar
 contrast. Hidden icons are available in the notification area's overflow.
@@ -56,7 +68,7 @@ conflicts preserve the previous working shortcut. Bubble shortcuts are active
 only while a bubble is visible. Buttons remain available if a shortcut conflicts.
 
 **Word meaning** and **Whole sentence** work independently. Both off leaves
-speech-only reading. **Speak Danish on hover** defaults to on; **Speak after**
+speech-only reading. **Speak on hover** defaults to on; **Speak after**
 changes only pronunciation delay (0.45 seconds by default), not bubble timing.
 The inline speaker replays the word. Refreshing a word does not repeat speech.
 **Follow screen changes** off keeps one static snapshot per monitor; restart
@@ -67,9 +79,9 @@ The overlay keeps compact reading geometry: a 280-point word panel with three
 controls above a divider and a separate 420-point sentence panel. Both avoid
 the source block. A rule underlines the actual word and its focused occurrence
 in the reading line. Meanings use 16-point type, source words 12-point type.
-Known feedback hides direct English; familiarity gradually fades Danish by
+Known feedback hides direct help; familiarity gradually fades familiar source words by
 the same amount as Mac. Feedback confirmations survive revisiting for five
-minutes. Adjacent English substitutions share a neutral tint.
+minutes. Adjacent help-language substitutions share a neutral tint.
 
 The reader joins continuation lines in the same column and restores wrapped
 hyphenated words. Danish abbreviations, dates, ordinals, URLs and quoted
@@ -83,7 +95,7 @@ review in the same window. Right-click a row to speak, mark known or remove
 from the book while preserving learning. In review, Space reveals, 1 records
 Knew it, 2 records Didn't know, and Esc returns. Misses repeat once per sitting
 and return after an hour. Remembered words progress through one, three, seven,
-twenty-one and sixty days. Spaced encounters gradually remove English help;
+twenty-one and sixty days. Spaced encounters gradually remove translation help;
 repeated hovering in one sitting does not count as learning.
 
 **What you have picked up** exports/imports Mac-compatible schema-1 learning
