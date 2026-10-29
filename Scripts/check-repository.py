@@ -27,4 +27,5 @@ assert fixtures["schemaVersion"] == 1 and fixtures["language"] == "da"
 assert fixtures["identities"] and fixtures["sentences"]
 subprocess.run([sys.executable, str(root / "Scripts/sync-windows-language.py"), "--check"], check=True)
 subprocess.run([sys.executable, str(root / "Tests/Shared/gloss-protocol-check.py")], check=True)
+subprocess.run([sys.executable, str(root / "Tests/Shared/language-support-check.py")], check=True)
 print(f"Repository references, platform boundaries, version {version} and shared fixtures passed.")

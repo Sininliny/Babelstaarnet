@@ -11,7 +11,7 @@ public static class ReadingContext
         string focusKey = ReadingPolicy.Key(hit.Word.Text);
         int wordIndex = hit.Line.Words.ToList().FindIndex(w => w == hit.Word);
         int occurrence = hit.Line.Words.Take(Math.Max(0, wordIndex)).Count(w => ReadingPolicy.Key(w.Text) == focusKey);
-        var matches = ReadingPolicy.Words().Matches(anchorText).Where(m => ReadingPolicy.Key(m.Value) == focusKey).ToArray();
+        var matches = ReadingPolicy.Units(anchorText).Where(m => ReadingPolicy.Key(m.Value) == focusKey).ToArray();
         int focusOffset = matches.Length == 0 ? 0 : matches[Math.Min(occurrence, matches.Length - 1)].Index;
         int focusEnd = focusOffset + (matches.Length == 0 ? hit.Word.Text.Length : matches[Math.Min(occurrence, matches.Length - 1)].Length);
         var stops = SentenceBoundary.StopLocations(anchorText);
@@ -51,7 +51,7 @@ public static class ReadingContext
         int start = range.Start; while (start < range.End && char.IsWhiteSpace(whole[start])) start++;
         string sentence = whole[start..range.End].TrimEnd();
         int focusInSentence = Math.Clamp(location - start, 0, sentence.Length);
-        int focusOccurrence = ReadingPolicy.Words().Matches(sentence).Count(m => m.Index + m.Length <= focusInSentence && ReadingPolicy.Key(m.Value) == ReadingPolicy.Key(word.Text));
+        int focusOccurrence = ReadingPolicy.Units(sentence).Count(m => m.Index + m.Length <= focusInSentence && ReadingPolicy.Key(m.Value) == ReadingPolicy.Key(word.Text));
         return new(word, new(sentence, selected.SelectMany(l => l.Words).ToArray()), focusOccurrence, selected.Select(l => l.Frame).Aggregate(OverlayLayout.Union));
     }
 

@@ -58,6 +58,7 @@ internal sealed class NewsCache
 // Source guide: https://www.dr.dk/nyheder/dr-nyheder-som-rss-feed (verified 2026-10-22).
 internal sealed class NewsService : IDisposable
 {
+    public bool ReadingLanguageSupported { get; set; } = true;
     public NewsReadingSupport Reader { get; }
     public static readonly string[] Topics = ["Latest", "Denmark", "World", "Money", "Politics", "Science", "Culture", "Sport"];
     public const string Disclosure = "Connects to DR to fetch public news. Matching stays on this PC. No word list, screenshots or learning records are uploaded. DR receives ordinary requests, including your IP address and requested URLs. Opening an original uses your browser.";
@@ -145,6 +146,7 @@ internal sealed class NewsService : IDisposable
     public void Configure(bool enabled, bool background, bool notify, int topic, int hour)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        enabled &= ReadingLanguageSupported;
         bool changedTopic = Preferences.Topic != topic;
         Preferences.Enabled = enabled; Preferences.Background = enabled && background; Preferences.Notify = enabled && background && notify;
         Preferences.Topic = Math.Clamp(topic, 0, Topics.Length - 1); Preferences.DigestHour = Math.Clamp(hour, 9, 20);
@@ -157,6 +159,7 @@ internal sealed class NewsService : IDisposable
     }
     public async Task RefreshAsync(bool manual = false, bool background = false)
     {
+        if (!ReadingLanguageSupported) { Status = "DR news is available when learning Danish."; return; }
         if (disposed || Busy || background && PageVisible) return;
         var now = clock();
         if (!manual && nextRetry is { } retry && now < retry) return;

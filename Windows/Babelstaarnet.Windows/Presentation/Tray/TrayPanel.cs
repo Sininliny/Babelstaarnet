@@ -27,12 +27,12 @@ internal sealed class TrayPanel : Border
         book = Ui.ActionButton("Word Book", model.OpenBook); book.FontSize = 13; book.FontWeight = FontWeights.SemiBold; book.HorizontalContentAlignment = HorizontalAlignment.Left; book.Margin = new Thickness(0, 13, 0, 0);
         System.Windows.Automation.AutomationProperties.SetName(book, "Open Word Book"); panel.Children.Add(book);
         var news = Ui.ActionButton("Read something new", model.OpenNews); news.HorizontalContentAlignment = HorizontalAlignment.Left; news.Margin = new Thickness(0, 5, 0, 0); panel.Children.Add(news);
-        var cards = Ui.ActionButton("Scheduled news cards…", model.OpenNewsSettings); cards.HorizontalContentAlignment = HorizontalAlignment.Left; cards.FontSize = 11; cards.Foreground = Ui.Muted; cards.Margin = new Thickness(0, 5, 0, 0); panel.Children.Add(cards);
+        var cards = Ui.ActionButton("Scheduled news cards…", model.OpenNewsSettings); cards.HorizontalContentAlignment = HorizontalAlignment.Left; cards.FontSize = 11; cards.Foreground = Ui.Muted; cards.Margin = new Thickness(0, 5, 0, 0); panel.Children.Add(cards); news.IsEnabled = cards.IsEnabled = model.ActiveLanguages.Source.Id == "da";
         var startContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left }; toggleTitle.Margin = new Thickness(0, 0, 0, 3); toggleDetail.Margin = new Thickness(0); toggleDetail.Foreground = Ui.Muted; startContent.Children.Add(toggleTitle); startContent.Children.Add(toggleDetail);
         start = Ui.ActionButton("", model.Toggle); start.Content = startContent; start.HorizontalContentAlignment = HorizontalAlignment.Stretch; start.Margin = new Thickness(0, 13, 0, 9); panel.Children.Add(start);
         failure.Foreground = Ui.ColorBrush(160, 54, 43); failure.MaxHeight = 48; failure.TextTrimming = TextTrimming.CharacterEllipsis; failure.Margin = new Thickness(0, 2, 0, 5); panel.Children.Add(failure); retry = Ui.Button("Retry", model.CheckEngines); panel.Children.Add(retry);
         var hoverRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) }; shortcut.TextAlignment = TextAlignment.Right; shortcut.Foreground = Ui.Muted; DockPanel.SetDock(shortcut, Dock.Right); hoverRow.Children.Add(shortcut); hoverRow.Children.Add(Ui.Text("Hover translation", 12, true)); panel.Children.Add(hoverRow);
-        var detail = Ui.Text("Keep reading Danish. English helps when you need it.", 11); detail.Foreground = Ui.Muted; panel.Children.Add(detail);
+        var detail = Ui.Text("Keep reading " + model.ActiveLanguages.Source.Name + ". " + model.ActiveLanguages.Target.Name + " helps when needed.", 11); detail.Foreground = Ui.Muted; panel.Children.Add(detail);
         foreach (var check in new[] { word, sentence }) { FormControls.Apply(check); check.FontSize = 12; check.Margin = new Thickness(0, 4, 0, 6); panel.Children.Add(check); check.Click += (_, _) => { if (refreshing) return; model.Preferences.WordMeaning = word.IsChecked == true; model.Preferences.WholeSentence = sentence.IsChecked == true; model.Commit(); }; }
         hints.Foreground = Ui.Muted; hints.Margin = new Thickness(0, 6, 0, 11); panel.Children.Add(hints);
         panel.Children.Add(new Border { Height = .7, Background = Ui.Stroke, Margin = new Thickness(0, 0, 0, 9) });
@@ -46,7 +46,7 @@ internal sealed class TrayPanel : Border
         refreshing = true;
         headerLogo.Source = BrandIcons.Image(WindowsTheme.Current.Dark ? "tray-active-dark.ico" : "tray-active-light.ico");
         status.Text = model.Installing ? "Installing local resources…" : model.Busy ? "Preparing local engines…" : model.Idle ? "Idle · waiting for input" : model.Active ? "Active" : "Inactive";
-        toggleTitle.Text = model.Active ? "Stop translating" : "Start translating"; toggleDetail.Text = model.Active ? "Pause Danish reading assistance" : "Hover a Danish word to begin";
+        toggleTitle.Text = model.Active ? "Stop translating" : "Start translating"; toggleDetail.Text = model.Active ? "Pause reading assistance" : "Hover a word to begin";
         start.IsEnabled = !model.Installing; shortcut.Text = model.Preferences.Shortcuts.ToggleLearning.Display;
         word.IsChecked = model.Preferences.WordMeaning; sentence.IsChecked = model.Preferences.WholeSentence;
         var keys = model.Preferences.Shortcuts; hints.Text = $"{keys.Known.Display}  Knew   ·   {keys.DontKnow.Display}  Don’t know   ·   {keys.TogglePin.Display}  Pin\nHold {keys.HoldModifier} to move into a bubble.";

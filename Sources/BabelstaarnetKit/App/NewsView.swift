@@ -17,7 +17,7 @@ struct NewsView: View {
                     Spacer()
                     SettingsLink { Label("News settings", systemImage: "gearshape") }.font(.caption)
                 }
-                Text("Read in Danish. English replaces difficult words. Your familiar Danish stays, with just a little new everyday vocabulary. Select any word for help.").foregroundStyle(.secondary)
+                Text("Read in Danish. Your help language replaces difficult words. Your familiar Danish stays, with just a little new everyday vocabulary. Select any word for help.").foregroundStyle(.secondary)
                 if !news.preferences.enabled {
                     Toggle("DR news (internet)", isOn: Binding(get: { news.preferences.enabled }, set: { value in
                         news.configure(enabled: value, background: false, notify: false, topic: news.preferences.topic, hour: news.preferences.digestHour)
@@ -65,7 +65,7 @@ struct NewsReadingCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if !compact { Text("DR · " + article.publishedDate.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
-            Text("YOUR DANISH · ENGLISH WHERE NEEDED").font(.caption2).foregroundStyle(.secondary)
+            Text("YOUR DANISH · HELP WHERE NEEDED").font(.caption2).foregroundStyle(.secondary)
             source(article.title, headline: !compact)
             if !article.summary.isEmpty {
                 source(article.summary, headline: false)
@@ -168,7 +168,7 @@ struct NewsSettings: View {
                 Text("1 hour").tag(60); Text("2 hours").tag(120); Text("4 hours").tag(240)
             }.frame(maxWidth: 250)
             Text("While the app runs · 09:00–21:00 · at most 3 cards a day. No catch-up queue, sound or focus stealing. Reading takes priority. Enable background refresh above to schedule cards.").font(.caption).foregroundStyle(.secondary)
-            Text("Each card uses installed local AI to simplify DR text, with English for difficult words and a little new Danish. No local AI means no scheduled cards; the original remains in Word Book.").font(.caption).foregroundStyle(.secondary)
+            Text("Each card uses installed local AI to simplify DR text, with your help language for difficult words and a little new Danish. No local AI means no scheduled cards; the original remains in Word Book.").font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Try a card now") { Task { await news.refresh(manual: true); await news.tickPopup(preview: true) } }.disabled(!news.preferences.enabled)
                 if news.popupsPaused { Button("Resume news cards") { news.pausePopupsForToday(false) } }

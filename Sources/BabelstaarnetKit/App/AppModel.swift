@@ -6,6 +6,7 @@ import BabelSpeech
 import BabelTranslate
 import Combine
 import LanguageDanish
+import LanguagePacks
 import OSLog
 import Translation
 import UniformTypeIdentifiers
@@ -13,7 +14,12 @@ import UserNotifications
 
 @MainActor
 public final class AppModel: ObservableObject {
-    public let news = NewsService()
+    public lazy var news: NewsService = {
+        let service = NewsService(directory: LanguagePackageManager.profileURL(source: languages.source.code, target: languages.target.code))
+        service.readingLanguageSupported = languages.source.code == "da"
+        return service
+    }()
+    let languagePackages = LanguagePackageManager()
     lazy var newsTranslator = NewsTranslationQueue(languages: languages)
     private var argosEngineReady = false
     @Published public private(set) var newsWindowRequest = 0
@@ -108,7 +114,8 @@ public final class AppModel: ObservableObject {
     /// The one place a language is named. Everything below is handed this
     /// pair rather than reaching for Danish itself, so a second language is a
     /// second pack and this line.
-    private let languages = LanguagePair.danishToEnglish
+    let languages = LanguagePair.configured(source: LanguagePackageManager.selection.source, target: LanguagePackageManager.selection.target)
+    private var pairSuffix: String { languages.source.code == "da" && languages.target.code == "en" ? "" : "." + languages.source.code + "--" + languages.target.code }
 
     private let captureService = ScreenCaptureService()
     private lazy var ocrService = OCRService(language: languages.source)
@@ -143,7 +150,7 @@ public final class AppModel: ObservableObject {
     private lazy var focusedRegionSelectionPolicy =
         FocusedRegionSelectionPolicy(language: languages.source)
     private lazy var learnerProfileStore = LearnerProfileStore(
-        language: languages.source
+        language: languages.source, storageKey: "learnerProfile.words" + pairSuffix
     )
     private let systemIdleMonitor = SystemIdleMonitor()
     private let engineInstallerService = EngineInstallerService()
@@ -191,7 +198,7 @@ public final class AppModel: ObservableObject {
     )
     /// The words the reader asked about, with what they meant. Opened from
     /// the menu bar.
-    let wordBook = WordBookStore()
+    lazy var wordBook = WordBookStore(storageKey: "wordBook.entries" + pairSuffix)
     private var isFillingWordBookMeanings = false
     private var pendingSentenceHelp: (String, CheckedContinuation<String, Error>)?
     private lazy var hotKeyService = HotKeyService { [weak self] in
@@ -276,6 +283,21 @@ public final class AppModel: ObservableObject {
         )
     }
 
+    func applyLanguages() {
+        guard languagePackages.valid, !languagePackages.busy else { return }
+        learnerProfileStore.flushPersistence(); languagePackages.saveSelection(); relaunch()
+    }
+    func manageLanguagePackages(_ operation: String) async {
+        guard !isInstallingEngines, !isInstallingContextualGlosses else { return }
+        if operation != "status" {
+            deactivateLearningMode()
+            news.cancelGeneration()
+            await argosTranslationService.shutdown(); await wordBridgeTranslationService.shutdown()
+            await contextualGlossService.shutdown()
+        }
+        await languagePackages.manage(operation)
+        if operation != "status" { await checkEngineReadiness() }
+    }
     func start() {
         guard !hasStarted else {
             return
@@ -296,6 +318,7 @@ public final class AppModel: ObservableObject {
                 self.translationConfiguration.invalidate()
             }
         }
+        if languages.source.code != "da" { news.configure(enabled: false, background: false, notify: false, topic: news.preferences.topic, hour: news.preferences.digestHour) }
         news.learningUnits = { [weak self] in
             guard let self else { return [] }
             let saved = self.wordBook.entries.filter { Date().timeIntervalSince($0.savedAt) <= 14 * 86400 }.map(\.word)
@@ -422,9 +445,7 @@ public final class AppModel: ObservableObject {
         translationEngineName = argosReady
             ? "Argos Translate — ready"
             : "Argos Translate — not installed"
-        openSourceEnginesReady = tesseractReady
-            && argosReady
-            && wordBridgeReady
+        openSourceEnginesReady = argosReady
 
         switch (tesseractReady, argosReady, wordBridgeReady) {
         case (true, true, true):
@@ -454,7 +475,7 @@ public final class AppModel: ObservableObject {
     }
 
     func installContextualGlosses() async {
-        guard !isInstallingContextualGlosses, !isInstallingEngines else {
+        guard !isInstallingContextualGlosses, !isInstallingEngines, !languagePackages.busy else {
             return
         }
         isInstallingContextualGlosses = true
@@ -486,7 +507,14 @@ public final class AppModel: ObservableObject {
     }
 
     func installOpenSourceEngines() async {
-        guard !isInstallingEngines, !isInstallingContextualGlosses else {
+        guard !isInstallingEngines, !isInstallingContextualGlosses, !languagePackages.busy else {
+            return
+        }
+        if languages.source.code != "da" || languages.target.code != "en" {
+            deactivateLearningMode(); news.cancelGeneration()
+            await argosTranslationService.shutdown(); await wordBridgeTranslationService.shutdown(); await contextualGlossService.shutdown()
+            await languagePackages.manage("install", sourceID: languages.source.code, targetID: languages.target.code)
+            await checkEngineReadiness()
             return
         }
 
@@ -750,7 +778,7 @@ public final class AppModel: ObservableObject {
     /// Puts the words marked "Don't know" before the word book existed into
     /// it, once, so a reader who had been marking words finds them there.
     private func adoptEarlierUnknownWords(defaults: UserDefaults) {
-        guard !defaults.bool(forKey: Keys.wordBookAdoptedProfile) else {
+        guard !defaults.bool(forKey: Keys.wordBookAdoptedProfile + pairSuffix) else {
             return
         }
         wordBook.adopt(
@@ -758,7 +786,7 @@ public final class AppModel: ObservableObject {
                 (key: $0.word, word: $0.word, seenAt: $0.lastSeen)
             }
         )
-        defaults.set(true, forKey: Keys.wordBookAdoptedProfile)
+        defaults.set(true, forKey: Keys.wordBookAdoptedProfile + pairSuffix)
     }
 
     /// How well the reader knows a word in the book now.
@@ -942,7 +970,10 @@ public final class AppModel: ObservableObject {
     func translatePendingRegions(using session: TranslationSession) async {
         if let pending = pendingSentenceHelp {
             pendingSentenceHelp = nil
-            do { let result = try await session.translate(pending.0); pending.1.resume(returning: result.targetText) }
+            do {
+                guard await LanguageAvailability().status(from: Locale.Language(identifier: languages.source.code), to: Locale.Language(identifier: languages.target.code)) == .installed else { throw ArgosTranslationError.unavailable }
+                let result = try await session.translate(pending.0); pending.1.resume(returning: result.targetText)
+            }
             catch { pending.1.resume(throwing: error) }
             return
         }
@@ -956,7 +987,9 @@ public final class AppModel: ObservableObject {
         }
 
         do {
-            try await session.prepareTranslation()
+            // Reading never asks Apple to download a missing pair. Setup is
+            // explicit in Languages & packs, including script-only pairs.
+            guard await LanguageAvailability().status(from: Locale.Language(identifier: languages.source.code), to: Locale.Language(identifier: languages.target.code)) == .installed else { throw ArgosTranslationError.unavailable }
             let requests = translationRequests(for: snapshot)
             let responses = try await session.translations(from: requests)
             await apply(

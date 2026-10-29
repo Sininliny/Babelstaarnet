@@ -83,6 +83,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
 /// Native network/storage adapter. Decisions come from the same C component as Windows.
 @MainActor public final class NewsService: ObservableObject {
     public let reader: NewsReadingSupport
+    public var readingLanguageSupported = true
     public static let topics = ["Latest", "Denmark", "World", "Money", "Politics", "Science", "Culture", "Sport"]
     public static let disclosure = "Connects to DR to fetch public news. Matching stays on this Mac. No word list, screenshots or learning records are uploaded. DR receives ordinary requests, including your IP address and requested URLs. Opening an original uses your browser."
     @Published public private(set) var preferences: NewsPreferences
@@ -172,6 +173,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         } catch { status = "News changes could not be saved: \(error.localizedDescription)" }
     }
     public func configure(enabled: Bool, background: Bool, notify: Bool, topic: Int, hour: Int) {
+        let enabled = enabled && readingLanguageSupported
         let changedTopic = preferences.topic != topic
         preferences.enabled = enabled; preferences.background = enabled && background; preferences.notify = enabled && background && notify
         preferences.topic = min(7, max(0, topic)); preferences.digestHour = min(20, max(9, hour))
@@ -183,6 +185,7 @@ private final class NewsRedirectDelegate: NSObject, URLSessionTaskDelegate {
         save(); selectCards()
     }
     public func refresh(manual: Bool = false, background: Bool = false) async {
+        guard readingLanguageSupported else { status = "DR news is available when learning Danish."; return }
         guard !busy, !(background && pageVisible) else { return }
         let now = clock()
         if !manual, let nextRetry, now < nextRetry { return }

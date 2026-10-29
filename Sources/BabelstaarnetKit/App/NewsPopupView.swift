@@ -10,7 +10,7 @@ public struct NewsPopupSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("A little Danish, now and then").font(.title2.bold())
-                Text("Optional short news cards bring new information. Keep your familiar Danish, with English for difficult words and a little new everyday vocabulary.").foregroundStyle(.secondary)
+                Text("Optional short news cards bring new information. Keep your familiar Danish, with your help language for difficult words and a little new everyday vocabulary.").foregroundStyle(.secondary)
                 NewsSettings(news: model.news)
             }.padding(24)
         }.frame(minWidth: 460, minHeight: 430)

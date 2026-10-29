@@ -6,6 +6,12 @@ namespace Babelstaarnet.Windows;
 internal sealed class ReaderUiModel
 {
     public ReaderPreferences Preferences { get; }
+    public ReadingLanguagePair ActiveLanguages { get; }
+    public LanguagePackageState Packages { get; set; } = new();
+    public bool PackagesBusy { get; set; }
+    public string PackageMessage { get; set; } = "Choose a direction to see its local components.";
+    public Action<string, string> ApplyLanguages { get; set; } = (_, _) => { };
+    public Action<string, string, string> ManageLanguages { get; set; } = (_, _, _) => { };
     public NewsService? News { get; set; }
     public VocabularyStore Vocabulary { get; }
     private readonly string? preferencesPath;
@@ -47,7 +53,7 @@ internal sealed class ReaderUiModel
     public Action ResetProfile { get; set; } = () => { };
     public Action<bool> ShortcutCapture { get; set; } = _ => { };
     public Func<HotKeyConfiguration, string?> ChangeShortcuts { get; set; } = _ => null;
-    public ReaderUiModel(ReaderPreferences preferences, VocabularyStore vocabulary, string? preferencesPath = null) { Preferences = preferences; Vocabulary = vocabulary; this.preferencesPath = preferencesPath; }
+    public ReaderUiModel(ReaderPreferences preferences, VocabularyStore vocabulary, string? preferencesPath = null) { Preferences = preferences; ActiveLanguages = preferences.LanguagePair; VoiceName = ActiveLanguages.Source.Id == "da" ? "Danish neural · offline" : "Windows " + ActiveLanguages.Source.Name + " · offline"; Vocabulary = vocabulary; this.preferencesPath = preferencesPath; }
     public void Notify() => Changed?.Invoke();
     public void Commit() { Preferences.Save(preferencesPath); Apply(); Notify(); }
     public int DueCount => System.Linq.Enumerable.Count(Vocabulary.Saved, e => e.DueAt <= DateTimeOffset.Now);

@@ -174,3 +174,25 @@ Run `python Scripts/check-repository.py` to check language data, versions and
 project references without downloading models. Open `Babelstaarnet.slnx` for
 Windows development; the Swift package and existing build scripts keep their
 current entry points.
+
+### Reading languages and local packs (0.7.0)
+
+Settings → Languages & packs selects the language you read and the language
+used for help: Danish, English, 简体中文 or 繁體中文, in all 12 directions.
+Apply & restart switches direction and restores its Word Book and learning
+records. Existing Danish→English data stays in place.
+
+Install translation downloads only the selected direction’s dependencies.
+Danish↔Chinese uses an explicitly labelled English pivot. Chinese script
+conversion uses a small local converter. Reading never installs or downloads
+resources. Setup needs Python 3.10–3.13; a private environment is reused.
+Use Refresh status to inspect installed translation components and Remove
+direction to release an installed direction while retaining shared models.
+Windows can install source OCR from this page (internet and administrator
+access); shared OCR and voices are managed in Windows Language options.
+macOS uses built-in Vision and installed offline voices. Danish neural speech
+is retained; other source languages use matching system voices. DR news remains
+available when learning Danish. App interface text remains English.
+
+See [language package architecture](docs/ADR-002-LANGUAGE-PACKS.md) for model
+routes, data isolation and the limits of automated validation.

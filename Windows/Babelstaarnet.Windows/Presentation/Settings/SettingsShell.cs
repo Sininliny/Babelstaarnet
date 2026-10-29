@@ -24,7 +24,7 @@ internal sealed class SettingsShell : Grid
         var rail = new DockPanel { Margin = new Thickness(16, 22, 14, 18) };
         var brand = new StackPanel { Margin = new Thickness(8, 0, 0, 24) };
         brand.Children.Add(new Image { Source = BrandIcons.AppImage, Width = 38, Height = 38, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 12) });
-        brand.Children.Add(Ui.Text("Babelstårnet", 17, true)); var sub = Ui.Text("Read Danish, naturally", 11); sub.Foreground = Ui.Muted; brand.Children.Add(sub);
+        brand.Children.Add(Ui.Text("Babelstårnet", 17, true)); var sub = Ui.Text("Read " + model.ActiveLanguages.Source.Name + ", naturally", 11); sub.Foreground = Ui.Muted; brand.Children.Add(sub);
         DockPanel.SetDock(brand, Dock.Top); rail.Children.Add(brand);
         navigation = new ListBox { Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
         navigation.Template = (ControlTemplate)XamlReader.Parse("""
@@ -49,7 +49,7 @@ internal sealed class SettingsShell : Grid
               </ControlTemplate></Setter.Value></Setter>
             </Style>
             """);
-        foreach (string name in new[] { "Translation", "Reading", "News (internet)", "Shortcuts", "What you have picked up", "Local engines", "Contextual meanings", "Appearance", "Access" })
+        foreach (string name in new[] { "Languages & packs", "Translation", "Reading", "News (internet)", "Shortcuts", "What you have picked up", "Local engines", "Contextual meanings", "Appearance", "Access" })
             navigation.Items.Add(new ListBoxItem { Style = itemStyle, Content = name == "What you have picked up" ? "Learning profile" : name, Tag = name, Padding = new Thickness(12, 10, 8, 10), Margin = new Thickness(0, 2, 0, 2), FontFamily = Ui.Font, FontSize = 13, Foreground = Ui.Ink });
         rail.Children.Add(navigation); Children.Add(rail);
         var body = new DockPanel(); Grid.SetColumn(body, 1); Children.Add(body);

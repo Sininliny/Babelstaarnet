@@ -15,6 +15,7 @@ internal sealed class SpeechService : IDisposable
     private readonly SemaphoreSlim gate = new(1);
     private readonly Dictionary<string, byte[]> cache = [];
     private readonly bool muted;
+    private readonly string sample;
     private ISpeechEngine engine;
     private CancellationTokenSource? utterance;
     private MediaPlayer? player;
@@ -28,16 +29,18 @@ internal sealed class SpeechService : IDisposable
     public string EngineName => engine.DisplayName;
     public bool IsAvailable => engine.IsAvailable;
 
-    public SpeechService(bool muted = false, ISpeechEngine? engine = null)
-    { this.muted = muted; this.engine = engine ?? new NeuralSpeechEngine(); }
+    public SpeechService(bool muted = false, ISpeechEngine? engine = null, string sample = "æbler")
+    { this.sample = sample; this.muted = muted; this.engine = engine ?? new NeuralSpeechEngine(); }
     public static bool DanishAvailable => DanishVoice is not null;
-    private static VoiceInformation? DanishVoice => SpeechSynthesizer.AllVoices
-        .Where(v => v.Language.Replace('_', '-').Equals("da-DK", StringComparison.OrdinalIgnoreCase))
+    private static VoiceInformation? DanishVoice => Voice("da-DK");
+    internal static bool Available(string locale) => Voice(locale) is not null;
+    private static VoiceInformation? Voice(string locale) => SpeechSynthesizer.AllVoices
+        .Where(v => v.Language.Replace('_', '-').Equals(locale, StringComparison.OrdinalIgnoreCase))
         .OrderBy(v => v.Id, StringComparer.Ordinal).FirstOrDefault();
-    internal static async Task<SpeechSynthesisStream> SynthesizeAsync(string text)
+    internal static async Task<SpeechSynthesisStream> SynthesizeAsync(string text, string locale = "da-DK")
     {
-        using var synthesizer = new SpeechSynthesizer { Voice = DanishVoice ??
-            throw new InvalidOperationException("No Danish Windows voice is installed.") };
+        using var synthesizer = new SpeechSynthesizer { Voice = Voice(locale) ??
+            throw new InvalidOperationException($"No {locale} Windows voice is installed.") };
         return await synthesizer.SynthesizeTextToStreamAsync(text);
     }
     public void SelectEngine(ISpeechEngine next)
@@ -48,9 +51,9 @@ internal sealed class SpeechService : IDisposable
     {
         if (!engine.IsAvailable) return;
         int before = generation;
-        await AudioAsync("æbler", CancellationToken.None);
+        await AudioAsync(sample, CancellationToken.None);
         if (disposed || before != generation || player is not null) return;
-        Task warm = SpeakCoreAsync("æbler", silent: true);
+        Task warm = SpeakCoreAsync(sample, silent: true);
         int request = generation;
         await warm;
         if (request == generation) Stop();
@@ -97,7 +100,7 @@ internal sealed class SpeechService : IDisposable
                 player = new MediaPlayer { AutoPlay = false, IsMuted = muted, RealTimePlayback = true, AudioCategory = MediaPlayerAudioCategory.Speech };
                 player.PlaybackSession.PlaybackStateChanged += (_, _) =>
                 { if (player?.PlaybackSession.PlaybackState == MediaPlaybackState.Playing) playback?.TrySetResult(); };
-                player.MediaFailed += (_, e) => playback?.TrySetException(new InvalidOperationException("Danish audio could not play: " + e.ErrorMessage));
+                player.MediaFailed += (_, e) => playback?.TrySetException(new InvalidOperationException("Speech could not play: " + e.ErrorMessage));
             }
             source = MediaSource.CreateFromStream(stream, "audio/wav");
             var started = playback = new(TaskCreationOptions.RunContinuationsAsynchronously);

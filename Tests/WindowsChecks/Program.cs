@@ -47,6 +47,7 @@ internal static class Program
             {
                 Console.WriteLine($"Passed {WindowLifecycleChecks.Run(temporary)} window lifecycle checks."); return 0;
             }
+            checks += await LanguageSupportChecks.RunAsync(temporary);
             GeometryChecks();
             MacLayoutChecks();
             ReadingContextChecks();

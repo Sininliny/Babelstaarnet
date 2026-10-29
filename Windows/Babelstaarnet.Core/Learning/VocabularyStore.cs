@@ -31,7 +31,7 @@ public sealed class VocabularyEntry
     public DateTimeOffset DueDate(DateTimeOffset now) => (ReviewedAt ?? SavedAt) + ReviewInterval(EffectiveLevel(now));
     public int EffectiveLevel(DateTimeOffset now)
     {
-        int level = Tracked ? Level : ReadingPolicy.StructuralWords.Contains(Key) ? 4 : 0;
+        int level = Level;
         if (!Tracked || ReviewedAt is not { } reviewed) return level;
         double elapsed = Math.Max(0, (now - reviewed).TotalDays);
         while (level > 0)
@@ -49,6 +49,7 @@ public sealed class VocabularyEntry
 public sealed class VocabularyStore
 {
     private readonly string path;
+    private readonly ReadingLanguagePair languages;
     private readonly Dictionary<string, VocabularyEntry> words;
     private int pendingEncounters;
     private DateTimeOffset lastSaved;
@@ -61,8 +62,9 @@ public sealed class VocabularyStore
     public IEnumerable<VocabularyEntry> Saved => words.Values.Where(w => w.Saved).OrderByDescending(w => w.SavedAt);
     public int TrackedCount => words.Values.Count(w => w.Tracked);
     public int FamiliarCount => words.Values.Count(w => w.Tracked && w.EffectiveLevel(DateTimeOffset.Now) >= 4);
-    public VocabularyStore(string path)
+    public VocabularyStore(string path, ReadingLanguagePair? languages = null)
     {
+        this.languages = languages ?? LanguageCatalog.Pair();
         this.path = path;
         var entries = File.Exists(path) ? JsonSerializer.Deserialize<List<VocabularyEntry>>(File.ReadAllText(path)) ?? throw new InvalidDataException("The vocabulary file is empty.") : [];
         if (entries.Count > MaximumEntries || entries.Any(e => e is null || string.IsNullOrEmpty(e.Key) || (e.Key != ReadingPolicy.Key(e.Word) && e.Key != ReadingPolicy.FoldKey(e.Word)) || e.Level is < 0 or > 5 || e.LastEvidenceKind is < 0 or > 4))
@@ -86,7 +88,7 @@ public sealed class VocabularyStore
     {
         key = ReadingPolicy.Key(key);
         if (words.TryGetValue(key, out var entry) && entry.Tracked) return entry.EffectiveLevel(DateTimeOffset.Now);
-        int prior = ReadingPolicy.StructuralWords.Contains(key) ? 4 : 0;
+        int prior = languages.StructuralWords.Contains(key) ? 4 : 0;
         return lemmas.TryGetValue(key, out var lemma) && words.TryGetValue(lemma, out var progress) && progress.Tracked
             ? Math.Max(prior, Math.Clamp(progress.EffectiveLevel(DateTimeOffset.Now) - 1, 0, 3)) : prior;
     }
@@ -151,7 +153,7 @@ public sealed class VocabularyStore
         lemmas.Clear();
         foreach (var key in words.Where(p => !p.Value.Saved).Select(p => p.Key).ToArray()) words.Remove(key);
         foreach (var entry in words.Values)
-        { entry.Tracked = false; entry.Level = ReadingPolicy.StructuralWords.Contains(entry.Key) ? 4 : 0; entry.ReviewedAt = null; entry.LastEvidenceKind = null; entry.EncounterCount = entry.MoreEnglishCount = entry.KnownConfirmationCount = 0; ClearSpaced(entry); }
+        { entry.Tracked = false; entry.Level = languages.StructuralWords.Contains(entry.Key) ? 4 : 0; entry.ReviewedAt = null; entry.LastEvidenceKind = null; entry.EncounterCount = entry.MoreEnglishCount = entry.KnownConfirmationCount = 0; ClearSpaced(entry); }
         Persist();
     }
     private VocabularyEntry? Get(string word)
@@ -199,7 +201,7 @@ public sealed class VocabularyStore
     private static readonly JsonSerializerOptions ArchiveOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true, Converters = { new ArchiveDateConverter() } };
     public string ExportProfile(DateTimeOffset now)
     {
-        var archive = new LearningArchive { SourceLanguage = "da", ExportedAt = now, Words = words.Values.Where(e => e.Tracked).OrderBy(e => e.Word).Select(e => new LearningWord
+        var archive = new LearningArchive { SourceLanguage = languages.Source.Id, ExportedAt = now, Words = words.Values.Where(e => e.Tracked).OrderBy(e => e.Word).Select(e => new LearningWord
         {
             Word = ReadingPolicy.Words().Match(e.Word).Value.ToLowerInvariant().Normalize(), KnowledgeLevel = e.Level, Familiarity = e.Level / 5.0,
             EncounterCount = e.EncounterCount, MoreEnglishCount = e.MoreEnglishCount, KnownConfirmationCount = e.KnownConfirmationCount,
@@ -214,7 +216,7 @@ public sealed class VocabularyStore
         if (Encoding.UTF8.GetByteCount(json) > 25_000_000) throw new InvalidDataException("This learning profile is too large to import.");
         var archive = JsonSerializer.Deserialize<LearningArchive>(json, ArchiveOptions) ?? throw new InvalidDataException("The profile is empty.");
         if (archive.SchemaVersion != 1) throw new InvalidDataException("Unsupported learning profile version.");
-        if (archive.SourceLanguage != "da") throw new InvalidDataException("This learning profile is not for Danish.");
+        if (archive.SourceLanguage != languages.Source.Id) throw new InvalidDataException("This learning profile belongs to a different source language.");
         if (archive.Words is null || archive.Words.Length > MaximumEntries) throw new InvalidDataException("Too many word records.");
         // Validate the entire archive before mutating even one local record.
         foreach (var e in archive.Words)

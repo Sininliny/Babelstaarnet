@@ -2,6 +2,7 @@ import BabelCore
 import BabelNews
 import Foundation
 import LanguageDanish
+import LanguagePacks
 
 @main
 enum CrossPlatformContractChecks {
@@ -14,6 +15,10 @@ enum CrossPlatformContractChecks {
         struct Popup: Decodable { let id: String; let enabled, background, optedIn, blocked: Bool; let hour: Int; let elapsed: Double; let interval, shown, fresh: Int; let due: Bool }
         struct Units: Decodable { let text: String; let words: [String] }
         struct Adaptive: Decodable { let id, title, display: String; let levels, bands: [String: Int]; let meanings: [String: String]; let targets: [String]; let ready: Bool; let supported: Bool? }
+        struct LanguageRoute: Decodable { let source, target: String; let models: [String]; let conversion: Bool }
+        struct LanguageSentence: Decodable { let source, text: String; let stops: Int; let ends: Bool }
+        let languagePairs: [LanguageRoute]
+        let multilingualSentences: [LanguageSentence]
         let newsAdaptive: [Adaptive]
         let readingUnits: [Units]
         let newsPopupSchedule: [Popup]
@@ -30,6 +35,27 @@ enum CrossPlatformContractChecks {
             .appendingPathComponent("Shared/reading-contract.json")
         let contract = try JSONDecoder().decode(Contract.self, from: Data(contentsOf: path))
         precondition(contract.schemaVersion == 1)
+        let unsupportedFolder = FileManager.default.temporaryDirectory.appendingPathComponent("unsupported-news-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: unsupportedFolder) }
+        let unsupported = NewsService(directory: unsupportedFolder, download: { _ in preconditionFailure("Unsupported news source must never be fetched") })
+        unsupported.readingLanguageSupported = false
+        unsupported.configure(enabled: true, background: true, notify: true, topic: 0, hour: 18)
+        await unsupported.refresh(manual: true)
+        precondition(!unsupported.preferences.enabled && !unsupported.preferences.background)
+        for item in contract.languagePairs {
+            let pair = LanguagePair.configured(source: item.source, target: item.target)
+            precondition(pair.source.code == item.source && pair.target.code == item.target)
+            precondition(LanguageCatalog.modelEdges(source: item.source, target: item.target) == item.models)
+            precondition((LanguageCatalog.language(item.source).cjk || LanguageCatalog.language(item.target).cjk) == item.conversion)
+            if item.source != "da" || item.target != "en" { precondition(pair.source.closedClassGlosses.isEmpty && pair.source.exactGlosses.isEmpty) }
+            precondition(pair.source.contextualGlossPrompts != nil)
+        }
+        for item in contract.multilingualSentences {
+            let source = LanguagePair.configured(source: item.source, target: item.source == "en" ? "da" : "en").source
+            let boundary = SentenceBoundary(rules: source.sentenceRules, locale: source.locale)
+            precondition(boundary.stopLocations(in: item.text).count == item.stops && boundary.endsSentence(item.text) == item.ends)
+        }
+        for text in ["我喜欢读书。", "我喜歡讀書。"] { precondition(ReadingText.words(in: text).count >= 3) }
         let language = SourceLanguage.danish
         let boundary = SentenceBoundary(rules: language.sentenceRules, locale: language.locale)
         for item in contract.readingUnits { precondition(ReadingText.words(in: item.text) == item.words) }

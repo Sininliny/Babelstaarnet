@@ -86,6 +86,7 @@ public actor ArgosTranslationService {
     }
 
     public func isWordBridgeReady(keepWarm: Bool = true) async -> Bool {
+        if languages.source.code != "da" || languages.target.code != "en" { return true }
         do {
             _ = try requestDefinitions(words: [])
             if !keepWarm {
@@ -100,6 +101,7 @@ public actor ArgosTranslationService {
 
     /// Warms the reverse direction, which is the one the word bridge asks in.
     public func warmUpWordBridge() async {
+        if languages.source.code != "da" || languages.target.code != "en" { return }
         do {
             _ = try request(
                 texts: [],
@@ -118,6 +120,9 @@ public actor ArgosTranslationService {
     ) async throws -> [String] {
         guard !words.isEmpty else {
             return []
+        }
+        if languages.target.code != "en" {
+            return try request(texts: words, source: languages.target.code, target: languages.source.code)
         }
         do {
             return try requestDefinitions(words: words)

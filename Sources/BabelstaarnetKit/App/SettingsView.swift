@@ -1,4 +1,5 @@
 import AppKit
+import BabelCore
 import BabelSpeech
 import SwiftUI
 
@@ -11,6 +12,7 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
+            Section("Languages & packs") { LanguagePackagesView(model: model, packages: model.languagePackages) }
             Section("Translation") {
                 Toggle(
                     "Word meaning",
@@ -33,22 +35,22 @@ public struct SettingsView: View {
                 )
 
                 Text(
-                    "Hovering a Danish word shows what it means. Use either panel on its own or both together; turning both off keeps Danish speech on hover."
+                    "Hovering a word shows what it means. Use either panel on its own or both together; turning both off keeps source-language speech on hover."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                Toggle("Speak Danish on hover", isOn: $model.autoSpeak)
+                Toggle("Speak on hover", isOn: $model.autoSpeak)
 
                 LabeledContent(
                     "Voice",
                     value: model.speechVoice.map(voiceDescription)
-                        ?? "No Danish voice installed"
+                        ?? "No matching voice installed"
                 )
 
                 if (model.speechVoice?.quality ?? .basic) == .basic {
                     Text(
-                        "This is the compact voice every Mac ships with. A clearer Danish voice is a free download: System Settings → Accessibility → Spoken Content → System voice → Manage Voices, then pick a Danish voice marked Enhanced or Premium. Babelstårnet switches to it on its own."
+                        "A compact system voice is selected. Clearer voices are available in: System Settings → Accessibility → Spoken Content → System voice → Manage Voices, then pick a matching voice marked Enhanced or Premium. Babelstårnet switches to it on its own."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -83,7 +85,7 @@ public struct SettingsView: View {
             }
 
             Section("Reading") {
-                Toggle("Supported reading · more English anchors", isOn: $model.supportedReading)
+                Toggle("Supported reading · more help", isOn: $model.supportedReading)
                 Toggle("Follow screen changes", isOn: $model.liveMode)
                     .disabled(!model.screenPermissionGranted)
 
@@ -102,7 +104,10 @@ public struct SettingsView: View {
                 }
             }
 
-            Section("News (internet)") { NewsSettings(news: model.news) }
+            Section("News (internet)") {
+                if model.languages.source.code == "da" { NewsSettings(news: model.news) }
+                else { Text("DR news is a Danish reading feature. Choose Danish as the learning language to use it.").font(.caption).foregroundStyle(.secondary) }
+            }
 
             Section("Shortcuts") {
                 ForEach(ConfigurableHotKeyAction.allCases) { action in
@@ -155,7 +160,7 @@ public struct SettingsView: View {
 
             Section("What you have picked up") {
                 LabeledContent(
-                    "Danish words seen",
+                    "Words seen",
                     value: wordCountDescription(
                         model.learnerTrackedWordCount
                     )
@@ -168,7 +173,7 @@ public struct SettingsView: View {
                 )
 
                 Text(
-                    "Babelstårnet keeps track of which Danish words keep coming back to you and quietly shows less English for those. Nothing here needs your attention — reading is enough to move it. Knew and Don’t know are there for the times it gets a word wrong. Stored only on this Mac; imports merge without double-counting."
+                    "Babelstårnet keeps track of which words keep coming back to you and quietly shows less help for those. Nothing here needs your attention — reading is enough to move it. Knew and Don’t know are there for the times it gets a word wrong. Stored only on this Mac; imports merge without double-counting."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -281,7 +286,7 @@ public struct SettingsView: View {
                 }
 
                 Text(
-                    "Word-at-a-time translation cannot tell “får” the verb (gets) from “får” the animal (sheep). A small language model running on this Mac reads the whole sentence and answers with the sense the word has there, plus its dictionary form and a short Danish explanation. The first answer for a new sentence arrives about a second after the bubble and replaces the word-at-a-time one. It uses about 3 GB of memory while reading and makes no network connection."
+                    "Word-at-a-time translation cannot tell “får” the verb (gets) from “får” the animal (sheep). A small language model running on this Mac reads the whole sentence and answers with the sense the word has there, plus its dictionary form and a short source-language explanation. The first answer for a new sentence arrives about a second after the bubble and replaces the word-at-a-time one. It uses about 3 GB of memory while reading and makes no network connection."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

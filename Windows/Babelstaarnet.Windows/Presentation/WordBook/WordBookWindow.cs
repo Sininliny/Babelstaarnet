@@ -177,7 +177,7 @@ internal sealed class WordBookPanel : Grid
         {
             var sentence = Ui.Text("", 13); sentence.TextAlignment = TextAlignment.Center; sentence.Margin = new Thickness(0, 6, 0, 20); sentence.Foreground = Ui.Muted;
             int position = 0;
-            foreach (System.Text.RegularExpressions.Match match in ReadingPolicy.Words().Matches(entry.Sentence))
+            foreach (var match in ReadingPolicy.Units(entry.Sentence))
             {
                 sentence.Inlines.Add(new Run(entry.Sentence[position..match.Index])); sentence.Inlines.Add(new Run(match.Value) { FontWeight = ReadingPolicy.Key(match.Value) == entry.Key ? FontWeights.SemiBold : FontWeights.Normal }); position = match.Index + match.Length;
             }

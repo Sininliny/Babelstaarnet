@@ -60,7 +60,7 @@ private enum NewsTranslationError: LocalizedError {
     case notInstalled, incomplete
     var errorDescription: String? {
         switch self {
-        case .notInstalled: "Install local Danish → English translation in Settings first. No online translation was used."
+        case .notInstalled: "Install local translation for this language direction in Settings first. No online translation was used."
         case .incomplete: "The local translator returned an incomplete answer."
         }
     }

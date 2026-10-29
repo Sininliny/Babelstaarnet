@@ -26,7 +26,8 @@ internal sealed class NewsPanel : ScrollViewer
     private void Render()
     {
         body.Children.Clear(); cards.Clear(); body.Children.Add(Ui.Text("Read something new", 24, true));
-        Add("Read in Danish. English replaces difficult words. Your familiar Danish stays, with just a little new everyday vocabulary. Select any word for help.");
+        if (!news.ReadingLanguageSupported) { Add("DR news is available when learning Danish. Choose Danish in Languages & packs to use it."); return; }
+        Add("Read in Danish. Your help language replaces difficult words. Your familiar Danish stays, with just a little new everyday vocabulary. Select any word for help.");
         var options = new WrapPanel { Margin = new Thickness(0, 8, 0, 4) };
         var enabled = new CheckBox { Content = "DR news · internet", IsChecked = news.Preferences.Enabled, Margin = new Thickness(0, 7, 22, 6) }; FormControls.Apply(enabled); options.Children.Add(enabled);
         enabled.Click += async (_, _) => { news.Configure(enabled.IsChecked == true, news.Preferences.Background, news.Preferences.Notify, news.Preferences.Topic, news.Preferences.DigestHour); await news.RefreshAsync(); };
@@ -61,7 +62,7 @@ internal sealed class NewsReadingCard : Border
         Background = Ui.Surface; BorderBrush = Ui.Stroke; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(10); Margin = new Thickness(0, compact ? 0 : 12, 0, 0);
         var content = new StackPanel { Margin = new Thickness(compact ? 14 : 18) }; Child = content;
         if (!compact) { var date = Ui.Text("DR · " + DateTimeOffset.FromUnixTimeSeconds((long)card.Article.Published).ToLocalTime().ToString("g"), 11); date.Foreground = Ui.Muted; content.Children.Add(date); }
-        var hint = Ui.Text("YOUR DANISH · ENGLISH WHERE NEEDED", 10); hint.Foreground = Ui.Muted; content.Children.Add(hint);
+        var hint = Ui.Text("YOUR DANISH · HELP WHERE NEEDED", 10); hint.Foreground = Ui.Muted; content.Children.Add(hint);
         content.Children.Add(Source(card.Article.Title, !compact));
         if (card.Article.Summary.Length > 0) { content.Children.Add(Source(card.Article.Summary, false)); }
         else if (!compact) { var note = Ui.Text("Headline only · DR did not include an excerpt.", 11); note.Foreground = Ui.Muted; content.Children.Add(note); }
@@ -111,7 +112,7 @@ internal sealed class NewsReadingCard : Border
             label.Foreground = display.Mode == 2 ? Ui.Accent : Ui.Ink;
             label.TextDecorations = display.Mode == 2 ? TextDecorations.Underline : null;
             button.Background = display.Mode == 1 ? WindowsTheme.Current.EnglishTint : Brushes.Transparent;
-            button.ToolTip = display.Mode == 2 ? "New everyday word · select for English" : "Danish: " + word;
+            button.ToolTip = display.Mode == 2 ? "New everyday word · select for meaning" : "Danish: " + word;
         }
         wordState.Text = reader.WordState(card.Article) ?? ""; wordState.Visibility = wordState.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         sentenceHelp.Content = reader.IsVisible(card.Article) ? "Back to reading" : "Help with this sentence";

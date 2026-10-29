@@ -1,3 +1,4 @@
+using Babelstaarnet.Core;
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -31,29 +32,34 @@ internal sealed class ArgosClient : IDisposable
     private bool disposed;
     private readonly string memoryPath, memoryStamp;
     private readonly bool persistentMemory;
+    private readonly ReadingLanguagePair languages;
+    private readonly bool verifyPackages;
 
     public ArgosClient(string? python = null, string? bridge = null, string? dataDirectory = null,
-        TimeSpan? requestTimeout = null, bool persistentMemory = true)
+        TimeSpan? requestTimeout = null, bool persistentMemory = true, ReadingLanguagePair? languages = null, bool verifyPackages = false)
     {
+        this.languages = languages ?? LanguageCatalog.Pair();
+        this.verifyPackages = verifyPackages;
         this.python = python ?? AppPaths.Python;
         this.bridge = bridge ?? AppPaths.Bridge;
         this.dataDirectory = dataDirectory ?? AppPaths.DataDirectory;
         this.requestTimeout = requestTimeout ?? TimeSpan.FromSeconds(60);
         this.persistentMemory = persistentMemory;
-        memoryPath = Path.Combine(this.dataDirectory, "translation-cache.json");
+        memoryPath = Path.Combine(this.languages.ProfileDirectory(this.dataDirectory), "translation-cache.json");
         string packages = Path.Combine(this.dataDirectory, "Argos", "data", "argos-translate", "packages");
-        memoryStamp = this.python + "|" + this.bridge + "|" + File.GetLastWriteTimeUtc(this.bridge).Ticks + "|" + Directory.GetLastWriteTimeUtc(packages).Ticks;
+        memoryStamp = this.languages.Id + "|" + this.python + "|" + this.bridge + "|" + File.GetLastWriteTimeUtc(this.bridge).Ticks + "|" + Directory.GetLastWriteTimeUtc(packages).Ticks;
         if (persistentMemory) foreach (var pair in TranslationMemory.Load(memoryPath, memoryStamp)) cache[pair.Key] = pair.Value;
     }
 
-    public bool IsInstalled => File.Exists(python) && File.Exists(bridge);
+    public bool IsInstalled => File.Exists(python) && File.Exists(bridge) && (!verifyPackages || LanguagePackages.ModelsAvailable(languages, dataDirectory));
+    internal void ReleaseModels() => StopWorker();
     internal int WorkerStarts { get; private set; }
 
     public Task<IReadOnlyList<string>> TranslateAsync(IReadOnlyList<string> texts,
         CancellationToken cancellationToken) => RunAsync(texts.ToArray(), cancellationToken, false);
 
     public async Task WarmAsync(CancellationToken cancellationToken) =>
-        await RunAsync(["æbler"], cancellationToken, true).ConfigureAwait(false);
+        await RunAsync([languages.Source.Sample], cancellationToken, true).ConfigureAwait(false);
 
     public bool TryGetCached(string text, out string translation) => cache.TryGetValue(text, out translation!);
 
@@ -164,7 +170,7 @@ internal sealed class ArgosClient : IDisposable
             StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8, WorkingDirectory = dataDirectory
         };
-        foreach (string argument in new[] { "-I", "-X", "utf8", "-u", bridge, "--word-server", "--source", "da", "--target", "en" })
+        foreach (string argument in new[] { "-I", "-X", "utf8", "-u", bridge, "--word-server", "--source", languages.Source.Id, "--target", languages.Target.Id })
             start.ArgumentList.Add(argument);
         foreach (string kind in new[] { "data", "config", "cache" })
         {

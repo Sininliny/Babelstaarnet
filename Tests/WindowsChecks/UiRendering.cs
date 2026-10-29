@@ -72,8 +72,11 @@ internal static class UiRendering
         var popupItem = new NewsPopupItem(fixtureCard.Article, "Regeringen har en ny plan for grøn energi.", "fixture local AI");
         Save(new NewsPopupPanel(news, popupItem, () => { }, () => { }), stem + "-news-popup.png", 460, 400);
         Save(new SettingsShell(model), stem + "-settings-shell.png", 880, 640);
+        var chinese = new ReaderUiModel(new ReaderPreferences { SourceLanguage = "zh-Hans", TargetLanguage = "zh-Hant" }, store, Path.Combine(fixture, "chinese-preferences.json"))
+        { Packages = new LanguagePackageState { Conversion = true }, PackageMessage = "Script conversion ready. No translation weights are needed for this direction." };
+        Save(new SettingsShell(chinese), stem + "-settings-chinese.png", 880, 640);
         var shell = new SettingsShell(model);
-        foreach (string page in new[] { "Translation", "Reading", "News (internet)", "Shortcuts", "What you have picked up", "Local engines", "Contextual meanings", "Appearance", "Access" })
+        foreach (string page in new[] { "Languages & packs", "Translation", "Reading", "News (internet)", "Shortcuts", "What you have picked up", "Local engines", "Contextual meanings", "Appearance", "Access" })
         {
             shell.SelectPage(page); Save(shell, stem + "-settings-" + page.Split(' ')[0].ToLowerInvariant() + ".png", 880, 640);
         }

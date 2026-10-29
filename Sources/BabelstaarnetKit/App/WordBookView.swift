@@ -39,7 +39,8 @@ public struct WordBookView: View {
             Picker("Word Book page", selection: $query.news) { Text("Words").tag(false); Text("Read something new · internet").tag(true) }
                 .pickerStyle(.segmented).padding(12)
             if query.news {
-                NewsView(news: model.news, translator: model.newsTranslator)
+                if model.news.readingLanguageSupported { NewsView(news: model.news, translator: model.newsTranslator) }
+                else { Text("DR news is available when learning Danish. Choose Danish in Languages & packs to use it.").padding(24) }
             } else if let review = query.review {
                 WordReviewView(model: model, session: review) {
                     query.review = nil
